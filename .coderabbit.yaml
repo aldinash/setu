@@ -1,0 +1,287 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit Configuration for Setu Project
+# https://docs.coderabbit.ai/guides/review-instructions
+# General Settings
+language: "en-US"
+early_access: false
+enable_free_tier: true
+release_notes: false
+# Tone and style instructions
+tone_instructions: |
+  You are an expert code reviewer for Setu, a high-performance C++/Python inference engine.
+  Be assertive about coding standards, performance, and correctness.
+  Focus on maintainability, security, and following established patterns.
+# Knowledge base for context learning
+knowledge_base:
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  jira:
+    project_keys: []
+  linear:
+    team_keys: []
+  context: |
+    Setu is a high-performance inference engine requiring strict coding standards.
+    Uses modern C++20/23 with Python bindings via pybind11.
+    PyTorch integration for model execution.
+    Production performance requirements.
+    Comprehensive testing with Google Test and pytest.
+    ALWAYS use Makefile for building, never cmake directly.
+# Chat configuration
+chat:
+  auto_reply: true
+# Review configuration
+reviews:
+  auto_review:
+    enabled: true
+    drafts: true
+    base_branch: "main"
+    base_branches:
+      - "experimental/*"
+      - "temp/*"
+    ignore_title_keywords:
+      - "TEMP"
+  profile: assertive # Be strict about code quality
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  # Enable relevant tools for C++/Python project
+  tools:
+    github_checks:
+      enabled: true
+    shellcheck:
+      enabled: true
+    ruff:
+      enabled: true
+    markdownlint:
+      enabled: true
+    languagetool:
+      enabled: true
+    hadolint:
+      enabled: true
+    bandit:
+      enabled: true
+    semgrep:
+      enabled: true
+  # Path filters to exclude certain files
+  path_filters:
+    - "!**/*.md"
+    - "!**/build/**"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!**/setu.egg-info/**"
+    - "!**/*.so"
+    - "!**/*.egg-info/**"
+  # Custom review instructions
+  instructions: |
+    You are reviewing code for Setu, a high-performance inference engine for large language models.
+    This is a complex C++/Python hybrid project with strict coding standards.
+
+    ## Project Context
+    - Core engine written in modern C++20/23 with Python bindings via pybind11
+    - PyTorch integration for model execution
+    - Advanced scheduling algorithms and parallelism features
+    - Production-grade performance requirements
+
+    ## CRITICAL BUILD REQUIREMENTS
+    The project MUST use Makefile commands only:
+    - ✅ `make build` (initial/full build)
+    - ✅ `make build/native` (incremental development)
+    - ✅ `make build/native_incremental` (fast, no new files)
+    - ✅ `make clean` (clean artifacts)
+    - ✅ `make test/ctest` (C++ tests)
+    - ✅ `make test/pytest` (Python tests)
+    - ❌ NEVER use cmake directly
+
+    ## C++ CODE REVIEW CHECKLIST (MANDATORY)
+
+    ### 1. File Structure
+    - [ ] Copyright header with exact format (2025 Setu Team; Georgia Institute of Technology)
+    - [ ] `#pragma once` used for header guards
+    - [ ] Include order: StdCommon.h → TorchCommon.h → BoostCommon.h → project headers
+    - [ ] Nested namespace syntax: `namespace setu::native::core {`
+
+    ### 2. Naming Conventions (ABSOLUTELY STRICT)
+    - [ ] Classes/Types: `PascalCase` (e.g., `SessionModifier`, `TokenInfo`)
+    - [ ] Functions/Methods: `PascalCase` (e.g., `GetStatus()`, `ProcessSession()`)
+    - [ ] Variables: `snake_case` (e.g., `num_tokens`, `session_id`)
+    - [ ] Member variables: `snake_case_` with trailing underscore
+    - [ ] Constants: `kPascalCase` (e.g., `kSamplingEps`)
+    - [ ] Enums: `enum class` with `kPascalCase` values
+
+    ### 3. Type System (CRITICAL)
+    - [ ] ONLY fixed-width types: `std::int32_t`, `std::uint64_t`, `std::size_t`
+    - [ ] FORBIDDEN: `int`, `long`, `unsigned`, `short`
+    - [ ] Type aliases for domain concepts: `using TokenId = std::int32_t;`
+    - [ ] NO `std::pair`/`std::tuple` - use named structs instead
+    - [ ] Smart pointer type aliases: `using ModelPtr = std::shared_ptr<BaseModel>;`
+
+    ### 4. Error Handling
+    - [ ] Setu macros ONLY: `ASSERT_VALID_POINTER_ARGUMENT(ptr)`
+    - [ ] `ASSERT_VALID_RUNTIME(condition, "message")` for validation
+    - [ ] `RAISE_RUNTIME_ERROR()`, `RAISE_INVALID_ARGUMENTS_ERROR()`
+    - [ ] FORBIDDEN: raw `assert()`, manual exception throwing
+
+    ### 5. Logging
+    - [ ] Setu logging macros: `LOG_INFO()`, `LOG_ERROR()`, etc.
+    - [ ] FORBIDDEN: `std::cout`, `printf`, `std::cerr`
+    - [ ] Use `std::format` for string formatting
+
+    ### 6. Class Design
+    - [ ] Use ClassTraits.h: `NonCopyable`, `NonCopyableNonMovable`, `StaticClass`
+    - [ ] Constructor with member initializer lists
+    - [ ] Validate all pointer parameters with assertions
+    - [ ] `[[nodiscard]]` for pure functions
+    - [ ] Parameter annotations: `/*[in]*/`, `/*[out]*/`, `/*[inout]*/`
+
+    ### 7. Modern C++ Features
+    - [ ] Concepts for template constraints when appropriate
+    - [ ] Range-based for loops with `auto`
+    - [ ] RAII and move semantics
+    - [ ] `const` correctness throughout
+
+    ## PYTHON CODE REVIEW CHECKLIST
+
+    ### 1. Import Organization (EXACT ORDER)
+    - [ ] Standard library imports
+    - [ ] Third-party imports (torch, numpy, etc.)
+    - [ ] Setu native imports (C++ bindings)
+    - [ ] Setu Python imports
+    - [ ] Alphabetical within each group
+
+    ### 2. Naming Conventions
+    - [ ] Variables/functions: `snake_case`
+    - [ ] Classes: `PascalCase`
+    - [ ] Constants: `UPPER_SNAKE_CASE`
+    - [ ] Modules: `snake_case`
+
+    ### 3. Type Hints (MANDATORY)
+    - [ ] ALL functions have complete type annotations
+    - [ ] Class attributes have type hints
+    - [ ] Use `Optional`, `Union`, `List`, `Dict` from typing
+
+    ### 4. Configuration Classes
+    - [ ] Use `@frozen_dataclass` decorator
+    - [ ] Field metadata with help text
+    - [ ] `__post_init__` for validation
+    - [ ] Native handle creation for C++ interop
+
+    ### 5. Logging
+    - [ ] Use `logger = init_logger(__name__)`
+    - [ ] FORBIDDEN: `print()` statements
+    - [ ] Structured logging with appropriate levels
+
+    ### 6. Design Patterns
+    - [ ] Registry pattern for extensible components
+    - [ ] Native handle integration for C++ interop
+    - [ ] BasePolyConfig for polymorphic configurations
+
+    ## TESTING REQUIREMENTS
+
+    ### C++ Tests
+    - [ ] Google Test framework
+    - [ ] Test naming: `MethodName_Condition_ExpectedResult`
+    - [ ] Fixed-width types in test code
+    - [ ] Location: `csrc/test/` directory
+    - [ ] Comprehensive test data structure
+
+    ### Python Tests
+    - [ ] pytest with Google-style docstrings
+    - [ ] Type hints in test functions
+    - [ ] Fixtures for common test data
+    - [ ] Parametrized tests where appropriate
+
+    ## CRITICAL VIOLATIONS (REQUEST CHANGES)
+
+    Flag these as requiring immediate fixes:
+    1. **Wrong naming conventions** (e.g., camelCase C++ functions)
+    2. **Raw integer types** (`int`, `long` instead of `std::int32_t`)
+    3. **Console output** (`std::cout`, `print()` instead of logging)
+    4. **Missing type hints** in Python functions
+    5. **Wrong import order** in Python files
+    6. **Missing validation** (no ASSERT_VALID_* macros)
+    7. **Build system violations** (using cmake directly)
+    8. **std::pair/tuple usage** (should use named structs)
+
+    ## PERFORMANCE CONSIDERATIONS
+
+    - [ ] Prefer stack allocation when possible
+    - [ ] Use move semantics for large objects
+    - [ ] Avoid unnecessary copies
+    - [ ] Thread safety documentation for concurrent code
+    - [ ] Memory management with RAII
+
+    ## SECURITY CHECKS
+
+    - [ ] No credentials or secrets in code
+    - [ ] Proper input validation
+    - [ ] Safe pointer handling
+    - [ ] Bounds checking for array access
+
+    ## DOCUMENTATION
+
+    - [ ] Google-style docstrings for Python
+    - [ ] Doxygen comments for C++ public APIs
+    - [ ] Clear parameter documentation
+    - [ ] Thread safety notes where applicable
+
+    ## FINAL INSTRUCTIONS
+
+    Be strict about style guide compliance - consistency is critical for this project.
+    When suggesting fixes, provide specific examples using the correct Setu patterns.
+    Highlight any code that doesn't follow the established patterns in the repository.
+    If you see good examples of following the style guide, praise them to reinforce good practices.
+  # Path-specific instructions
+  path_instructions:
+    - path: "csrc/**/*.h"
+      instructions: |
+        Header files must follow exact structure with copyright, pragma once,
+        include order, and namespace organization. Verify all naming conventions.
+    - path: "csrc/**/*.cpp"
+      instructions: |
+        Implementation files must use Setu logging/assertion macros.
+        Check for fixed-width types and proper error handling.
+    - path: "csrc/**/*.cu"
+      instructions: |
+        CUDA files must follow C++ standards plus CUDA-specific best practices.
+        Check kernel launch configurations and memory management.
+    - path: "setu/**/*.py"
+      instructions: |
+        Python modules must have complete type hints, proper import order,
+        and use Setu logger. Configuration classes need @frozen_dataclass.
+    - path: "test/**/*"
+      instructions: |
+        Test files must follow naming conventions and use appropriate
+        frameworks (Google Test for C++, pytest for Python).
+    - path: "**/CMakeLists.txt"
+      instructions: |
+        CMake files should rarely be modified directly.
+        Remind contributors to use Makefile commands instead.
+        If CMake changes are necessary, ensure they follow project patterns.
+    - path: "**/*.yml,**/*.yaml"
+      instructions: |
+        YAML files must be properly formatted and follow schema requirements.
+        Check for proper indentation and valid syntax.
+# Language-specific instructions (deprecated in favor of path_instructions)
+language_instructions:
+  cpp:
+    instructions: |
+      For C++ files, pay special attention to:
+      - Exact header structure with copyright notice
+      - PascalCase function names (not camelCase!)
+      - Fixed-width integer types only
+      - Setu logging and assertion macros
+      - No std::pair/tuple usage
+      - Proper namespace organization
+  python:
+    instructions: |
+      For Python files, pay special attention to:
+      - Exact import order (stdlib → third-party → native → setu)
+      - Complete type hints on all functions
+      - @frozen_dataclass for configuration classes
+      - Setu logger usage (no print statements)
+      - Native handle integration patterns

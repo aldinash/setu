@@ -1,0 +1,15 @@
+# Configure ccache for faster compilation
+if(SETU_ENABLE_CCACHE)
+  find_program(CCACHE_FOUND ccache)
+  if(CCACHE_FOUND)
+    message(STATUS "ccache found: ${CCACHE_FOUND}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_FOUND})
+    set(CMAKE_CUDA_COMPILER_LAUNCHER ${CCACHE_FOUND})
+
+    message(STATUS "ccache enabled for C++/CUDA compilation")
+  else()
+    message(WARNING "ccache requested but not found. Install with: sudo apt install ccache")
+  endif()
+else()
+  message(STATUS "ccache disabled")
+endif()

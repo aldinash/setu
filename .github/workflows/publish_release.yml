@@ -1,0 +1,68 @@
+name: Publish Release to PyPI
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+env:
+  PYPI_RELEASE_CUDA_VERSION: "124"
+  PYPI_RELEASE_TORCH_VERSION: "251"
+  IS_NIGHTLY_BUILD: "false"
+jobs:
+  build:
+    uses: ./.github/workflows/build_wheels.yml
+    with:
+      cuda_version: "124"
+      torch_version: "251"
+      is_nightly: "false"
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/setu
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          merge-multiple: true
+          path: dist/
+      - name: Prepare PyPI distribution
+        run: |
+          mkdir pypi_dist
+          # Copy wheels that don't contain '+' in their name
+          for f in dist/*.whl; do
+            if [[ ! $(basename "$f") == *"+"* ]]; then
+              # change linux to manylinux1 in the wheel name
+              new_f_name=$(echo $f | sed 's/linux/manylinux1/')
+              new_f_name=$(basename $new_f_name)
+              mv $f pypi_dist/$new_f_name
+            fi
+          done
+          cp dist/*.tar.gz pypi_dist/ || true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pypi_dist/
+      - name: Notify On Success
+        if: success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: >-
+            ✅ The release build succeeded! Build artifacts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Notify On Failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: >-
+            ❌ The release build failed! Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

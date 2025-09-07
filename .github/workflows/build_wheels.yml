@@ -1,0 +1,73 @@
+name: Build Wheels
+on:
+  workflow_call: # This makes the workflow reusable
+    inputs:
+      cuda_version:
+        required: true
+        type: string
+      torch_version:
+        required: true
+        type: string
+      is_nightly:
+        required: true
+        type: string
+    outputs:
+      artifact-name:
+        description: "Name of the artifact containing built wheels"
+        value: python-package-distributions
+permissions:
+  contents: read
+  packages: write
+env:
+  CONTAINER_NAME: nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda: ["12.4"]
+        torch: ["2.4"]
+    runs-on: [self-hosted, cpu]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: "Run test image"
+        run: |
+          docker run -d \
+          --gpus all \
+          --shm-size=12gb \
+          --name setu-builder-${{ github.run_id }} \
+          -v ${{ github.workspace }}:/repo \
+          -w /repo \
+          $CONTAINER_NAME sleep infinity
+      - name: "Setup build environment"
+        run: |
+          docker exec \
+          -e HUGGINGFACE_TOKEN="${{ secrets.HUGGINGFACE_TOKEN }}" \
+          setu-builder-${{ github.run_id }} \
+          bash /repo/scripts/containers/dev/setup_env.sh
+      - name: Build wheel
+        run: |
+          docker exec \
+              -e PYPI_RELEASE_CUDA_VERSION=${{ inputs.cuda_version }} \
+              -e PYPI_RELEASE_TORCH_VERSION=${{ inputs.torch_version }} \
+              -e IS_NIGHTLY_BUILD=${{ inputs.is_nightly }} \
+              -e SETU_CI_CUDA_VERSION=${{ matrix.cuda }} \
+              -e SETU_CI_TORCH_VERSION=${{ matrix.torch }} \
+              -e SETU_IS_CI_CONTEXT="true" \
+              -e MAX_JOBS=128 \
+              setu-builder-${{ github.run_id }} \
+              make build/wheel
+        timeout-minutes: 120
+      - name: "Stop Docker container"
+        id: stop_docker_container
+        if: always()
+        run: |
+          docker stop setu-builder-${{ github.run_id }}
+          docker rm setu-builder-${{ github.run_id }}
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/*

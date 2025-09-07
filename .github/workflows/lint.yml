@@ -1,0 +1,41 @@
+name: "Run Linters"
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  packages: write
+defaults:
+  run:
+    shell: bash -l {0}
+jobs:
+  sanity_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout Repository"
+        uses: actions/checkout@v3
+      - name: Install Conda environment from environment-dev.yml
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment-dev.yml
+      - name: "Run black"
+        run: make lint/black
+      - name: "Run isort"
+        run: make lint/isort
+      - name: "Run autoflake"
+        run: make lint/autoflake
+      - name: "Run cpplint"
+        run: make lint/cpplint
+      - name: "Run clang-format"
+        run: make lint/clang-format
+      - name: "Run codespell"
+        run: make lint/codespell
+      - name: "Run shellcheck"
+        run: make lint/shellcheck
+      - name: "Run cmake-lint"
+        run: make lint/cmake-lint
+      - name: "Run niti cpp linter"
+        run: make lint/niti

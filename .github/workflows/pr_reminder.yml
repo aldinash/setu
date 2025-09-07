@@ -1,0 +1,26 @@
+name: PR Reminder Comment Bot
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  pr_reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remind to run full CI on PR
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        # v7.0.1
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '👋 Hi! Thank you for contributing to the Vajra project.\n\n' +
+                'Just a reminder: PRs would not trigger full CI run by default.\n' +
+                'It would only run `fastcheck` CI which quickly catches errors.\n' +
+                'Once approved, reviewers can run CI to test changes before merging.\n\n' +
+                'To run full CI, add `ready` label to the PR.\n\n' +
+                '🚀'
+            })
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

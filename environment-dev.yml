@@ -1,0 +1,56 @@
+name: setu-dev
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - clang-tools
+  - cmake>=4.0
+  - cpplint
+  - doxygen # For C++ API documentation
+  - gcc=13.2
+  - gdb # For debugging and crash analysis
+  - gmp
+  - gnutls
+  - go-shfmt
+  - shellcheck
+  - graphviz # For Doxygen diagrams
+  - gxx
+  - libsodium
+  - make
+  - ninja
+  - pip
+  - pkg-config
+  - python=3.12
+  - rust
+  - mold
+  - ccache
+  - yamlfmt
+  - cmake_format
+  - cmakelint
+  - yamllint
+  - backtrace
+  - pip:
+      - autoflake
+      - black
+      - build
+      - cmake>=4.0 # python wrapper
+      - codespell
+      - datasets
+      - huggingface-hub
+      - isort
+      - py-spy
+      - pylint
+      - pyright
+      - pytest
+      - pytest-cov
+      - pytest-html
+      - pytest-mock
+      - pytest-xdist
+      - requests
+      - rich
+      - setuptools_scm
+      - twine
+      - pybind11
+      - numpy
+      - torch
+      - niti

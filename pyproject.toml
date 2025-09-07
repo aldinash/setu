@@ -1,0 +1,60 @@
+[build-system]
+requires = [
+    "cmake>=3.26",
+    "ninja",
+    "packaging",
+    "setuptools>=61",
+    "setuptools-scm>=8.0",
+    "torch == 2.4",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+
+[tool.isort]
+profile = "black"
+known_first_party = "setu"
+extend_skip_glob=["setu/datatypes/generated/*", "setu/_version.py"]
+
+
+[tool.black]
+extend-exclude = '''
+/(
+    setu/datatypes/generated
+    | setu/_version\.py
+)/
+'''
+
+
+[tool.pytest.ini_options]
+addopts = [
+    "--strict-markers",
+    "-s",
+    "--junitxml=test_reports/pytest-results.xml",
+    "--cov=setu",
+    "--cov-report=xml:test_reports/coverage.xml",
+    "--cov-report=html:test_reports/coverage_html"
+]
+testpaths = [
+    "test"
+]
+markers = [
+    "functional: Functional tests.",
+    "unit: Python unit tests.",
+    "integration: Integration tests.",
+    "gpu: Test will run on GPUs and CUDA sync."
+]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.pyright]
+include = ["setu", "test"]
+exclude = [
+    "**/__pycache__"
+]
+reportMissingImports = false

@@ -1,0 +1,7 @@
+ninja  # For faster builds.
+psutil
+numpy
+torch == 2.4
+pillow
+zmq
+rich
