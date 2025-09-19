@@ -1,5 +1,6 @@
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +27,7 @@ namespace setu::kernels {
 ///
 /// @param output Output tensor
 /// @param input Input tensor
-/// @throws std::runtime_error if tensor dimensions are incompatible
+/// @throws std::runtime_error if tensor Dims are incompatible
 void Sum(torch::Tensor& output /*[out]*/, const torch::Tensor& input /*[in]*/);
 //==============================================================================
 }  // namespace setu::kernels

@@ -1,5 +1,6 @@
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +17,12 @@
 #pragma once
 //==============================================================================
 #include "commons/StdCommon.h"
-#include "native/core/Types.h"
+#include "commons/Types.h"
 //==============================================================================
 namespace setu::commons::time_utils {
 //==============================================================================
-using setu::native::core::TimeMS;
-using setu::native::core::TimeS;
+using setu::commons::TimeMS;
+using setu::commons::TimeS;
 //==============================================================================
 inline TimeS now_s() {
   return std::chrono::duration<TimeS>(

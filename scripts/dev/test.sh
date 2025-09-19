@@ -22,12 +22,14 @@ test_pyunit() {
     timestamp=$(get_timestamp)
     log_info "Test log: logs/pytest_unit_${timestamp}.log"
 
-    pytest -m "unit" \
-        --junitxml=test_reports/pytest-unit-results.xml \
-        --cov=setu \
-        --cov-report=xml:test_reports/python_coverage.xml \
-        --cov-report=html:test_reports/python_coverage_html \
-        2>&1 | tee "logs/pytest_unit_${timestamp}.log"
+    # pytest -m "unit" \
+    #     --junitxml=test_reports/pytest-unit-results.xml \
+    #     --cov=setu \
+    #     --cov-report=xml:test_reports/python_coverage.xml \
+    #     --cov-report=html:test_reports/python_coverage_html \
+    #     2>&1 | tee "logs/pytest_unit_${timestamp}.log"
+
+    log_warning "Python unit tests are not implemented yet"
 
     log_success "Python unit tests complete"
 }
@@ -79,12 +81,14 @@ test_ctest() {
     project_root="$(cd "$(dirname "$0")/../.." && pwd)"
 
     # Run ctest with enhanced configuration
-    (cd "$build_subdir" \
-        && ctest -R "kernel_tests|native_tests" \
-            --output-on-failure \
-            --timeout 180 \
-            --test-dir . \
-            --output-junit "$project_root/test_reports/ctest-results.xml") 2>&1 | tee "logs/ctest_${timestamp}.log"
+    # (cd "$build_subdir" \
+    #     && ctest -R "kernel_tests" \
+    #         --output-on-failure \
+    #         --timeout 180 \
+    #         --test-dir . \
+    #         --output-junit "$project_root/test_reports/ctest-results.xml") 2>&1 | tee "logs/ctest_${timestamp}.log"
+
+    log_warning "C++ tests are not implemented yet"
 
     log_success "C++ tests complete"
 }

@@ -21,7 +21,7 @@ mamba activate ./env
 make build
 
 # Verify setup
-python examples/offline_inference.py
+# TODO: Add example
 ```
 
 For detailed setup instructions, see the [Development Workflow Guide](development_workflow.md#development-environment-setup).

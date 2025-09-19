@@ -121,7 +121,7 @@ docs_init() {
     cd docs || exit 1
 
     # Run sphinx-quickstart with defaults
-    sphinx-quickstart --quiet --project="Setu" --author="Setu Team" \
+    sphinx-quickstart --quiet --project="Setu" --author="Vajra Team" \
         --release="1.0" --language="en" --ext-autodoc \
         --ext-viewcode --makefile --batchfile
 

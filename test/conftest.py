@@ -120,15 +120,6 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(scope="session")
-def check_native_extension():
-    """Check if native extension is available."""
-    try:
-        return True
-    except ImportError:
-        return False
-
-
-@pytest.fixture(scope="session")
 def check_gpu_available():
     """Check if GPU/CUDA is available."""
     try:
@@ -157,33 +148,3 @@ def pytest_addoption(parser):
         default=False,
         help="Run benchmark/performance tests",
     )
-
-
-def pytest_report_header(config):
-    """Add custom information to pytest header."""
-    header_lines = [
-        f"setu Test Suite",
-        f"Python: {sys.version.split()[0]}",
-        f"Platform: {sys.platform}",
-    ]
-
-    # Check for native extension
-    try:
-        header_lines.append("Native Extension: Available")
-    except ImportError:
-        header_lines.append("Native Extension: Not Available")
-
-    # Check for GPU support
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            header_lines.append(
-                f"CUDA: Available (GPU count: {torch.cuda.device_count()})"
-            )
-        else:
-            header_lines.append("CUDA: Not Available")
-    except ImportError:
-        header_lines.append("PyTorch: Not Available")
-
-    return "\n".join(header_lines)

@@ -1,5 +1,6 @@
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,12 +55,12 @@ TEST(KernelParameterTest, ValidateCommonKernelParameters) {
 }
 //==============================================================================
 /**
- * @brief Test kernel grid dimension calculation
+ * @brief Test kernel grid Dim calculation
  *
- * This test verifies that grid dimensions are calculated correctly
+ * This test verifies that grid Dims are calculated correctly
  * for various problem sizes, ensuring proper coverage of all data elements.
  */
-TEST(KernelParameterTest, GridDimensionCalculation) {
+TEST(KernelParameterTest, GridDimCalculation) {
   // Arrange: Define test parameters
   const std::int32_t threads_per_block = 256;
   std::vector<std::int32_t> problem_sizes = {1,   100,  255,  256,

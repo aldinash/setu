@@ -64,8 +64,7 @@ SHOW_NAMESPACES        = YES
 #---------------------------------------------------------------------------
 # Configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = ../csrc/setu/native \
-                         ../csrc/setu/commons \
+INPUT                  = ../csrc/setu/commons \
                          ../csrc/setu/kernels
 INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          = *.h \

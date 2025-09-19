@@ -57,10 +57,6 @@ make setup/check              # Check system dependencies
 
 # Building
 make build                    # Intelligent build (auto-detects what's needed)
-make build/native            # Force full native build
-make build/native_incremental # Force incremental build
-make build/editable          # Force editable install
-make build/wheel             # Build Python wheel
 make build/test              # Build tests intelligently
 
 # Testing
@@ -109,7 +105,7 @@ The build system intelligently detects what needs to be built and chooses the op
 ### File Header (EXACT FORMAT REQUIRED)
 ```cpp
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,13 +129,13 @@ The build system intelligently detects what needs to be built and chooses the op
 #include "commons/Logging.h"
 #include "project_headers.h"
 //==============================================================================
-namespace setu::native::core {  // Use nested namespace syntax (C++17)
+namespace setu::commons {  // Use nested namespace syntax (C++17)
 //==============================================================================
 
 // Implementation
 
 //==============================================================================
-}  // namespace setu::native::core
+}  // namespace setu::commons
 //==============================================================================
 ```
 
@@ -179,7 +175,7 @@ constexpr double kSamplingEps = 1e-5;
 constexpr std::int32_t kMaxSessionLength = 4096;
 
 // Namespaces: nested C++17 syntax matching directory structure
-namespace setu::native::core::scheduler { }
+namespace setu::commons::scheduler { }
 ```
 
 ### Type System (CRITICAL REQUIREMENTS)
@@ -676,7 +672,7 @@ class InferenceEngine:
 // Naming: ClassNameTest.cpp
 
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -695,7 +691,7 @@ class InferenceEngine:
 #include "commons/StdCommon.h"
 #include "native/core/session/Session.h"
 //==============================================================================
-using setu::native::core::session::Session;
+using setu::commons::session::Session;
 //==============================================================================
 
 class SessionTest : public ::testing::Test {
@@ -987,8 +983,6 @@ Before submitting:
 
 ### Build Commands
 - `make build` - Intelligent build (auto-detects what's needed)
-- `make build/native` - Force full native build
-- `make build/native_incremental` - Force incremental build
 - `make build/test` - Build tests intelligently
 - `make clean` - Clean build artifacts
 
@@ -1064,6 +1058,6 @@ setu/
 
 ### Namespace Updates
 All C++ namespaces updated to singular form:
-- `namespace setu::native::llm::controller::replica::session_batcher`
-- `namespace setu::native::llm::controller::replicaset::session_router`
-- `namespace setu::native::llm::controller::helpers::session_prioritizer` 
+- `namespace setu::commons::llm::controller::replica::session_batcher`
+- `namespace setu::commons::llm::controller::replicaset::session_router`
+- `namespace setu::commons::llm::controller::helpers::session_prioritizer` 

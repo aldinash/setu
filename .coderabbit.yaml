@@ -100,10 +100,10 @@ reviews:
     ## C++ CODE REVIEW CHECKLIST (MANDATORY)
 
     ### 1. File Structure
-    - [ ] Copyright header with exact format (2025 Setu Team; Georgia Institute of Technology)
+    - [ ] Copyright header with exact format (2025 Vajra Team; Georgia Institute of Technology; Microsoft Corporation)
     - [ ] `#pragma once` used for header guards
     - [ ] Include order: StdCommon.h → TorchCommon.h → BoostCommon.h → project headers
-    - [ ] Nested namespace syntax: `namespace setu::native::core {`
+    - [ ] Nested namespace syntax: `namespace setu::commons {`
 
     ### 2. Naming Conventions (ABSOLUTELY STRICT)
     - [ ] Classes/Types: `PascalCase` (e.g., `SessionModifier`, `TokenInfo`)

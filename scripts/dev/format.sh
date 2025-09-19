@@ -13,17 +13,17 @@ init_ci_environment
 # Python formatting functions
 format_black() {
     log_format "Formatting (Black)..."
-    black setu test examples setup.py
+    black setu test setup.py
 }
 
 format_isort() {
     log_format "Formatting (isort)..."
-    isort --profile black setu test examples setup.py
+    isort --profile black setu test setup.py
 }
 
 format_autoflake() {
     log_format "Formatting (autoflake)..."
-    autoflake --in-place --recursive --remove-all-unused-imports setu test examples setup.py
+    autoflake --in-place --recursive --remove-all-unused-imports setu test setup.py
 }
 
 # C++ formatting functions

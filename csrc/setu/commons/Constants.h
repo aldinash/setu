@@ -1,5 +1,6 @@
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,14 +17,12 @@
 #pragma once
 //==============================================================================
 #include "commons/StdCommon.h"
-#include "native/core/Types.h"
+#include "commons/Types.h"
 //==============================================================================
 namespace setu::commons {
 //==============================================================================
-using setu::native::core::Rank;
-//==============================================================================
 // MPI/Rank Constants
-constexpr Rank kRootRank = 0;
+constexpr NodeRank kRootRank = 0;
 //==============================================================================
 // Display Constants
 constexpr std::size_t kMaxTokenPreviewCount = 5;

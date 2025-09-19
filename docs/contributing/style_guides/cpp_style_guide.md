@@ -20,7 +20,7 @@ All header files must follow this exact structure:
 
 ```cpp
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,13 +44,13 @@ All header files must follow this exact structure:
 #include "commons/Logging.h"
 #include "project_headers.h"
 //==============================================================================
-namespace setu::native::core {  // Use nested namespace syntax (C++17)
+namespace setu::commons {  // Use nested namespace syntax (C++17)
 //==============================================================================
 
 // Class declarations and implementations
 
 //==============================================================================
-}  // namespace setu::native::core
+}  // namespace setu::commons
 //==============================================================================
 ```
 
@@ -77,7 +77,7 @@ Setu uses centralized header files to ensure consistent imports and reduce compi
 
 ```cpp
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,18 +97,18 @@ Setu uses centralized header files to ensure consistent imports and reduce compi
 #include "commons/TorchCommon.h"  // If needed
 #include "other_project_headers.h"
 //==============================================================================
-namespace setu::native::core {
+namespace setu::commons {
 //==============================================================================
 // Using declarations - sorted alphabetically
 using setu::commons::NonCopyable;
-using setu::native::datatypes::SessionPtr;
-using setu::native::datatypes::TokenId;
+using setu::commons::datatypes::SessionPtr;
+using setu::commons::datatypes::TokenId;
 //==============================================================================
 
 // Implementation code
 
 //==============================================================================
-}  // namespace setu::native::core
+}  // namespace setu::commons
 //==============================================================================
 ```
 
@@ -120,12 +120,12 @@ Setu uses a hierarchical namespace structure that mirrors the directory organiza
 
 ```cpp
 // Directory: csrc/include/setu/native/core/scheduler/
-namespace setu::native::core::controller {
+namespace setu::commons::controller {
     // Code for scheduler components
 }
 
 // Directory: csrc/include/setu/native/llm/worker/model_executor/layers/
-namespace setu::native::llm::worker::model_executor::layers {
+namespace setu::commons::llm::worker::model_executor::layers {
     // Code for model layers
 }
 ```
@@ -135,7 +135,7 @@ namespace setu::native::llm::worker::model_executor::layers {
 1. **Use C++17 nested namespace syntax**:
 ```cpp
 // ✅ Good
-namespace setu::native::core::controller {
+namespace setu::commons::controller {
 
 // ❌ Don't do this
 namespace setu {
@@ -146,18 +146,18 @@ namespace scheduler {
 
 2. **Place using declarations after namespace declaration**:
 ```cpp
-namespace setu::native::core::controller {
+namespace setu::commons::controller {
 //==============================================================================
 // Sort using declarations alphabetically
 using setu::commons::NonCopyable;
-using setu::native::core::PageTable;
-using setu::native::datatypes::SessionPtr;
+using setu::commons::PageTable;
+using setu::commons::datatypes::SessionPtr;
 //==============================================================================
 ```
 
 3. **Use namespace aliases for deeply nested namespaces**:
 ```cpp
-namespace setu::native::core {
+namespace setu::commons {
 //==============================================================================
 using setu::commons::time_utils::now_s;
 //==============================================================================
@@ -167,11 +167,11 @@ using setu::commons::time_utils::now_s;
 ```cpp
 // ❌ Never do this in headers
 using namespace std;
-using namespace setu::native::datatypes;
+using namespace setu::commons::datatypes;
 
 // ✅ Use specific using declarations instead
-using setu::native::datatypes::SessionPtr;
-using setu::native::datatypes::TokenId;
+using setu::commons::datatypes::SessionPtr;
+using setu::commons::datatypes::TokenId;
 ```
 
 ### Benefits of Common Headers
@@ -790,7 +790,7 @@ All test files must follow this structure and be placed in the `csrc/test/` dire
 
 ```cpp
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -809,9 +809,9 @@ All test files must follow this structure and be placed in the `csrc/test/` dire
 #include "commons/StdCommon.h"
 #include "native/core/tokenizer/Tokenizer.h"
 //==============================================================================
-using setu::native::core::tokenizer::Tokenizer;
+using setu::commons::tokenizer::Tokenizer;
 //==============================================================================
-namespace setu::test::native::core {
+namespace setu::test::commons {
 ```
 
 ### Test Class Naming

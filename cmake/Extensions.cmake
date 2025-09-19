@@ -11,6 +11,7 @@ target_link_libraries(
             Boost::heap
             Boost::container_hash
             Boost::stacktrace
+            Boost::dynamic_bitset
             libzmq-static
             dl
             backtrace
@@ -84,10 +85,21 @@ file(GLOB_RECURSE KERNELS_SRC "csrc/setu/kernels/*.cpp")
 define_setu_extension(_kernels "${KERNELS_SRC}" "setu_common_objects" "_kernels_common")
 define_setu_static(_kernels_static "${KERNELS_SRC}" "setu_common_objects" "_kernels_common")
 
-file(GLOB_RECURSE NATIVE_SRC "csrc/setu/native/**/*.cpp")
-define_setu_extension(_native "${NATIVE_SRC};csrc/setu/native/Pybind.cpp" "setu_common_objects"
-                      "_kernels_common")
-define_setu_static(_native_static "${NATIVE_SRC}" "setu_common_objects" "_kernels_common")
+define_setu_extension(_commons "csrc/setu/commons/Pybind.cpp" "setu_common_objects" "")
+define_setu_static(_commons_static "" "setu_common_objects" "")
+
+file(GLOB_RECURSE CLIENT_SRC "csrc/setu/client/*.cpp")
+define_setu_extension(_client "${CLIENT_SRC}" "setu_common_objects" "")
+define_setu_static(_client_static "${CLIENT_SRC}" "setu_common_objects" "")
+
+file(GLOB_RECURSE NODE_MANAGER_SRC "csrc/setu/node_manager/*.cpp")
+define_setu_extension(_node_manager "${NODE_MANAGER_SRC}" "setu_common_objects" "_kernels_common")
+define_setu_static(_node_manager_static "${NODE_MANAGER_SRC}" "setu_common_objects"
+                   "_kernels_common")
+
+file(GLOB_RECURSE COORDINATOR_SRC "csrc/setu/coordinator/*.cpp")
+define_setu_extension(_coordinator "${COORDINATOR_SRC}" "setu_common_objects" "")
+define_setu_static(_coordinator_static "${COORDINATOR_SRC}" "setu_common_objects" "")
 
 # OPTIMIZATION: Enhanced build graph and parallel compilation
 set_target_properties(setu_common_objects PROPERTIES INTERPROCEDURAL_OPTIMIZATION
@@ -96,8 +108,9 @@ set_target_properties(setu_common_objects PROPERTIES INTERPROCEDURAL_OPTIMIZATIO
 # Link-time optimizations for release builds
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set_target_properties(
-    _kernels _native PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON LINK_WHAT_YOU_USE ON # Remove unused
-                                                                                     # libraries
+    _kernels _commons
+    PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON LINK_WHAT_YOU_USE ON # Remove unused
+               # libraries
   )
 endif()
 
@@ -120,23 +133,43 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
   target_precompile_headers(
     setu_common_objects PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/commons/PrecompiledCommonHeaders.h")
-
   # Kernels PCH - CUDA and kernel-specific headers
   target_precompile_headers(
     setu_kernels_cuda_objects PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/kernels/PrecompiledKernelHeaders.h")
 
-  # Native PCH - comprehensive headers for native C++ code
+  # Commons PCH - comprehensive headers for commons C++ code
   target_precompile_headers(
-    _native PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/native/PrecompiledNativeHeaders.h")
+    _commons PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/commons/PrecompiledCommonHeaders.h")
   target_precompile_headers(
-    _native_static PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/native/PrecompiledNativeHeaders.h")
+    _commons_static PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/commons/PrecompiledCommonHeaders.h")
+
   target_precompile_headers(
     _kernels PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/kernels/PrecompiledKernelHeaders.h")
   target_precompile_headers(
     _kernels_static PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/kernels/PrecompiledKernelHeaders.h")
+
+  target_precompile_headers(
+    _client PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/client/PrecompiledCommonHeaders.h")
+  target_precompile_headers(
+    _client_static PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/client/PrecompiledCommonHeaders.h")
+
+  target_precompile_headers(
+    _node_manager PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/node_manager/PrecompiledCommonHeaders.h")
+  target_precompile_headers(
+    _node_manager_static PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/node_manager/PrecompiledCommonHeaders.h")
+
+  target_precompile_headers(
+    _coordinator PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/coordinator/PrecompiledCommonHeaders.h")
+  target_precompile_headers(
+    _coordinator_static PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/coordinator/PrecompiledCommonHeaders.h")
 
   message(STATUS "Module-specific precompiled headers enabled")
 endif()

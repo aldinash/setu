@@ -37,7 +37,7 @@ vim csrc/setu/native/controller/replica/request_batcher/base_request_batcher.cpp
 make build
 
 # Test your changes
-python examples/offline_inference.py
+# TODO: Add example
 
 # Build and run C++ tests
 make build/test  # Intelligent test build

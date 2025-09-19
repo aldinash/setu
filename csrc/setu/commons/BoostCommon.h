@@ -1,5 +1,6 @@
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +19,7 @@
 // Boost headers
 #include <boost/algorithm/hex.hpp>
 #include <boost/container_hash/hash.hpp>
+#include <boost/dynamic_bitset.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/heap/fibonacci_heap.hpp>
 #include <boost/stacktrace.hpp>

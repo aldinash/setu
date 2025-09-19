@@ -24,7 +24,7 @@ setup_dirs() {
 # Find files functions
 find_python_files() {
     # Target specific directories like original Makefile
-    echo "setu test examples setup.py"
+    echo "setu test setup.py"
 }
 
 find_cpp_files() {

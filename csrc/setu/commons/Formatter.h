@@ -1,5 +1,6 @@
 //==============================================================================
-// Copyright 2025 Setu Team; Georgia Institute of Technology
+// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -427,6 +428,25 @@ struct formatter<
   }
 };
 //==============================================================================
+// Formatter for Boost::dynamic_bitset<>
+//==============================================================================
+/// @brief Formatter specialization for Boost::dynamic_bitset
+/// @ingroup Formatters
+template <>
+struct formatter<boost::dynamic_bitset<>, char> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const boost::dynamic_bitset<>& bitset, FormatContext& ctx) const {
+    std::basic_string<char, std::char_traits<char>> s;
+    boost::to_string(bitset, s);
+    return std::format_to(ctx.out(), "{}", s);
+  }
+};
+//==============================================================================
 // Formatter for Printable types (types with ToString() method)
 //==============================================================================
 /// @brief Formatter specialization for types with ToString() method
@@ -448,6 +468,7 @@ template <typename T>
            !setu::commons::Printable<T> &&
            !std::is_same_v<T, c10::ScalarType> &&
            !std::is_same_v<T, torch::Tensor> &&
+           !std::is_same_v<T, boost::dynamic_bitset<>> &&
            !std::is_same_v<std::remove_cv_t<T>,
                            boost::concurrent::sync_queue<
                                typename std::remove_cv_t<T>::value_type>> &&

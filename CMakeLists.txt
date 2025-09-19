@@ -1,5 +1,5 @@
 # ##################################################################################################
-# Copyright (C) 2025 by Setu Team, Georgia Institute of Technology This file is part of the setu
+# Copyright (C) 2025 by Vajra Team, Georgia Institute of Technology This file is part of the setu
 # project.
 # ##################################################################################################
 cmake_minimum_required(VERSION 4.0)
@@ -49,7 +49,16 @@ include(cmake/Testing.cmake)
 # Define default target
 add_custom_target(
   default
-  DEPENDS _kernels _native _kernels_static _native_static
+  DEPENDS _kernels
+          _commons
+          _kernels_static
+          _commons_static
+          _client
+          _client_static
+          _node_manager
+          _node_manager_static
+          _coordinator
+          _coordinator_static
   COMMENT "Build all default targets")
 # ##################################################################################################
 # Enable testing

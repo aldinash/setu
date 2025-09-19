@@ -313,19 +313,13 @@ def get_package_name() -> str:
 
 ext_modules = []
 
-ext_modules.append(CMakeExtension(name="setu._kernels"))
-ext_modules.append(CMakeExtension(name="setu._native"))
+ext_modules.append(CMakeExtension(name="setu._commons"))
+ext_modules.append(CMakeExtension(name="setu._client"))
 
-package_data = {
-    get_package_name(): [
-        "model_executor/layers/fused_moe/configs/*.json",
-        "datatypes/generated/*.py",
-    ]
-}
 
 setup(
     name=get_package_name(),
-    author="Setu Team",
+    author="Vajra Team",
     version=get_setu_version(),
     license="Apache 2.0",
     description=("A high-throughput and low-latency LLM inference system"),
@@ -341,5 +335,4 @@ setup(
     install_requires=get_requirements(),
     ext_modules=ext_modules,
     cmdclass={"build_ext": cmake_build_ext},
-    package_data=package_data,
 )

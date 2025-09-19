@@ -245,7 +245,7 @@ determine_test_build_strategy() {
 
     local test_binaries_exist=false
     # Look for common test binary names
-    if [ -f "$build_subdir/native_tests" ] || [ -f "$build_subdir/kernel_tests" ] || find "$build_subdir" -name "*_test" -executable -type f -print -quit 2>/dev/null | grep -q .; then
+    if [ -f "$build_subdir/kernel_tests" ] || find "$build_subdir" -name "*_test" -executable -type f -print -quit 2>/dev/null | grep -q .; then
         test_binaries_exist=true
     fi
 
