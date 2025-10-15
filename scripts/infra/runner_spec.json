@@ -1,0 +1,14 @@
+[
+    {
+      "num_gpus": 4,
+      "num_instances": 1,
+      "tags": ["4xA6000", "2xA6000", "1xA6000"],
+      "runner_name_prefix": "gcr-gpu-high"
+    },
+    {
+      "num_gpus": 0,
+      "num_instances": 8,
+      "tags": ["cpu"],
+      "runner_name_prefix": "gcr-cpu"
+    }
+]
