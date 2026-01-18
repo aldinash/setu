@@ -19,10 +19,27 @@
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
+#include "node_manager/NodeAgent.h"
+//==============================================================================
+namespace setu::node_manager {
+//==============================================================================
+void InitNodeAgentPybindClass(py::module_& m) {
+  py::class_<NodeAgent, std::shared_ptr<NodeAgent>>(m, "NodeAgent")
+      .def(py::init<std::size_t, std::size_t, std::size_t>(),
+           py::arg("router_port"), py::arg("dealer_executor_port"),
+           py::arg("dealer_handler_port"))
+      .def("start", &NodeAgent::Start)
+      .def("stop", &NodeAgent::Stop)
+      .def("register_tensor_shard", &NodeAgent::RegisterTensorShard,
+           py::arg("tensor_name"));
+}
+//==============================================================================
+}  // namespace setu::node_manager
 //==============================================================================
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   setu::commons::Logger::InitializeLogLevel();
 
   setu::node_manager::datatypes::InitDatatypesPybindSubmodule(m);
+  setu::node_manager::InitNodeAgentPybindClass(m);
 }
 //==============================================================================

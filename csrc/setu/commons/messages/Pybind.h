@@ -14,37 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "client/Client.h"
-#include "commons/Logging.h"
-#include "commons/StdCommon.h"
+#pragma once
+//==============================================================================
 #include "commons/TorchCommon.h"
-#include "commons/enums/Enums.h"
 //==============================================================================
-namespace setu::client {
+namespace setu::commons::messages {
 //==============================================================================
-using setu::commons::enums::ErrorCode;
+void InitMessagesPybindSubmodule(py::module_& pm);
 //==============================================================================
-void InitClientPybindClass(py::module_& m) {
-  py::class_<Client, std::shared_ptr<Client>>(m, "Client")
-      .def(py::init<const std::string&>(), py::arg("endpoint"))
-      .def("register_tensor_shard", &Client::RegisterTensorShard,
-           py::arg("tensor_name"));
-}
-//==============================================================================
-void InitEnumsPybindClass(py::module_& m) {
-  py::enum_<ErrorCode>(m, "ErrorCode")
-      .value("SUCCESS", ErrorCode::kSuccess)
-      .value("INVALID_ARGUMENTS", ErrorCode::kInvalidArguments)
-      .value("TIMEOUT", ErrorCode::kTimeout)
-      .value("INTERNAL_ERROR", ErrorCode::kInternalError);
-}
-//==============================================================================
-}  // namespace setu::client
-//==============================================================================
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  setu::commons::Logger::InitializeLogLevel();
-
-  setu::client::InitEnumsPybindClass(m);
-  setu::client::InitClientPybindClass(m);
-}
+}  // namespace setu::commons::messages
 //==============================================================================

@@ -32,6 +32,13 @@ enum class ErrorCode : std::uint32_t {
   kInternalError = 3
 };
 //==============================================================================
+enum class MsgType : std::uint16_t {
+  kRegisterTensorShardRequest = 1,
+  kRegisterTensorShardResponse = 2,
+  kSubmitCopy = 3,
+  kWaitForCopy = 4,
+};
+//==============================================================================
 }  // namespace setu::commons::enums
 //==============================================================================
 // std::formatter specializations for enums
