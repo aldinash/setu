@@ -22,12 +22,17 @@
 #include "commons/datatypes/Device.h"
 #include "commons/datatypes/TensorDimShard.h"
 #include "commons/enums/Enums.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
 //==============================================================================
 // Type aliases for convenience
 using setu::commons::GenerateUUID;
 using setu::commons::enums::DType;
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Represents a shard of a tensor distributed across devices
@@ -67,6 +72,35 @@ struct TensorShard {
   }
 
   /**
+   * @brief Constructs a tensor shard with an explicit shard ID
+   *
+   * @param id_param UUID identifier for this shard
+   * @param name_param Name of the tensor being sharded
+   * @param device_param Device information where this shard resides
+   * @param device_ptr_param Pointer to the device memory location
+   * @param dtype_param Data type of the tensor elements
+   * @param dim_shards_param Map of dimension names to their shard information
+   *
+   * @throws std::invalid_argument if device_ptr is null, dim_shards is empty,
+   * or shard ID is nil
+   */
+  TensorShard(ShardId id_param, TensorName name_param, Device device_param,
+              DevicePtr device_ptr_param, DType dtype_param,
+              TensorDimShardsMap dim_shards_param)
+      : id(id_param),
+        name(name_param),
+        device(device_param),
+        device_ptr(device_ptr_param),
+        dtype(dtype_param),
+        dim_shards(dim_shards_param),
+        shard_size(GetShardSize()) {
+    ASSERT_VALID_ARGUMENTS(!id_param.is_nil(), "Shard ID cannot be nil UUID");
+    ASSERT_VALID_POINTER_ARGUMENT(device_ptr_param);
+    ASSERT_VALID_ARGUMENTS(dim_shards_param.size() > 0,
+                           "Dim shards must be non-empty");
+  }
+
+  /**
    * @brief Calculates the total number of elements in the shard
    *
    * Computes the product of all dimension sizes to determine the total
@@ -94,6 +128,10 @@ struct TensorShard {
         "dim_shards={}, shard_size={})",
         id, name, device, device_ptr, dtype, dim_shards, shard_size);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static TensorShard Deserialize(const BinaryRange& range);
 
   /**
    * @brief Returns the number of dimensions in this shard

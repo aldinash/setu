@@ -27,6 +27,7 @@
 #include "commons/datatypes/TensorShard.h"
 #include "commons/datatypes/TensorShardHandle.h"
 #include "commons/datatypes/TensorShardRef.h"
+#include "commons/datatypes/TensorShardSpec.h"
 #include "commons/datatypes/TensorSlice.h"
 #include "commons/enums/Enums.h"
 //==============================================================================
@@ -177,6 +178,31 @@ void InitTensorShardPybind(py::module_& m) {
       .def("__repr__", &TensorShard::ToString);
 }
 //==============================================================================
+void InitTensorShardSpecPybind(py::module_& m) {
+  py::class_<TensorShardSpec>(m, "TensorShardSpec", py::module_local())
+      .def(py::init<TensorName, Device, DType, TensorDimShardsMap>(),
+           py::arg("name"), py::arg("device"), py::arg("dtype"),
+           py::arg("dim_shards"))
+      .def_readonly("name", &TensorShardSpec::name,
+                    "Name of the tensor being sharded")
+      .def_readonly("device", &TensorShardSpec::device,
+                    "Device where this shard resides")
+      .def_readonly("dtype", &TensorShardSpec::dtype,
+                    "Data type of tensor elements")
+      .def_readonly("dim_shards", &TensorShardSpec::dim_shards,
+                    "Map of dimension names to shard info")
+      .def_readonly("shard_size", &TensorShardSpec::shard_size,
+                    "Size of this specific shard")
+      .def("get_shard_size", &TensorShardSpec::GetShardSize,
+           "Get total number of elements in the shard")
+      .def("get_num_dims", &TensorShardSpec::GetNumDims,
+           "Get number of dimensions in this shard")
+      .def("get_dim_slice", &TensorShardSpec::GetDimSlice, py::arg("dim_name"),
+           "Get slice information for a specific dimension")
+      .def("__str__", &TensorShardSpec::ToString)
+      .def("__repr__", &TensorShardSpec::ToString);
+}
+//==============================================================================
 void InitTensorShardRefPybind(py::module_& m) {
   py::class_<TensorShardRef, TensorShardRefPtr>(m, "TensorShardRef",
                                                 py::module_local())
@@ -228,6 +254,7 @@ void InitDatatypesPybindSubmodule(py::module_& pm) {
   InitCopySpecPybind(m);
   InitTensorDimShardPybind(m);
   InitTensorShardPybind(m);
+  InitTensorShardSpecPybind(m);
   InitTensorShardRefPybind(m);
   InitTensorShardReadHandlePybind(m);
   InitTensorShardWriteHandlePybind(m);

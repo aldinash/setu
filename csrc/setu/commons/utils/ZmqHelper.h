@@ -31,6 +31,13 @@ using setu::commons::NonCopyableNonMovable;
 using ZmqSocketPtr = std::shared_ptr<zmq::socket_t>;
 using ZmqContextPtr = std::shared_ptr<zmq::context_t>;
 //==============================================================================
+// Socket configuration constants
+constexpr std::size_t kPubSocketWaitMs = 500;  // Wait time for PUB socket
+                                               // subscribers to connect
+constexpr std::size_t kSocketBindRetries = 5;  // Number of bind retry attempts
+constexpr std::size_t kSocketBindBackoffS =
+    5;  // Backoff time between retries in seconds
+//==============================================================================
 class ZmqHelper : public NonCopyableNonMovable {
  public:
   /**
@@ -135,7 +142,7 @@ class ZmqHelper : public NonCopyableNonMovable {
   }
 
   /**
-   * @brief Send multiple objects as a multipart message
+   * @brief Send multiple objects as a multipart message (homogeneous types)
    *
    * @tparam T The setu type to send (must satisfy Serializable concept)
    * @param socket The ZMQ socket to send over
@@ -166,7 +173,7 @@ class ZmqHelper : public NonCopyableNonMovable {
   }
 
   /**
-   * @brief Receive multiple objects from a multipart message
+   * @brief Receive multiple objects from a multipart message (homogeneous)
    *
    * @tparam T The setu type to receive (must satisfy Serializable concept)
    * @param socket The ZMQ socket to receive from
@@ -195,6 +202,79 @@ class ZmqHelper : public NonCopyableNonMovable {
     }
 
     return results;
+  }
+
+  /**
+   * @brief Create and bind a ZMQ socket with standard configuration
+   *
+   * Automatically configures linger=0 and adds sleep for PUB sockets to allow
+   * subscribers to connect before first message is sent.
+   *
+   * @param context [in] ZMQ context to create socket in
+   * @param socket_type [in] Type of ZMQ socket to create
+   * @param port [in] Port number to bind to
+   * @return Created and configured socket
+   */
+  [[nodiscard]] static ZmqSocketPtr CreateAndBindSocket(
+      ZmqContextPtr context /*[in]*/, zmq::socket_type socket_type /*[in]*/,
+      std::size_t port /*[in]*/) {
+    ASSERT_VALID_POINTER_ARGUMENT(context);
+
+    auto socket = std::make_shared<zmq::socket_t>(*context, socket_type);
+    socket->set(zmq::sockopt::linger, 0);
+
+    std::string endpoint = std::format("tcp://*:{}", port);
+
+    // Retry binding with backoff
+    for (std::size_t num_retries = 0; num_retries < kSocketBindRetries;
+         ++num_retries) {
+      try {
+        socket->bind(endpoint);
+        break;  // Success
+      } catch (const zmq::error_t& e) {
+        if (num_retries == kSocketBindRetries - 1) {
+          RAISE_RUNTIME_ERROR("Failed to bind socket to {} after {} retries",
+                              endpoint, kSocketBindRetries);
+        }
+        LOG_WARNING("Failed to bind socket to {}: {}", endpoint, e.what());
+        LOG_WARNING("Retrying in {} seconds...", kSocketBindBackoffS);
+        std::this_thread::sleep_for(std::chrono::seconds(kSocketBindBackoffS));
+      }
+    }
+
+    // PUB sockets need time for subscribers to connect
+    if (socket_type == zmq::socket_type::pub) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(kPubSocketWaitMs));
+    }
+
+    return socket;
+  }
+
+  /**
+   * @brief Create and connect a ZMQ socket with standard configuration
+   *
+   * Automatically configures linger=0 and sets subscribe="" for SUB sockets.
+   *
+   * @param context [in] ZMQ context to create socket in
+   * @param socket_type [in] Type of ZMQ socket to create
+   * @param endpoint [in] Endpoint to connect to (e.g., "tcp://host:port")
+   * @return Created and configured socket
+   */
+  [[nodiscard]] static ZmqSocketPtr CreateAndConnectSocket(
+      ZmqContextPtr context /*[in]*/, zmq::socket_type socket_type /*[in]*/,
+      const std::string& endpoint /*[in]*/) {
+    ASSERT_VALID_POINTER_ARGUMENT(context);
+
+    auto socket = std::make_shared<zmq::socket_t>(*context, socket_type);
+    socket->set(zmq::sockopt::linger, 0);
+    socket->connect(endpoint);
+
+    // SUB sockets need subscribe filter
+    if (socket_type == zmq::socket_type::sub) {
+      socket->set(zmq::sockopt::subscribe, "");
+    }
+
+    return socket;
   }
 
  private:

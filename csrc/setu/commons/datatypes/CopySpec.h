@@ -20,8 +20,13 @@
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 #include "commons/datatypes/TensorSelection.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Specification for copying tensor data between source and destination
@@ -69,6 +74,10 @@ struct CopySpec {
         "dst_selection={})",
         src_name, dst_name, src_selection, dst_selection);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static CopySpec Deserialize(const BinaryRange& range);
 
   const TensorName src_name;               ///< Name of the source tensor
   const TensorName dst_name;               ///< Name of the destination tensor

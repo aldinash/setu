@@ -19,8 +19,13 @@
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Represents a named dimension of a tensor with its size
@@ -53,6 +58,10 @@ struct TensorDim {
   [[nodiscard]] std::string ToString() const {
     return std::format("TensorDim(name={}, size={})", name, size);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static TensorDim Deserialize(const BinaryRange& range);
 
   const TensorDimName name;  ///< Name of the tensor dimension
   const std::size_t size;    ///< Size of the tensor dimension

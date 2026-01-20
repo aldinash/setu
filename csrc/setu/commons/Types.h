@@ -46,6 +46,8 @@ using DeviceRank = std::size_t;
 using LocalDeviceRank = std::size_t;
 /// @brief Unique serial number for tracking objects
 using SerialNumber = std::uint64_t;
+/// @brief Unique identity for client identity (zmq)
+using ClientIdentity = std::string;
 
 // Tensor related types
 /// @brief Name identifier for a tensor
@@ -67,6 +69,8 @@ using TensorIndicesBitset = boost::dynamic_bitset<>;
 using TensorIndicesMap = std::unordered_map<TensorDimName, TensorIndicesBitset>;
 /// @brief Unique identifier for a tensor shard (UUID)
 using ShardId = boost::uuids::uuid;
+/// @brief Unique identifier for a copy operation (UUID)
+using CopyOperationId = boost::uuids::uuid;
 
 // Binary serialization related types
 /// @brief Buffer for storing binary serialized data

@@ -20,10 +20,15 @@
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 #include "commons/enums/Enums.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
 //==============================================================================
 using setu::commons::enums::DeviceKind;
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Represents a physical compute device in the distributed system
@@ -63,6 +68,10 @@ struct Device {
         "Device(kind={}, node_rank={}, device_rank={}, local_device_rank={})",
         kind, node_rank, device_rank, local_device_rank);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static Device Deserialize(const BinaryRange& range);
 
   const DeviceKind kind;         ///< Type of device (CPU, GPU, etc.)
   const NodeRank node_rank;      ///< Rank of the node containing this device

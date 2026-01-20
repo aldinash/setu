@@ -18,13 +18,12 @@
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
+#include "commons/datatypes/Pybind.h"
 //==============================================================================
 namespace setu::node_manager::datatypes {
 //==============================================================================
 void InitDatatypesPybindSubmodule(py::module_& pm) {
-  // Node manager datatypes submodule placeholder
-  // All shard types have been moved to commons/datatypes
-  auto m = pm.def_submodule("datatypes", "Node manager datatypes submodule");
+  setu::commons::datatypes::InitDatatypesPybindSubmodule(pm);
 }
 //==============================================================================
 }  // namespace setu::node_manager::datatypes
