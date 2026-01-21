@@ -35,7 +35,6 @@ Coordinator::Coordinator(std::size_t router_executor_port,
     : router_executor_port_(router_executor_port),
       router_handler_port_(router_handler_port) {
   InitZmqSockets();
-  InitializeThreads();
 }
 
 Coordinator::~Coordinator() {
@@ -46,6 +45,7 @@ Coordinator::~Coordinator() {
 void Coordinator::Start() {
   LOG_DEBUG("Starting Coordinator");
   StartHandlerLoop();
+  StartExecutorLoop();
 }
 
 void Coordinator::Stop() {
@@ -102,18 +102,6 @@ void Coordinator::CloseZmqSockets() {
   LOG_DEBUG("Closed ZMQ sockets successfully");
 }
 
-void Coordinator::InitializeThreads() {
-  LOG_DEBUG("Initializing Coordinator threads");
-  StartHandlerLoop();
-  StartExecutorLoop();
-}
-
-void Coordinator::StopThreads() {
-  LOG_DEBUG("Stopping Coordinator threads");
-  StopHandlerLoop();
-  StopExecutorLoop();
-}
-
 void Coordinator::StartHandlerLoop() {
   LOG_DEBUG("Starting handler loop");
 
@@ -152,7 +140,71 @@ void Coordinator::StopExecutorLoop() {
   LOG_DEBUG("Executor loop stopped");
 }
 
-void Coordinator::HandlerLoop() { LOG_DEBUG("Entering handler loop"); }
+void Coordinator::HandlerLoop() {
+  LOG_DEBUG("Entering handler loop");
+
+  handler_running_ = true;
+  while (handler_running_) {
+    // Try to receive requests from NodeAgents (via DEALER sockets)
+    // Use TryRecvRequestFromDealer since NodeAgent uses DEALER socket
+    if (auto result_opt = SetuCommHelper::TryRecvRequestFromDealer(
+            node_agent_router_handler_socket_)) {
+      auto& [node_agent_identity, request] = result_opt.value();
+      std::visit(
+          [&](const auto& req) {
+            HandleNodeAgentRequest(node_agent_identity, req);
+          },
+          request);
+    }
+  }
+}
+
+void Coordinator::HandleNodeAgentRequest(
+    const ClientIdentity& node_agent_identity,
+    const RegisterTensorShardRequest& request) {
+  LOG_INFO("Coordinator received RegisterTensorShardRequest for tensor: {}",
+           request.tensor_shard_spec.name);
+
+  // TODO: Actually register the tensor shard
+  // For now, just log and respond with success
+  LOG_INFO("Registered tensor shard: {} (stub implementation)",
+           request.tensor_shard_spec.name);
+
+  RegisterTensorShardResponse response(ErrorCode::kSuccess, std::nullopt);
+  SetuCommHelper::SendToDealer(node_agent_router_handler_socket_,
+                               node_agent_identity, response);
+}
+
+void Coordinator::HandleNodeAgentRequest(
+    const ClientIdentity& node_agent_identity,
+    const SubmitCopyRequest& request) {
+  LOG_INFO("Coordinator received SubmitCopyRequest from {} to {}",
+           request.copy_spec.src_name, request.copy_spec.dst_name);
+
+  // TODO: Actually submit the copy operation
+  // For now, just log and respond with success
+  LOG_INFO("Submitted copy operation: {} -> {} (stub implementation)",
+           request.copy_spec.src_name, request.copy_spec.dst_name);
+
+  SubmitCopyResponse response(ErrorCode::kSuccess);
+  SetuCommHelper::SendToDealer(node_agent_router_handler_socket_,
+                               node_agent_identity, response);
+}
+
+void Coordinator::HandleNodeAgentRequest(
+    const ClientIdentity& node_agent_identity,
+    const WaitForCopyRequest& request) {
+  LOG_INFO("Coordinator received WaitForCopyRequest for copy operation ID: {}",
+           request.copy_operation_id);
+
+  // TODO: Actually wait for the copy operation
+  // For now, just log and respond with success
+  LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
+
+  WaitForCopyResponse response(ErrorCode::kSuccess);
+  SetuCommHelper::SendToDealer(node_agent_router_handler_socket_,
+                               node_agent_identity, response);
+}
 
 void Coordinator::ExecutorLoop() {
   LOG_DEBUG("Entering executor loop");

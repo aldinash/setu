@@ -55,9 +55,6 @@ class Worker {
   void Execute(const Program& program);
 
  private:
-  void InitializeThreads();
-  void StopThreads();
-
   void InitZmqSockets();
   void CloseZmqSockets();
 

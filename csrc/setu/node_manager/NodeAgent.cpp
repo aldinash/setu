@@ -49,7 +49,6 @@ NodeAgent::NodeAgent(NodeRank node_rank, std::size_t router_port,
       dealer_executor_port_(dealer_executor_port),
       dealer_handler_port_(dealer_handler_port) {
   InitZmqSockets();
-  InitializeThreads();
 }
 
 NodeAgent::~NodeAgent() {
@@ -59,7 +58,12 @@ NodeAgent::~NodeAgent() {
 
 void NodeAgent::Start() {
   LOG_DEBUG("Starting NodeAgent");
-  StartHandlerLoop();
+  if (!handler_running_.load()) {
+    StartHandlerLoop();
+  }
+  if (!executor_running_.load()) {
+    StartExecutorLoop();
+  }
 }
 
 void NodeAgent::Stop() {
@@ -112,10 +116,15 @@ void NodeAgent::InitZmqSockets() {
   client_router_socket_ = ZmqHelper::CreateAndBindSocket(
       zmq_context_, zmq::socket_type::router, router_port_);
 
-  coordinator_dealer_executor_socket_ = ZmqHelper::CreateAndBindSocket(
-      zmq_context_, zmq::socket_type::dealer, dealer_executor_port_);
-  coordinator_dealer_handler_socket_ = ZmqHelper::CreateAndBindSocket(
-      zmq_context_, zmq::socket_type::dealer, dealer_handler_port_);
+  std::string executor_endpoint =
+      std::format("tcp://localhost:{}", dealer_executor_port_);
+  coordinator_dealer_executor_socket_ = ZmqHelper::CreateAndConnectSocket(
+      zmq_context_, zmq::socket_type::dealer, executor_endpoint);
+
+  std::string handler_endpoint =
+      std::format("tcp://localhost:{}", dealer_handler_port_);
+  coordinator_dealer_handler_socket_ = ZmqHelper::CreateAndConnectSocket(
+      zmq_context_, zmq::socket_type::dealer, handler_endpoint);
 
   LOG_DEBUG("Initialized ZMQ sockets successfully");
 }
@@ -139,18 +148,6 @@ void NodeAgent::CloseZmqSockets() {
   if (zmq_context_) zmq_context_->close();
 
   LOG_DEBUG("Closed ZMQ sockets successfully");
-}
-
-void NodeAgent::InitializeThreads() {
-  LOG_DEBUG("Initializing Node Agent threads");
-  StartHandlerLoop();
-  StartExecutorLoop();
-}
-
-void NodeAgent::StopThreads() {
-  LOG_DEBUG("Stopping Node Agent threads");
-  StopHandlerLoop();
-  StopExecutorLoop();
 }
 
 void NodeAgent::StartHandlerLoop() {
@@ -218,13 +215,14 @@ void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
   LOG_DEBUG("Handling RegisterTensorShardRequest for tensor: {}",
             request.tensor_shard_spec.name);
 
-  auto shard_ref_opt = RegisterTensorShard(request.tensor_shard_spec);
+  // Forward request to coordinator
+  SetuCommHelper::Send(coordinator_dealer_handler_socket_, request);
 
-  RegisterTensorShardResponse response(shard_ref_opt.has_value()
-                                           ? ErrorCode::kSuccess
-                                           : ErrorCode::kInternalError,
-                                       shard_ref_opt);
+  // Wait for response from coordinator
+  auto response = SetuCommHelper::Recv<RegisterTensorShardResponse>(
+      coordinator_dealer_handler_socket_);
 
+  // Forward response to client
   SetuCommHelper::SendToClient(client_router_socket_, client_identity,
                                response);
 }
@@ -234,12 +232,14 @@ void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
   LOG_DEBUG("Handling SubmitCopyRequest from {} to {}",
             request.copy_spec.src_name, request.copy_spec.dst_name);
 
-  auto copy_op_id_opt = SubmitCopy(request.copy_spec);
+  // Forward request to coordinator
+  SetuCommHelper::Send(coordinator_dealer_handler_socket_, request);
 
-  SubmitCopyResponse response(copy_op_id_opt.has_value()
-                                  ? ErrorCode::kSuccess
-                                  : ErrorCode::kInternalError);
+  // Wait for response from coordinator
+  auto response = SetuCommHelper::Recv<SubmitCopyResponse>(
+      coordinator_dealer_handler_socket_);
 
+  // Forward response to client
   SetuCommHelper::SendToClient(client_router_socket_, client_identity,
                                response);
 }

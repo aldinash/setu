@@ -66,9 +66,6 @@ class Coordinator {
   void Stop();
 
  private:
-  void InitializeThreads();
-  void StopThreads();
-
   void StartHandlerLoop();
   void StopHandlerLoop();
 
@@ -77,6 +74,13 @@ class Coordinator {
 
   void HandlerLoop();
   void ExecutorLoop();
+
+  void HandleNodeAgentRequest(const ClientIdentity& node_agent_identity,
+                              const RegisterTensorShardRequest& request);
+  void HandleNodeAgentRequest(const ClientIdentity& node_agent_identity,
+                              const SubmitCopyRequest& request);
+  void HandleNodeAgentRequest(const ClientIdentity& node_agent_identity,
+                              const WaitForCopyRequest& request);
 
   void InitZmqSockets();
   void CloseZmqSockets();

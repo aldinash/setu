@@ -180,25 +180,20 @@ void InitTensorShardPybind(py::module_& m) {
 //==============================================================================
 void InitTensorShardSpecPybind(py::module_& m) {
   py::class_<TensorShardSpec>(m, "TensorShardSpec", py::module_local())
-      .def(py::init<TensorName, Device, DType, TensorDimShardsMap>(),
-           py::arg("name"), py::arg("device"), py::arg("dtype"),
-           py::arg("dim_shards"))
+      .def(py::init<TensorName, std::vector<TensorDim>, DType, Device>(),
+           py::arg("name"), py::arg("dims"), py::arg("dtype"),
+           py::arg("device"))
       .def_readonly("name", &TensorShardSpec::name,
-                    "Name of the tensor being sharded")
-      .def_readonly("device", &TensorShardSpec::device,
-                    "Device where this shard resides")
+                    "Name/identifier for the tensor")
+      .def_readonly("dims", &TensorShardSpec::dims, "List of tensor dimensions")
       .def_readonly("dtype", &TensorShardSpec::dtype,
                     "Data type of tensor elements")
-      .def_readonly("dim_shards", &TensorShardSpec::dim_shards,
-                    "Map of dimension names to shard info")
-      .def_readonly("shard_size", &TensorShardSpec::shard_size,
-                    "Size of this specific shard")
-      .def("get_shard_size", &TensorShardSpec::GetShardSize,
-           "Get total number of elements in the shard")
+      .def_readonly("device", &TensorShardSpec::device,
+                    "Device where tensor resides")
+      .def("get_num_elements", &TensorShardSpec::GetNumElements,
+           "Get total number of elements in the tensor")
       .def("get_num_dims", &TensorShardSpec::GetNumDims,
-           "Get number of dimensions in this shard")
-      .def("get_dim_slice", &TensorShardSpec::GetDimSlice, py::arg("dim_name"),
-           "Get slice information for a specific dimension")
+           "Get number of dimensions")
       .def("__str__", &TensorShardSpec::ToString)
       .def("__repr__", &TensorShardSpec::ToString);
 }

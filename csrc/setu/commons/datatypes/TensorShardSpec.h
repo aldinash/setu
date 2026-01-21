@@ -16,11 +16,11 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include "commons/BoostCommon.h"
+#include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 #include "commons/datatypes/Device.h"
-#include "commons/datatypes/TensorDimShard.h"
+#include "commons/datatypes/TensorDim.h"
 #include "commons/enums/Enums.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
@@ -32,98 +32,81 @@ using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
- * @brief Represents a shard of a tensor distributed across devices
+ * @brief Specification for creating a tensor shard
  *
- * TensorShardSpec encapsulates a portion of a tensor that resides on a specific
- * device, including information about which dimensions are sharded and how they
- * are sliced. This enables distributed tensor operations across multiple
- * devices.
+ * TensorShardSpec contains the user-provided specification for a tensor shard:
+ * - name: identifier for the tensor
+ * - dims: list of dimensions with names and sizes
+ * - dtype: data type of tensor elements
+ * - device: device where the tensor resides
+ *
+ * This is the simplified input from the client. The coordinator will use this
+ * to create the full TensorShard with generated UUIDs and additional metadata.
  */
 struct TensorShardSpec {
   /**
-   * @brief Constructs a tensor shard with all required parameters
+   * @brief Constructs a tensor shard specification
    *
-   * Automatically generates a UUID for the shard identifier.
-   *
-   * @param name_param Name of the tensor being sharded
-   * @param device_param Device information where this shard resides
+   * @param name_param Name/identifier for the tensor
+   * @param dims_param Vector of TensorDim specifying each dimension
    * @param dtype_param Data type of the tensor elements
-   * @param dim_shards_param Map of dimension names to their shard information
+   * @param device_param Device where this tensor resides
    *
-   * @throws std::invalid_argument if dim_shards is empty
+   * @throws std::invalid_argument if dims is empty
    */
-  TensorShardSpec(TensorName name_param, Device device_param, DType dtype_param,
-                  TensorDimShardsMap dim_shards_param)
-      : name(name_param),
-        device(device_param),
+  TensorShardSpec(TensorName name_param, std::vector<TensorDim> dims_param,
+                  DType dtype_param, Device device_param)
+      : name(std::move(name_param)),
+        dims(std::move(dims_param)),
         dtype(dtype_param),
-        dim_shards(dim_shards_param),
-        shard_size(GetShardSize()) {
-    ASSERT_VALID_ARGUMENTS(dim_shards_param.size() > 0,
-                           "Dim shards must be non-empty");
+        device(device_param) {
+    ASSERT_VALID_ARGUMENTS(!dims.empty(), "Dims must be non-empty");
   }
 
   /**
-   * @brief Calculates the total number of elements in the shard
+   * @brief Calculates the total number of elements in the tensor
    *
-   * Computes the product of all dimension sizes to determine the total
-   * number of elements that would be contained in a shard of this shape.
-   *
-   * @return Total number of elements across all dimensions
+   * @return Total number of elements (product of all dimension sizes)
    */
-  [[nodiscard]] std::size_t GetShardSize() const {
-    std::size_t size = 1;
-    for (const auto& [_, dim_shard] : dim_shards) {
-      size *= dim_shard.shard_size;
+  [[nodiscard]] std::size_t GetNumElements() const {
+    std::size_t num_elements = 1;
+    for (const auto& dim : dims) {
+      num_elements *= dim.size;
     }
-    return size;
+    return num_elements;
   }
 
   /**
-   * @brief Returns a string representation of the tensor shard
+   * @brief Returns the number of dimensions
    *
-   * @return String containing all shard properties including ID, name, device,
-   * and dimensions
+   * @return Number of tensor dimensions
+   */
+  [[nodiscard]] std::size_t GetNumDims() const { return dims.size(); }
+
+  /**
+   * @brief Returns a string representation of the tensor shard spec
+   *
+   * @return String containing all spec properties
    */
   [[nodiscard]] std::string ToString() const {
-    return std::format(
-        "TensorShardSpec(name={}, device={}, dtype={}, "
-        "dim_shards={}, shard_size={})",
-        name, device, dtype, dim_shards, shard_size);
+    std::string dims_str = "[";
+    for (std::size_t i = 0; i < dims.size(); ++i) {
+      if (i > 0) dims_str += ", ";
+      dims_str += dims[i].ToString();
+    }
+    dims_str += "]";
+    return std::format("TensorShardSpec(name={}, dims={}, dtype={}, device={})",
+                       name, dims_str, dtype, device);
   }
 
   void Serialize(BinaryBuffer& buffer) const;
 
   static TensorShardSpec Deserialize(const BinaryRange& range);
 
-  /**
-   * @brief Returns the number of dimensions in this shard
-   *
-   * @return Number of tensor dimensions represented in this shard
-   */
-  [[nodiscard]] std::size_t GetNumDims() const { return dim_shards.size(); }
-
-  /**
-   * @brief Retrieves the slice information for a specific dimension
-   *
-   * @param dim_name Name of the dimension to get slice for
-   * @return Shared pointer to the TensorSlice for the specified dimension
-   *
-   * @throws std::invalid_argument if dimension name is not found in this shard
-   */
-  [[nodiscard]] TensorSlicePtr GetDimSlice(
-      const TensorDimName& dim_name) const {
-    ASSERT_VALID_ARGUMENTS(dim_shards.find(dim_name) != dim_shards.end(),
-                           "Dim {} not found", dim_name);
-    return dim_shards.at(dim_name).slice;
-  }
-
-  const TensorName name;  ///< Name of the tensor being sharded
-  const Device device;    ///< Device where this shard resides
-  const DType dtype;      ///< Data type of tensor elements
-  const TensorDimShardsMap
-      dim_shards;                ///< Map of dimension names to shard info
-  const std::size_t shard_size;  ///< Size of this specific shard
+  const TensorName name;              ///< Name/identifier for the tensor
+  const std::vector<TensorDim> dims;  ///< Dimensions of the tensor
+  const DType dtype;                  ///< Data type of tensor elements
+  const Device device;                ///< Device where tensor resides
 };
 //==============================================================================
 /// @brief Shared pointer to a TensorShardSpec object

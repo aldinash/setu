@@ -77,16 +77,6 @@ void Worker::CloseZmqSockets() {
   LOG_DEBUG("Closed ZMQ sockets successfully");
 }
 
-void Worker::InitializeThreads() {
-  LOG_DEBUG("Initializing Worker threads");
-  // Threads are started via Start() method, not in constructor
-}
-
-void Worker::StopThreads() {
-  LOG_DEBUG("Stopping Worker threads");
-  StopExecutorLoop();
-}
-
 void Worker::StartExecutorLoop() {
   LOG_DEBUG("Starting executor loop");
 

@@ -25,14 +25,14 @@ using setu::commons::utils::BinaryWriter;
 //==============================================================================
 void TensorShardSpec::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(name, device, dtype, dim_shards);
+  writer.WriteFields(name, dims, dtype, device);
 }
 
 TensorShardSpec TensorShardSpec::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [name_val, device_val, dtype_val, dim_shards_val] =
-      reader.ReadFields<TensorName, Device, DType, TensorDimShardsMap>();
-  return TensorShardSpec(name_val, device_val, dtype_val, dim_shards_val);
+  auto [name_val, dims_val, dtype_val, device_val] =
+      reader.ReadFields<TensorName, std::vector<TensorDim>, DType, Device>();
+  return TensorShardSpec(name_val, dims_val, dtype_val, device_val);
 }
 //==============================================================================
 }  // namespace setu::commons::datatypes

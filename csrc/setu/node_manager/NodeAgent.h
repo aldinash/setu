@@ -78,9 +78,6 @@ class NodeAgent {
   void Stop();
 
  private:
-  void InitializeThreads();
-  void StopThreads();
-
   void StartHandlerLoop();
   void StopHandlerLoop();
 
