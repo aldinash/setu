@@ -28,7 +28,7 @@
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Plan.h"
-#include "worker/Worker.h"
+#include "node_manager/worker/Worker.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
@@ -52,7 +52,7 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
-using setu::worker::Worker;
+using setu::node_manager::worker::Worker;
 //==============================================================================
 class NodeAgent {
  public:

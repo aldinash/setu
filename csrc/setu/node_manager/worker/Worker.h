@@ -26,8 +26,9 @@
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Instruction.h"
 #include "coordinator/datatypes/Program.h"
-
-namespace setu::worker {
+//==============================================================================
+namespace setu::node_manager::worker {
+//==============================================================================
 using setu::commons::ClientRank;
 using setu::commons::CopyOperationId;
 using setu::commons::datatypes::CopySpec;
@@ -39,7 +40,7 @@ using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::Program;
-
+//==============================================================================
 class Worker {
  public:
   Worker(Device device, std::size_t reply_port);
@@ -76,4 +77,5 @@ class Worker {
   std::thread executor_thread_;
 };
 //==============================================================================
-}  // namespace setu::worker
+}  // namespace setu::node_manager::worker
+//==============================================================================

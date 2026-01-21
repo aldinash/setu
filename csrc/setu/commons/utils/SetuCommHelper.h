@@ -290,7 +290,7 @@ class SetuCommHelper : public NonCopyableNonMovable {
   /// @return Optional tuple of (node agent identity, request variant)
   [[nodiscard]] static std::optional<
       std::tuple<ClientIdentity, AnyClientRequest>>
-  TryRecvRequestFromDealer(ZmqSocketPtr socket) {
+  TryRecvRequestFromNodeAgent(ZmqSocketPtr socket) {
     ASSERT_VALID_POINTER_ARGUMENT(socket);
 
     // Identity frame (non-blocking)
@@ -328,11 +328,12 @@ class SetuCommHelper : public NonCopyableNonMovable {
     return std::make_tuple(std::move(identity), std::move(request));
   }
 
-  /// @brief Send a response to a DEALER via ROUTER socket
-  /// @note DEALER→ROUTER response has no delimiter frame
+  /// @brief Send a response to a NODE AGENT via ROUTER socket
+  /// @note NODE AGENT→ROUTER response has no delimiter frame
   template <Serializable T>
-  static void SendToDealer(ZmqSocketPtr socket, const ClientIdentity& identity,
-                           const T& message) {
+  static void SendToNodeAgent(ZmqSocketPtr socket,
+                              const ClientIdentity& identity,
+                              const T& message) {
     ASSERT_VALID_POINTER_ARGUMENT(socket);
     ASSERT_VALID_ARGUMENTS(!identity.empty(),
                            "Dealer identity cannot be empty");

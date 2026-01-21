@@ -92,16 +92,10 @@ file(GLOB_RECURSE CLIENT_SRC "csrc/setu/client/*.cpp")
 define_setu_extension(_client "${CLIENT_SRC}" "setu_common_objects" "")
 define_setu_static(_client_static "${CLIENT_SRC}" "setu_common_objects" "")
 
-# Worker must be defined before node_manager since node_manager depends on it
-file(GLOB_RECURSE WORKER_SRC "csrc/setu/worker/*.cpp")
-define_setu_extension(_worker "${WORKER_SRC}" "setu_common_objects" "_kernels_common")
-define_setu_static(_worker_static "${WORKER_SRC}" "setu_common_objects" "_kernels_common")
-
 file(GLOB_RECURSE NODE_MANAGER_SRC "csrc/setu/node_manager/*.cpp")
-define_setu_extension(_node_manager "${NODE_MANAGER_SRC}" "setu_common_objects"
-                      "_kernels_common;_worker_static")
+define_setu_extension(_node_manager "${NODE_MANAGER_SRC}" "setu_common_objects" "_kernels_common")
 define_setu_static(_node_manager_static "${NODE_MANAGER_SRC}" "setu_common_objects"
-                   "_kernels_common;_worker_static")
+                   "_kernels_common")
 
 file(GLOB_RECURSE COORDINATOR_SRC "csrc/setu/coordinator/*.cpp")
 define_setu_extension(_coordinator "${COORDINATOR_SRC}" "setu_common_objects" "")
@@ -169,12 +163,6 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
   target_precompile_headers(
     _node_manager_static PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/node_manager/PrecompiledCommonHeaders.h")
-
-  target_precompile_headers(
-    _worker PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/worker/PrecompiledCommonHeaders.h")
-  target_precompile_headers(
-    _worker_static PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/csrc/setu/worker/PrecompiledCommonHeaders.h")
 
   target_precompile_headers(
     _coordinator PRIVATE

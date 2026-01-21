@@ -27,7 +27,6 @@
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Plan.h"
-#include "worker/Worker.h"
 //==============================================================================
 namespace setu::coordinator {
 //==============================================================================
@@ -46,7 +45,6 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
-using setu::worker::Worker;
 //==============================================================================
 class Coordinator {
  public:

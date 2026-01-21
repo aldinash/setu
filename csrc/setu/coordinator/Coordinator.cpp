@@ -147,7 +147,7 @@ void Coordinator::HandlerLoop() {
   while (handler_running_) {
     // Try to receive requests from NodeAgents (via DEALER sockets)
     // Use TryRecvRequestFromDealer since NodeAgent uses DEALER socket
-    if (auto result_opt = SetuCommHelper::TryRecvRequestFromDealer(
+    if (auto result_opt = SetuCommHelper::TryRecvRequestFromNodeAgent(
             node_agent_router_handler_socket_)) {
       auto& [node_agent_identity, request] = result_opt.value();
       std::visit(
@@ -171,8 +171,8 @@ void Coordinator::HandleNodeAgentRequest(
            request.tensor_shard_spec.name);
 
   RegisterTensorShardResponse response(ErrorCode::kSuccess, std::nullopt);
-  SetuCommHelper::SendToDealer(node_agent_router_handler_socket_,
-                               node_agent_identity, response);
+  SetuCommHelper::SendToNodeAgent(node_agent_router_handler_socket_,
+                                  node_agent_identity, response);
 }
 
 void Coordinator::HandleNodeAgentRequest(
@@ -187,8 +187,8 @@ void Coordinator::HandleNodeAgentRequest(
            request.copy_spec.src_name, request.copy_spec.dst_name);
 
   SubmitCopyResponse response(ErrorCode::kSuccess);
-  SetuCommHelper::SendToDealer(node_agent_router_handler_socket_,
-                               node_agent_identity, response);
+  SetuCommHelper::SendToNodeAgent(node_agent_router_handler_socket_,
+                                  node_agent_identity, response);
 }
 
 void Coordinator::HandleNodeAgentRequest(
@@ -202,8 +202,8 @@ void Coordinator::HandleNodeAgentRequest(
   LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
 
   WaitForCopyResponse response(ErrorCode::kSuccess);
-  SetuCommHelper::SendToDealer(node_agent_router_handler_socket_,
-                               node_agent_identity, response);
+  SetuCommHelper::SendToNodeAgent(node_agent_router_handler_socket_,
+                                  node_agent_identity, response);
 }
 
 void Coordinator::ExecutorLoop() {

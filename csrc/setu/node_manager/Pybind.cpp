@@ -22,7 +22,9 @@
 #include "commons/datatypes/CopySpec.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
+#include "coordinator/datatypes/Program.h"
 #include "node_manager/NodeAgent.h"
+#include "node_manager/worker/Worker.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
@@ -32,6 +34,22 @@ using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
+using setu::coordinator::datatypes::Program;
+using setu::node_manager::worker::Worker;
+//==============================================================================
+void InitWorkerPybindClass(py::module_& m) {
+  py::class_<Worker, std::shared_ptr<Worker>>(m, "Worker")
+      .def(py::init<Device, std::size_t>(), py::arg("device"),
+           py::arg("reply_port"),
+           "Create a worker bound to a device and reply port")
+      .def("start", &Worker::Start, "Start the worker executor loop")
+      .def("stop", &Worker::Stop, "Stop the worker executor loop")
+      .def("execute", &Worker::Execute, py::arg("program"),
+           "Execute a program on the worker")
+      .def("is_running", &Worker::IsRunning, "Check if worker is running")
+      .def_property_readonly("device", &Worker::GetDevice,
+                             "Get the device this worker is bound to");
+}
 //==============================================================================
 void InitNodeAgentPybindClass(py::module_& m) {
   py::class_<NodeAgent, std::shared_ptr<NodeAgent>>(m, "NodeAgent")
@@ -63,6 +81,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   setu::commons::Logger::InitializeLogLevel();
 
   setu::node_manager::datatypes::InitDatatypesPybindSubmodule(m);
+  setu::node_manager::InitWorkerPybindClass(m);
   setu::node_manager::InitNodeAgentPybindClass(m);
 }
 //==============================================================================
