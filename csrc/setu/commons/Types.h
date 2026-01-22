@@ -47,7 +47,7 @@ using LocalDeviceRank = std::size_t;
 /// @brief Unique serial number for tracking objects
 using SerialNumber = std::uint64_t;
 /// @brief Unique identity for client identity (zmq)
-using ClientIdentity = std::string;
+using Identity = std::string;
 
 // Tensor related types
 /// @brief Name identifier for a tensor

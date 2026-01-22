@@ -17,6 +17,7 @@
 #include "node_manager/worker/Worker.h"
 //==============================================================================
 #include "commons/Logging.h"
+#include "commons/messages/Messages.h"
 #include "commons/utils/SetuCommHelper.h"
 #include "commons/utils/ThreadingUtils.h"
 //==============================================================================

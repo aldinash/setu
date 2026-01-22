@@ -40,25 +40,23 @@ namespace setu::commons::messages {
 // Request variants by source
 //==============================================================================
 // Requests from clients to NodeAgent
-using AnyClientRequest = std::variant<RegisterTensorShardRequest,
-                                      SubmitCopyRequest, WaitForCopyRequest>;
+using ClientRequest = std::variant<RegisterTensorShardRequest,
+                                   SubmitCopyRequest, WaitForCopyRequest>;
 
 // Requests from coordinator to NodeAgent
-using AnyCoordinatorRequest =
+using CoordinatorRequest =
     std::variant<AllocateTensorRequest, CopyOperationFinishedRequest,
                  ExecuteRequest>;
 
-// All request types (for generic handling if needed)
-using AnyRequest = std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
-                                WaitForCopyRequest, AllocateTensorRequest,
-                                CopyOperationFinishedRequest, ExecuteRequest>;
+using Request = std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
+                             WaitForCopyRequest, AllocateTensorRequest,
+                             CopyOperationFinishedRequest, ExecuteRequest>;
 //==============================================================================
 // AnyResponse - Variant of all response types
 //==============================================================================
-using AnyResponse =
-    std::variant<RegisterTensorShardResponse, SubmitCopyResponse,
-                 WaitForCopyResponse, AllocateTensorResponse,
-                 CopyOperationFinishedResponse, ExecuteResponse>;
+using Response = std::variant<RegisterTensorShardResponse, SubmitCopyResponse,
+                              WaitForCopyResponse, AllocateTensorResponse,
+                              CopyOperationFinishedResponse, ExecuteResponse>;
 //==============================================================================
 // Helper for std::visit with lambdas
 //==============================================================================

@@ -21,7 +21,6 @@
 #include "commons/Types.h"
 #include "commons/ZmqCommon.h"
 //==============================================================================
-#include "commons/messages/Messages.h"
 #include "commons/utils/Serialization.h"
 #include "commons/utils/ZmqHelper.h"
 //==============================================================================
@@ -29,34 +28,35 @@ namespace setu::commons::utils {
 //==============================================================================
 using setu::commons::BinaryBuffer;
 using setu::commons::BinaryRange;
-using setu::commons::ClientIdentity;
+using setu::commons::Identity;
 using setu::commons::NonCopyableNonMovable;
-using setu::commons::messages::AnyClientRequest;
-using setu::commons::messages::AnyCoordinatorRequest;
-//==============================================================================
-// SetuCommHelper - Static helper for Setu protocol communication over ZMQ
-//
-// Wire format uses std::variant serialization - the variant index is written
-// automatically, eliminating the need for a separate header frame.
-//
-// Supported socket patterns:
-//   - REQ/REP/DEALER: Use Send(), Recv<T>(), TryRecv<T>()
-//   - ROUTER: Use SendToClient(), RecvRequestFromClient(), etc.
-//==============================================================================
+
 class SetuCommHelper : public NonCopyableNonMovable {
  public:
-  //============================================================================
-  // REQ/REP/DEALER pattern: Single frame with serialized message
-  //============================================================================
-
-  /// @brief Send a typed message (single frame)
+  /**
+   * @brief Send a typed message as a single frame (blocking).
+   *
+   * Socket pairs: REQ -> ROUTER, REQ -> REP, DEALER -> ROUTER
+   *
+   * @tparam T The message type to send
+   * @param socket [in] The ZMQ socket to send on
+   * @param message [in] The message to send
+   */
   template <typename T>
   static void Send(ZmqSocketPtr socket, const T& message) {
     ASSERT_VALID_POINTER_ARGUMENT(socket);
     SendFrame(socket, message, zmq::send_flags::none);
   }
 
-  /// @brief Receive a typed message (blocking)
+  /**
+   * @brief Receive a typed message as a single frame (blocking).
+   *
+   * Socket pairs: REP <- REQ, DEALER <- ROUTER
+   *
+   * @tparam T The message type to receive
+   * @param socket [in] The ZMQ socket to receive from
+   * @return The deserialized message
+   */
   template <typename T>
   [[nodiscard]] static T Recv(ZmqSocketPtr socket) {
     ASSERT_VALID_POINTER_ARGUMENT(socket);
@@ -68,54 +68,61 @@ class SetuCommHelper : public NonCopyableNonMovable {
     return DeserializeFrame<T>(msg);
   }
 
-  /// @brief Try to receive a typed message (non-blocking)
-  template <typename T>
-  [[nodiscard]] static std::optional<T> TryRecv(ZmqSocketPtr socket) {
-    ASSERT_VALID_POINTER_ARGUMENT(socket);
-
-    zmq::message_t msg;
-    auto result = socket->recv(msg, zmq::recv_flags::dontwait);
-    if (!result.has_value()) {
-      return std::nullopt;
-    }
-
-    return DeserializeFrame<T>(msg);
-  }
-
-  //============================================================================
-  // ROUTER pattern for REQ clients: [Identity][Delimiter][Body]
-  // REQ sockets add an empty delimiter frame
-  //============================================================================
-
-  /// @brief Send a typed response to a specific client (REQ pattern)
-  template <typename T>
-  static void SendToClient(ZmqSocketPtr socket, const ClientIdentity& identity,
-                           const T& message) {
+  /**
+   * @brief Send a typed message with identity routing via ROUTER socket.
+   *
+   * Socket pairs:
+   *   - ROUTER -> REQ (AddDelimiter=true): Frame layout
+   * [Identity][Delimiter][Body]
+   *   - ROUTER -> DEALER (AddDelimiter=false): Frame layout [Identity][Body]
+   *
+   * @tparam T The message type to send
+   * @tparam AddDelimiter Whether to add empty delimiter frame (true for REQ)
+   * @param socket [in] The ROUTER socket to send on
+   * @param identity [in] The client identity to route to
+   * @param message [in] The message to send
+   */
+  template <typename T, bool AddDelimiter = true>
+  static void SendWithIdentity(ZmqSocketPtr socket, const Identity& identity,
+                               const T& message) {
     ASSERT_VALID_POINTER_ARGUMENT(socket);
     ASSERT_VALID_ARGUMENTS(!identity.empty(),
                            "Client identity cannot be empty");
 
-    // Identity frame
     zmq::message_t identity_msg(identity.data(), identity.size());
     auto result = socket->send(identity_msg, zmq::send_flags::sndmore);
     ASSERT_VALID_RUNTIME(result.has_value(), "Failed to send identity frame");
 
-    // Empty delimiter frame (REQ pattern)
-    zmq::message_t delimiter_msg;
-    result = socket->send(delimiter_msg, zmq::send_flags::sndmore);
-    ASSERT_VALID_RUNTIME(result.has_value(), "Failed to send delimiter frame");
+    if constexpr (AddDelimiter) {
+      zmq::message_t delimiter_msg;
+      result = socket->send(delimiter_msg, zmq::send_flags::sndmore);
+      ASSERT_VALID_RUNTIME(result.has_value(),
+                           "Failed to send delimiter frame");
+    }
 
-    // Body frame
     SendFrame(socket, message, zmq::send_flags::none);
   }
 
-  /// @brief Receive a request from a REQ client (blocking)
-  /// @return Tuple of (client identity, request variant)
-  [[nodiscard]] static std::tuple<ClientIdentity, AnyClientRequest>
-  RecvRequestFromClient(ZmqSocketPtr socket) {
+  /**
+   * @brief Receive a typed message with identity from a ROUTER socket
+   * (blocking).
+   *
+   * Socket pairs:
+   *   - ROUTER <- REQ (ExpectDelimiter=true): Frame layout
+   * [Identity][Delimiter][Body]
+   *   - ROUTER <- DEALER (ExpectDelimiter=false): Frame layout [Identity][Body]
+   *
+   * @tparam T The message type to receive
+   * @tparam ExpectDelimiter Whether to expect empty delimiter frame (true for
+   * REQ)
+   * @param socket [in] The ROUTER socket to receive from
+   * @return Tuple of (identity, message)
+   */
+  template <typename T, bool ExpectDelimiter = true>
+  [[nodiscard]] static std::tuple<Identity, T> RecvWithIdentity(
+      ZmqSocketPtr socket) {
     ASSERT_VALID_POINTER_ARGUMENT(socket);
 
-    // Identity frame
     zmq::message_t identity_msg;
     auto result = socket->recv(identity_msg, zmq::recv_flags::none);
     ASSERT_VALID_RUNTIME(result.has_value(),
@@ -123,146 +130,60 @@ class SetuCommHelper : public NonCopyableNonMovable {
     ASSERT_VALID_RUNTIME(identity_msg.more(),
                          "Expected multipart message, but identity was last");
 
-    ClientIdentity identity(static_cast<const char*>(identity_msg.data()),
-                            identity_msg.size());
+    Identity identity(static_cast<const char*>(identity_msg.data()),
+                      identity_msg.size());
 
-    // Delimiter frame
-    zmq::message_t delimiter_msg;
-    result = socket->recv(delimiter_msg, zmq::recv_flags::none);
-    ASSERT_VALID_RUNTIME(result.has_value(),
-                         "Failed to receive delimiter frame");
-    ASSERT_VALID_RUNTIME(delimiter_msg.more(),
-                         "Expected multipart message, but delimiter was last");
+    if constexpr (ExpectDelimiter) {
+      zmq::message_t delimiter_msg;
+      result = socket->recv(delimiter_msg, zmq::recv_flags::none);
+      ASSERT_VALID_RUNTIME(result.has_value(),
+                           "Failed to receive delimiter frame");
+      ASSERT_VALID_RUNTIME(
+          delimiter_msg.more(),
+          "Expected multipart message, but delimiter was last");
+    }
 
-    // Body frame - deserialize variant directly
     zmq::message_t body_msg;
     result = socket->recv(body_msg, zmq::recv_flags::none);
     ASSERT_VALID_RUNTIME(result.has_value(), "Failed to receive body frame");
 
-    return {std::move(identity), DeserializeFrame<AnyClientRequest>(body_msg)};
+    return {std::move(identity), DeserializeFrame<T>(body_msg)};
   }
 
-  /// @brief Try to receive a request from a REQ client (non-blocking)
-  [[nodiscard]] static std::optional<
-      std::tuple<ClientIdentity, AnyClientRequest>>
-  TryRecvRequestFromClient(ZmqSocketPtr socket) {
-    ASSERT_VALID_POINTER_ARGUMENT(socket);
+  /**
+   * @brief Poll multiple sockets for readability.
+   *
+   * @param sockets [in] Vector of sockets to poll
+   * @param timeout_ms [in] Timeout in milliseconds (-1 for infinite)
+   * @return Vector of sockets that are ready to read
+   */
+  [[nodiscard]] static std::vector<ZmqSocketPtr> PollForRead(
+      const std::vector<ZmqSocketPtr>& sockets /*[in]*/,
+      std::int32_t timeout_ms /*[in]*/) {
+    ASSERT_VALID_ARGUMENTS(!sockets.empty(), "Cannot poll empty socket list");
 
-    // Identity frame (non-blocking)
-    zmq::message_t identity_msg;
-    auto result = socket->recv(identity_msg, zmq::recv_flags::dontwait);
-    if (!result.has_value()) {
-      return std::nullopt;
+    std::vector<zmq::pollitem_t> poll_items;
+    poll_items.reserve(sockets.size());
+
+    for (const auto& socket : sockets) {
+      ASSERT_VALID_POINTER_ARGUMENT(socket);
+      poll_items.push_back({socket->handle(), 0, ZMQ_POLLIN, 0});
     }
 
-    ASSERT_VALID_RUNTIME(identity_msg.more(),
-                         "Expected multipart message, but identity was last");
+    zmq::poll(poll_items, std::chrono::milliseconds(timeout_ms));
 
-    ClientIdentity identity(static_cast<const char*>(identity_msg.data()),
-                            identity_msg.size());
-
-    // Delimiter frame (blocking - we already started receiving)
-    zmq::message_t delimiter_msg;
-    result = socket->recv(delimiter_msg, zmq::recv_flags::none);
-    ASSERT_VALID_RUNTIME(result.has_value(),
-                         "Failed to receive delimiter frame");
-    ASSERT_VALID_RUNTIME(delimiter_msg.more(),
-                         "Expected multipart message, but delimiter was last");
-
-    // Body frame
-    zmq::message_t body_msg;
-    result = socket->recv(body_msg, zmq::recv_flags::none);
-    ASSERT_VALID_RUNTIME(result.has_value(), "Failed to receive body frame");
-
-    return std::make_tuple(std::move(identity),
-                           DeserializeFrame<AnyClientRequest>(body_msg));
-  }
-
-  //============================================================================
-  // DEALER pattern: Single frame (no identity/delimiter needed)
-  //============================================================================
-
-  /// @brief Receive a coordinator request from a DEALER socket (blocking)
-  [[nodiscard]] static AnyCoordinatorRequest RecvCoordinatorRequest(
-      ZmqSocketPtr socket) {
-    ASSERT_VALID_POINTER_ARGUMENT(socket);
-
-    zmq::message_t msg;
-    auto result = socket->recv(msg, zmq::recv_flags::none);
-    ASSERT_VALID_RUNTIME(result.has_value(), "Failed to receive message frame");
-
-    return DeserializeFrame<AnyCoordinatorRequest>(msg);
-  }
-
-  /// @brief Try to receive a coordinator request from a DEALER socket
-  /// (non-blocking)
-  [[nodiscard]] static std::optional<AnyCoordinatorRequest>
-  TryRecvCoordinatorRequest(ZmqSocketPtr socket) {
-    ASSERT_VALID_POINTER_ARGUMENT(socket);
-
-    zmq::message_t msg;
-    auto result = socket->recv(msg, zmq::recv_flags::dontwait);
-    if (!result.has_value()) {
-      return std::nullopt;
+    std::vector<ZmqSocketPtr> ready;
+    for (std::size_t i = 0; i < poll_items.size(); ++i) {
+      if (poll_items[i].revents & ZMQ_POLLIN) {
+        ready.push_back(sockets[i]);
+      }
     }
 
-    return DeserializeFrame<AnyCoordinatorRequest>(msg);
-  }
-
-  //============================================================================
-  // ROUTER pattern for DEALER clients: [Identity][Body]
-  // DEALER sockets do NOT add a delimiter frame
-  //============================================================================
-
-  /// @brief Try to receive a client request from a DEALER via ROUTER socket
-  /// @note DEALER→ROUTER has no delimiter frame, unlike REQ→ROUTER
-  [[nodiscard]] static std::optional<
-      std::tuple<ClientIdentity, AnyClientRequest>>
-  TryRecvRequestFromNodeAgent(ZmqSocketPtr socket) {
-    ASSERT_VALID_POINTER_ARGUMENT(socket);
-
-    // Identity frame (non-blocking)
-    zmq::message_t identity_msg;
-    auto result = socket->recv(identity_msg, zmq::recv_flags::dontwait);
-    if (!result.has_value()) {
-      return std::nullopt;
-    }
-
-    ASSERT_VALID_RUNTIME(identity_msg.more(),
-                         "Expected multipart message, but identity was last");
-
-    ClientIdentity identity(static_cast<const char*>(identity_msg.data()),
-                            identity_msg.size());
-
-    // Body frame (no delimiter in DEALER→ROUTER pattern)
-    zmq::message_t body_msg;
-    result = socket->recv(body_msg, zmq::recv_flags::none);
-    ASSERT_VALID_RUNTIME(result.has_value(), "Failed to receive body frame");
-
-    return std::make_tuple(std::move(identity),
-                           DeserializeFrame<AnyClientRequest>(body_msg));
-  }
-
-  /// @brief Send a response to a DEALER via ROUTER socket
-  /// @note No delimiter frame in DEALER→ROUTER pattern
-  template <typename T>
-  static void SendToNodeAgent(ZmqSocketPtr socket,
-                              const ClientIdentity& identity,
-                              const T& message) {
-    ASSERT_VALID_POINTER_ARGUMENT(socket);
-    ASSERT_VALID_ARGUMENTS(!identity.empty(),
-                           "Dealer identity cannot be empty");
-
-    // Identity frame
-    zmq::message_t identity_msg(identity.data(), identity.size());
-    auto result = socket->send(identity_msg, zmq::send_flags::sndmore);
-    ASSERT_VALID_RUNTIME(result.has_value(), "Failed to send identity frame");
-
-    // Body frame (no delimiter in DEALER→ROUTER pattern)
-    SendFrame(socket, message, zmq::send_flags::none);
+    return ready;
   }
 
  private:
+  /* Serialize and send an object as a single ZMQ frame. */
   template <typename T>
   static void SendFrame(ZmqSocketPtr socket, const T& obj,
                         zmq::send_flags flags) {
@@ -278,6 +199,7 @@ class SetuCommHelper : public NonCopyableNonMovable {
                          buf.size());
   }
 
+  /* Deserialize a ZMQ message frame into a typed object. */
   template <typename T>
   [[nodiscard]] static T DeserializeFrame(const zmq::message_t& msg) {
     const auto* data = static_cast<const std::uint8_t*>(msg.data());

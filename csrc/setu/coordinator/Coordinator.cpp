@@ -22,6 +22,7 @@
 namespace setu::coordinator {
 //==============================================================================
 using setu::commons::enums::ErrorCode;
+using setu::commons::messages::ClientRequest;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyResponse;
@@ -145,22 +146,19 @@ void Coordinator::HandlerLoop() {
 
   handler_running_ = true;
   while (handler_running_) {
-    // Try to receive requests from NodeAgents (via DEALER sockets)
-    // Use TryRecvRequestFromDealer since NodeAgent uses DEALER socket
-    if (auto result_opt = SetuCommHelper::TryRecvRequestFromNodeAgent(
-            node_agent_router_handler_socket_)) {
-      auto& [node_agent_identity, request] = result_opt.value();
-      std::visit(
-          [&](const auto& req) {
-            HandleNodeAgentRequest(node_agent_identity, req);
-          },
-          request);
-    }
+    auto [node_agent_identity, request] =
+        SetuCommHelper::RecvWithIdentity<ClientRequest, false>(
+            node_agent_router_handler_socket_);
+    std::visit(
+        [&](const auto& req) {
+          HandleNodeAgentRequest(node_agent_identity, req);
+        },
+        request);
   }
 }
 
 void Coordinator::HandleNodeAgentRequest(
-    const ClientIdentity& node_agent_identity,
+    const Identity& node_agent_identity,
     const RegisterTensorShardRequest& request) {
   LOG_INFO("Coordinator received RegisterTensorShardRequest for tensor: {}",
            request.tensor_shard_spec.name);
@@ -171,13 +169,12 @@ void Coordinator::HandleNodeAgentRequest(
            request.tensor_shard_spec.name);
 
   RegisterTensorShardResponse response(ErrorCode::kSuccess, std::nullopt);
-  SetuCommHelper::SendToNodeAgent(node_agent_router_handler_socket_,
-                                  node_agent_identity, response);
+  SetuCommHelper::SendWithIdentity<RegisterTensorShardResponse, false>(
+      node_agent_router_handler_socket_, node_agent_identity, response);
 }
 
-void Coordinator::HandleNodeAgentRequest(
-    const ClientIdentity& node_agent_identity,
-    const SubmitCopyRequest& request) {
+void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
+                                         const SubmitCopyRequest& request) {
   LOG_INFO("Coordinator received SubmitCopyRequest from {} to {}",
            request.copy_spec.src_name, request.copy_spec.dst_name);
 
@@ -187,13 +184,12 @@ void Coordinator::HandleNodeAgentRequest(
            request.copy_spec.src_name, request.copy_spec.dst_name);
 
   SubmitCopyResponse response(ErrorCode::kSuccess);
-  SetuCommHelper::SendToNodeAgent(node_agent_router_handler_socket_,
-                                  node_agent_identity, response);
+  SetuCommHelper::SendWithIdentity<SubmitCopyResponse, false>(
+      node_agent_router_handler_socket_, node_agent_identity, response);
 }
 
-void Coordinator::HandleNodeAgentRequest(
-    const ClientIdentity& node_agent_identity,
-    const WaitForCopyRequest& request) {
+void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
+                                         const WaitForCopyRequest& request) {
   LOG_INFO("Coordinator received WaitForCopyRequest for copy operation ID: {}",
            request.copy_operation_id);
 
@@ -202,8 +198,8 @@ void Coordinator::HandleNodeAgentRequest(
   LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
 
   WaitForCopyResponse response(ErrorCode::kSuccess);
-  SetuCommHelper::SendToNodeAgent(node_agent_router_handler_socket_,
-                                  node_agent_identity, response);
+  SetuCommHelper::SendWithIdentity<WaitForCopyResponse, false>(
+      node_agent_router_handler_socket_, node_agent_identity, response);
 }
 
 void Coordinator::ExecutorLoop() {

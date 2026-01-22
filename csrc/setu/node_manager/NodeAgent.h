@@ -32,9 +32,9 @@
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
-using setu::commons::ClientIdentity;
 using setu::commons::CopyOperationId;
 using setu::commons::DeviceRank;
+using setu::commons::Identity;
 using setu::commons::NodeRank;
 using setu::commons::Queue;
 using setu::commons::ShardId;
@@ -87,11 +87,11 @@ class NodeAgent {
   void HandlerLoop();
   void ExecutorLoop();
 
-  void HandleClientRequest(const ClientIdentity& client_identity,
+  void HandleClientRequest(const Identity& client_identity,
                            const RegisterTensorShardRequest& request);
-  void HandleClientRequest(const ClientIdentity& client_identity,
+  void HandleClientRequest(const Identity& client_identity,
                            const SubmitCopyRequest& request);
-  void HandleClientRequest(const ClientIdentity& client_identity,
+  void HandleClientRequest(const Identity& client_identity,
                            const WaitForCopyRequest& request);
   void HandleCoordinatorRequest(const AllocateTensorRequest& request);
   void HandleCoordinatorRequest(const CopyOperationFinishedRequest& request);
@@ -125,7 +125,7 @@ class NodeAgent {
   std::unordered_map<DeviceRank, std::unique_ptr<Worker>> workers_;
 
   // Pending client waits: maps copy_op_id to list of client identities waiting
-  std::unordered_map<CopyOperationId, std::vector<ClientIdentity>,
+  std::unordered_map<CopyOperationId, std::vector<Identity>,
                      boost::hash<CopyOperationId>>
       pending_waits_;
 

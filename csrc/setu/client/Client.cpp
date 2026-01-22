@@ -17,12 +17,13 @@
 #include "client/Client.h"
 //==============================================================================
 #include "commons/Logging.h"
+#include "commons/messages/Messages.h"
 #include "commons/utils/SetuCommHelper.h"
 #include "commons/utils/ZmqHelper.h"
 //==============================================================================
 namespace setu::client {
 //==============================================================================
-using setu::commons::messages::AnyClientRequest;
+using setu::commons::messages::ClientRequest;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyRequest;
@@ -86,7 +87,7 @@ std::optional<TensorShardRef> Client::RegisterTensorShard(
     const TensorShardSpec& shard_spec) {
   LOG_DEBUG("Client registering tensor shard: {}", shard_spec.name);
 
-  AnyClientRequest request = RegisterTensorShardRequest(shard_spec);
+  ClientRequest request = RegisterTensorShardRequest(shard_spec);
   SetuCommHelper::Send(request_socket_, request);
 
   auto response =
@@ -106,7 +107,7 @@ std::optional<CopyOperationId> Client::SubmitCopy(const CopySpec& copy_spec) {
   LOG_DEBUG("Client submitting copy operation from {} to {}",
             copy_spec.src_name, copy_spec.dst_name);
 
-  AnyClientRequest request = SubmitCopyRequest(copy_spec);
+  ClientRequest request = SubmitCopyRequest(copy_spec);
   SetuCommHelper::Send(request_socket_, request);
 
   auto response = SetuCommHelper::Recv<SubmitCopyResponse>(request_socket_);
@@ -124,7 +125,7 @@ std::optional<CopyOperationId> Client::SubmitCopy(const CopySpec& copy_spec) {
 void Client::WaitForCopy(CopyOperationId copy_op_id) {
   LOG_DEBUG("Client waiting for copy operation ID: {}", copy_op_id);
 
-  AnyClientRequest request = WaitForCopyRequest(copy_op_id);
+  ClientRequest request = WaitForCopyRequest(copy_op_id);
   SetuCommHelper::Send(request_socket_, request);
 
   auto response = SetuCommHelper::Recv<WaitForCopyResponse>(request_socket_);

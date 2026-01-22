@@ -30,9 +30,9 @@
 //==============================================================================
 namespace setu::coordinator {
 //==============================================================================
-using setu::commons::ClientIdentity;
 using setu::commons::CopyOperationId;
 using setu::commons::DeviceRank;
+using setu::commons::Identity;
 using setu::commons::NodeRank;
 using setu::commons::Queue;
 using setu::commons::TensorName;
@@ -73,11 +73,11 @@ class Coordinator {
   void HandlerLoop();
   void ExecutorLoop();
 
-  void HandleNodeAgentRequest(const ClientIdentity& node_agent_identity,
+  void HandleNodeAgentRequest(const Identity& node_agent_identity,
                               const RegisterTensorShardRequest& request);
-  void HandleNodeAgentRequest(const ClientIdentity& node_agent_identity,
+  void HandleNodeAgentRequest(const Identity& node_agent_identity,
                               const SubmitCopyRequest& request);
-  void HandleNodeAgentRequest(const ClientIdentity& node_agent_identity,
+  void HandleNodeAgentRequest(const Identity& node_agent_identity,
                               const WaitForCopyRequest& request);
 
   void InitZmqSockets();

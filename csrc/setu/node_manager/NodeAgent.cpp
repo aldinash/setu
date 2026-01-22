@@ -28,7 +28,8 @@ using setu::commons::TensorName;
 using setu::commons::datatypes::Device;
 using setu::commons::enums::DeviceKind;
 using setu::commons::enums::ErrorCode;
-using setu::commons::messages::AnyClientRequest;
+using setu::commons::messages::ClientRequest;
+using setu::commons::messages::CoordinatorRequest;
 using setu::commons::messages::ExecuteProgramRequest;
 using setu::commons::messages::ExecuteProgramResponse;
 using setu::commons::messages::ExecuteResponse;
@@ -40,7 +41,7 @@ using setu::commons::utils::ZmqHelper;
 using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::Program;
 //==============================================================================
-constexpr std::chrono::milliseconds kHandleLoopSleepMs(10);
+constexpr std::int32_t kPollTimeoutMs = 100;
 //==============================================================================
 NodeAgent::NodeAgent(NodeRank node_rank, std::size_t router_port,
                      std::size_t dealer_executor_port,
@@ -194,30 +195,32 @@ void NodeAgent::HandlerLoop() {
 
   handler_running_ = true;
   while (handler_running_) {
-    // TODO: create smarter polling
+    auto ready = SetuCommHelper::PollForRead(
+        {client_router_socket_, coordinator_dealer_handler_socket_},
+        kPollTimeoutMs);
 
-    if (auto request_opt = SetuCommHelper::TryRecvCoordinatorRequest(
-            coordinator_dealer_handler_socket_)) {
-      std::visit([&](const auto& req) { HandleCoordinatorRequest(req); },
-                 request_opt.value());
-    }
-
-    if (auto result_opt =
-            SetuCommHelper::TryRecvRequestFromClient(client_router_socket_)) {
-      auto& [identity, request] = result_opt.value();
-      std::visit([&](const auto& req) { HandleClientRequest(identity, req); },
-                 request);
+    for (const auto& socket : ready) {
+      if (socket == client_router_socket_) {
+        auto [identity, request] =
+            SetuCommHelper::RecvWithIdentity<ClientRequest, true>(socket);
+        std::visit([&](const auto& req) { HandleClientRequest(identity, req); },
+                   request);
+      } else if (socket == coordinator_dealer_handler_socket_) {
+        auto request = SetuCommHelper::Recv<CoordinatorRequest>(socket);
+        std::visit([&](const auto& req) { HandleCoordinatorRequest(req); },
+                   request);
+      }
     }
   }
 }
 
-void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
+void NodeAgent::HandleClientRequest(const Identity& client_identity,
                                     const RegisterTensorShardRequest& request) {
   LOG_DEBUG("Handling RegisterTensorShardRequest for tensor: {}",
             request.tensor_shard_spec.name);
 
   // Forward request to coordinator (wrapped in variant)
-  AnyClientRequest variant_request = request;
+  ClientRequest variant_request = request;
   SetuCommHelper::Send(coordinator_dealer_handler_socket_, variant_request);
 
   // Wait for response from coordinator
@@ -225,17 +228,17 @@ void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
       coordinator_dealer_handler_socket_);
 
   // Forward response to client
-  SetuCommHelper::SendToClient(client_router_socket_, client_identity,
-                               response);
+  SetuCommHelper::SendWithIdentity<RegisterTensorShardResponse, true>(
+      client_router_socket_, client_identity, response);
 }
 
-void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
+void NodeAgent::HandleClientRequest(const Identity& client_identity,
                                     const SubmitCopyRequest& request) {
   LOG_DEBUG("Handling SubmitCopyRequest from {} to {}",
             request.copy_spec.src_name, request.copy_spec.dst_name);
 
   // Forward request to coordinator (wrapped in variant)
-  AnyClientRequest variant_request = request;
+  ClientRequest variant_request = request;
   SetuCommHelper::Send(coordinator_dealer_handler_socket_, variant_request);
 
   // Wait for response from coordinator
@@ -243,11 +246,11 @@ void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
       coordinator_dealer_handler_socket_);
 
   // Forward response to client
-  SetuCommHelper::SendToClient(client_router_socket_, client_identity,
-                               response);
+  SetuCommHelper::SendWithIdentity<SubmitCopyResponse, true>(
+      client_router_socket_, client_identity, response);
 }
 
-void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
+void NodeAgent::HandleClientRequest(const Identity& client_identity,
                                     const WaitForCopyRequest& request) {
   LOG_DEBUG("Handling WaitForCopyRequest for copy operation ID: {}",
             request.copy_operation_id);
@@ -256,8 +259,8 @@ void NodeAgent::HandleClientRequest(const ClientIdentity& client_identity,
 
   WaitForCopyResponse response(ErrorCode::kSuccess);
 
-  SetuCommHelper::SendToClient(client_router_socket_, client_identity,
-                               response);
+  SetuCommHelper::SendWithIdentity<WaitForCopyResponse, true>(
+      client_router_socket_, client_identity, response);
 }
 
 void NodeAgent::HandleCoordinatorRequest(const AllocateTensorRequest& request) {
@@ -274,7 +277,8 @@ void NodeAgent::HandleCoordinatorRequest(
   if (it != pending_waits_.end()) {
     for (const auto& client_id : it->second) {
       WaitForCopyResponse response(ErrorCode::kSuccess);
-      SetuCommHelper::SendToClient(client_router_socket_, client_id, response);
+      SetuCommHelper::SendWithIdentity<WaitForCopyResponse, true>(
+          client_router_socket_, client_id, response);
     }
     pending_waits_.erase(it);
   }
