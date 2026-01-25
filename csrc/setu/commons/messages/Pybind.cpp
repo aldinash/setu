@@ -59,11 +59,10 @@ void InitRegisterTensorShardResponsePybind(py::module_& m) {
 void InitExecuteProgramRequestPybind(py::module_& m) {
   py::class_<ExecuteProgramRequest>(m, "ExecuteProgramRequest",
                                     py::module_local())
-      .def(py::init<>(), "Create an empty ExecuteProgramRequest")
       .def(py::init<Program>(), py::arg("program"),
            "Create an ExecuteProgramRequest with a program")
-      .def_readwrite("program", &ExecuteProgramRequest::program,
-                     "The program to execute")
+      .def_readonly("program", &ExecuteProgramRequest::program,
+                    "The program to execute")
       .def("__str__", &ExecuteProgramRequest::ToString)
       .def("__repr__", &ExecuteProgramRequest::ToString);
 }

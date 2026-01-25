@@ -37,6 +37,7 @@ using setu::commons::DeviceRank;
 using setu::commons::Identity;
 using setu::commons::NodeRank;
 using setu::commons::Queue;
+using setu::commons::RequestId;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
@@ -44,11 +45,15 @@ using setu::commons::datatypes::Device;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::messages::AllocateTensorRequest;
+using setu::commons::messages::CoordinatorResponse;
 using setu::commons::messages::CopyOperationFinishedRequest;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::RegisterTensorShardRequest;
+using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyRequest;
+using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
+using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
@@ -57,7 +62,8 @@ using setu::node_manager::worker::Worker;
 class NodeAgent {
  public:
   NodeAgent(NodeRank node_rank, std::size_t router_port,
-            std::size_t dealer_executor_port, std::size_t dealer_handler_port);
+            std::size_t dealer_executor_port, std::size_t dealer_handler_port,
+            const std::vector<Device>& devices);
   ~NodeAgent();
 
   std::optional<TensorShardRef> RegisterTensorShard(
@@ -89,16 +95,23 @@ class NodeAgent {
 
   void HandleClientRequest(const Identity& client_identity,
                            const RegisterTensorShardRequest& request);
+
   void HandleClientRequest(const Identity& client_identity,
                            const SubmitCopyRequest& request);
+
   void HandleClientRequest(const Identity& client_identity,
                            const WaitForCopyRequest& request);
+
+  void HandleCoordinatorResponse(const CoordinatorResponse& response);
+
   void HandleCoordinatorRequest(const AllocateTensorRequest& request);
   void HandleCoordinatorRequest(const CopyOperationFinishedRequest& request);
   void HandleCoordinatorRequest(const ExecuteRequest& request);
 
   void InitZmqSockets();
   void CloseZmqSockets();
+
+  void InitWorkers(const std::vector<Device>& devices);
 
   void EnsureWorkerIsReady(DeviceRank device_rank);
 
@@ -111,6 +124,8 @@ class NodeAgent {
   ZmqSocketPtr coordinator_dealer_executor_socket_;
   ZmqSocketPtr coordinator_dealer_handler_socket_;
   std::unordered_map<DeviceRank, ZmqSocketPtr> workers_req_sockets_;
+
+  std::unordered_map<RequestId, Identity> request_to_client_;
 
   std::thread handler_thread_;
   std::thread executor_thread_;
@@ -131,6 +146,8 @@ class NodeAgent {
 
   // Executor queue: (copy_op_id, node_plan) pairs for execution
   Queue<std::pair<CopyOperationId, Plan>> executor_queue_;
+
+  std::unordered_map<TensorName, TensorShardSpec> tensor_name_to_spec_;
 };
 //==============================================================================
 }  // namespace setu::node_manager

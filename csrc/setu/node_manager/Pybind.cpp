@@ -53,10 +53,12 @@ void InitWorkerPybindClass(py::module_& m) {
 //==============================================================================
 void InitNodeAgentPybindClass(py::module_& m) {
   py::class_<NodeAgent, std::shared_ptr<NodeAgent>>(m, "NodeAgent")
-      .def(py::init<NodeRank, std::size_t, std::size_t, std::size_t>(),
+      .def(py::init<NodeRank, std::size_t, std::size_t, std::size_t,
+                    const std::vector<Device>&>(),
            py::arg("node_rank") = NodeRank{0}, py::arg("router_port"),
            py::arg("dealer_executor_port"), py::arg("dealer_handler_port"),
-           "Create a NodeAgent with specified ports for communication")
+           py::arg("devices"),
+           "Create a NodeAgent with specified ports and devices")
       .def("start", &NodeAgent::Start, "Start the NodeAgent handler loop")
       .def("stop", &NodeAgent::Stop, "Stop the NodeAgent handler loop")
       .def("register_tensor_shard", &NodeAgent::RegisterTensorShard,

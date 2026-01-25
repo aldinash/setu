@@ -24,6 +24,8 @@ namespace setu::coordinator {
 using setu::commons::RequestId;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::ClientRequest;
+using setu::commons::messages::CoordinatorMessage;
+using setu::commons::messages::CoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyResponse;
@@ -169,9 +171,11 @@ void Coordinator::HandleNodeAgentRequest(
   LOG_INFO("Registered tensor shard: {} (stub implementation)",
            request.tensor_shard_spec.name);
 
-  RegisterTensorShardResponse response(RequestId(), ErrorCode::kSuccess, std::nullopt);
-  SetuCommHelper::SendWithIdentity<RegisterTensorShardResponse, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+  RegisterTensorShardResponse response(request.request_id, ErrorCode::kSuccess,
+                                       std::nullopt);
+  CoordinatorMessage message = CoordinatorResponse(response);
+  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_router_handler_socket_, node_agent_identity, message);
 }
 
 void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
@@ -185,8 +189,9 @@ void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
            request.copy_spec.src_name, request.copy_spec.dst_name);
 
   SubmitCopyResponse response(RequestId(), ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<SubmitCopyResponse, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+  CoordinatorMessage message = CoordinatorResponse(response);
+  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_router_handler_socket_, node_agent_identity, message);
 }
 
 void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
@@ -199,8 +204,9 @@ void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
   LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
 
   WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<WaitForCopyResponse, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+  CoordinatorMessage message = CoordinatorResponse(response);
+  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_router_handler_socket_, node_agent_identity, message);
 }
 
 void Coordinator::ExecutorLoop() {
