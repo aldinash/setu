@@ -22,8 +22,11 @@
 #include "commons/datatypes/TensorDimShard.h"
 #include "commons/datatypes/TensorShard.h"
 #include "commons/datatypes/TensorSlice.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
 //==============================================================================
 // Forward declarations
 struct TensorSelection;
@@ -44,6 +47,10 @@ struct TensorSelection {
   [[nodiscard]] std::string ToString() const {
     return std::format("TensorSelection(name={}, indices={})", name, indices);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static TensorSelection Deserialize(const BinaryRange& range);
 
   [[nodiscard]] TensorSelectionPtr GetIntersection(
       TensorSelectionPtr other) const {

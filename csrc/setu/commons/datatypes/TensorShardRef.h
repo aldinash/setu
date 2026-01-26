@@ -20,8 +20,13 @@
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 #include "commons/datatypes/TensorDim.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Lightweight reference to a tensor shard
@@ -58,6 +63,10 @@ struct TensorShardRef {
     return std::format("TensorShardRef(name={}, shard_id={}, dims={})", name,
                        shard_id, dims);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static TensorShardRef Deserialize(const BinaryRange& range);
 
   /**
    * @brief Returns the number of dimensions in this shard

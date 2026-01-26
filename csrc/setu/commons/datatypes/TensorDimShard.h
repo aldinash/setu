@@ -20,8 +20,13 @@
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 #include "commons/datatypes/TensorSlice.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Represents a shard of a tensor dimension across distributed devices
@@ -73,6 +78,10 @@ struct TensorDimShard {
         "slice={}, stride={})",
         name, dim_size, shard_size, slice, stride);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static TensorDimShard Deserialize(const BinaryRange& range);
 
   const TensorDimName name;      ///< Name of the tensor dimension
   const ShardId shard_id;        ///< Unique identifier for this shard

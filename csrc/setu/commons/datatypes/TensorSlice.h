@@ -18,8 +18,13 @@
 //==============================================================================
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
+#include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 /**
  * @brief Represents a contiguous slice of elements along a tensor dimension
@@ -59,6 +64,10 @@ struct TensorSlice {
     return std::format("TensorSlice(dim_name={}, start={}, end={}, size={})",
                        dim_name, start, end, size);
   }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static TensorSlice Deserialize(const BinaryRange& range);
 
   /**
    * @brief Converts the slice to a bitset representation
