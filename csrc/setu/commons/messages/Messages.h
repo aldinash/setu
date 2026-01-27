@@ -43,8 +43,7 @@ using ClientRequest =
     std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
                  WaitForCopyRequest, GetTensorHandleRequest>;
 
-/// @brief Requests from NodeAgent to Coordinator (subset of ClientRequest that
-/// gets forwarded).
+/// @brief Requests from NodeAgent to Coordinator
 using NodeAgentRequest = std::variant<RegisterTensorShardRequest,
                                       SubmitCopyRequest, WaitForCopyRequest>;
 

@@ -351,15 +351,25 @@ void NodeAgent::HandleCoordinatorResponse(const CoordinatorResponse& response) {
   std::visit(
       [&](const auto& response) {
         using T = std::decay_t<decltype(response)>;
+        auto it = request_to_client_.find(response.request_id);
+        if (it == request_to_client_.end()) {
+          LOG_WARNING(
+              "Received response for unknown request_id: {}, ignoring",
+              response.request_id);
+          return;
+        }
+        const auto& client_identity = it->second;
+
         if constexpr (std::is_same_v<T, RegisterTensorShardResponse>) {
-          auto& client_identity = request_to_client_[response.request_id];
           SetuCommHelper::SendWithIdentity<RegisterTensorShardResponse, true>(
               client_router_socket_, client_identity, response);
         } else if constexpr (std::is_same_v<T, SubmitCopyResponse>) {
-          auto& client_identity = request_to_client_[response.request_id];
           SetuCommHelper::SendWithIdentity<SubmitCopyResponse, true>(
               client_router_socket_, client_identity, response);
         }
+
+        // Clean up the request-to-client mapping after forwarding the response
+        request_to_client_.erase(it);
       },
       response);
 }
