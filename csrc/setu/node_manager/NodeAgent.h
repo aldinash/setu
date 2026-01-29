@@ -139,7 +139,10 @@ class NodeAgent {
   ZmqSocketPtr coordinator_dealer_handler_socket_;
   std::unordered_map<DeviceRank, ZmqSocketPtr> workers_req_sockets_;
 
-  std::unordered_map<RequestId, Identity> request_to_client_;
+  // stores mapping from request id to the client identity who sent this request
+  // Used to route coordinator responses back to the client that initiated the
+  // request
+  std::unordered_map<RequestId, Identity> request_id_to_client_identity_;
 
   std::thread handler_thread_;
   std::thread executor_thread_;

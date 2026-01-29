@@ -294,7 +294,7 @@ void NodeAgent::HandleRegisterTensorShardRequest(
   LOG_DEBUG("Handling RegisterTensorShardRequest for tensor: {}",
             request.tensor_shard_spec.name);
 
-  request_to_client_[request.request_id] = client_identity;
+  request_id_to_client_identity_[request.request_id] = client_identity;
 
   // Store the spec so we can allocate the tensor when Coordinator sends
   // AllocateTensorRequest
@@ -310,7 +310,7 @@ void NodeAgent::HandleSubmitCopyRequest(const Identity& client_identity,
   LOG_DEBUG("Handling SubmitCopyRequest from {} to {}",
             request.copy_spec.src_name, request.copy_spec.dst_name);
 
-  request_to_client_[request.request_id] = client_identity;
+  request_id_to_client_identity_[request.request_id] = client_identity;
 
   SetuCommHelper::Send<NodeAgentRequest>(coordinator_dealer_handler_socket_,
                                          request);
@@ -383,8 +383,8 @@ void NodeAgent::HandleExecuteRequest(const ExecuteRequest& request) {
 
 void NodeAgent::HandleRegisterTensorShardResponse(
     const RegisterTensorShardResponse& response) {
-  auto it = request_to_client_.find(response.request_id);
-  if (it == request_to_client_.end()) {
+  auto it = request_id_to_client_identity_.find(response.request_id);
+  if (it == request_id_to_client_identity_.end()) {
     LOG_WARNING(
         "Received RegisterTensorShardResponse for unknown request_id: "
         "{}, ignoring",
@@ -396,12 +396,12 @@ void NodeAgent::HandleRegisterTensorShardResponse(
   SetuCommHelper::SendWithIdentity<RegisterTensorShardResponse>(
       client_router_socket_, client_identity, response);
 
-  request_to_client_.erase(it);
+  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::HandleSubmitCopyResponse(const SubmitCopyResponse& response) {
-  auto it = request_to_client_.find(response.request_id);
-  if (it == request_to_client_.end()) {
+  auto it = request_id_to_client_identity_.find(response.request_id);
+  if (it == request_id_to_client_identity_.end()) {
     LOG_WARNING(
         "Received SubmitCopyResponse for unknown request_id: {}, ignoring",
         response.request_id);
@@ -412,12 +412,12 @@ void NodeAgent::HandleSubmitCopyResponse(const SubmitCopyResponse& response) {
   SetuCommHelper::SendWithIdentity<SubmitCopyResponse>(
       client_router_socket_, client_identity, response);
 
-  request_to_client_.erase(it);
+  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::HandleWaitForCopyResponse(const WaitForCopyResponse& response) {
-  auto it = request_to_client_.find(response.request_id);
-  if (it == request_to_client_.end()) {
+  auto it = request_id_to_client_identity_.find(response.request_id);
+  if (it == request_id_to_client_identity_.end()) {
     LOG_WARNING(
         "Received WaitForCopyResponse for unknown request_id: {}, ignoring",
         response.request_id);
@@ -428,7 +428,7 @@ void NodeAgent::HandleWaitForCopyResponse(const WaitForCopyResponse& response) {
   SetuCommHelper::SendWithIdentity<WaitForCopyResponse>(
       client_router_socket_, client_identity, response);
 
-  request_to_client_.erase(it);
+  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::ExecutorLoop() {
