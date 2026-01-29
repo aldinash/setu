@@ -2,7 +2,7 @@
 // Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
 // Corporation
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License")
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -45,7 +45,6 @@ using setu::coordinator::datatypes::TensorOwnershipMapPtr;
 //==============================================================================
 void InitInstructionPybind(py::module_& m) {
   py::class_<Instruction>(m, "Instruction")
-      .def(py::init<>(), "Create an empty instruction")
       .def("__str__", &Instruction::ToString)
       .def("__repr__", &Instruction::ToString);
 }

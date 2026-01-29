@@ -38,14 +38,11 @@ using setu::coordinator::datatypes::Program;
 using setu::node_manager::worker::Worker;
 //==============================================================================
 void InitWorkerPybindClass(py::module_& m) {
+  // Worker is not directly constructible from Python - it's created internally
+  // by NodeAgent. Only expose read-only properties for inspection.
   py::class_<Worker, std::shared_ptr<Worker>>(m, "Worker")
-      .def(py::init<Device, std::size_t>(), py::arg("device"),
-           py::arg("reply_port"),
-           "Create a worker bound to a device and reply port")
       .def("start", &Worker::Start, "Start the worker executor loop")
       .def("stop", &Worker::Stop, "Stop the worker executor loop")
-      .def("execute", &Worker::Execute, py::arg("program"),
-           "Execute a program on the worker")
       .def("is_running", &Worker::IsRunning, "Check if worker is running")
       .def_property_readonly("device", &Worker::GetDevice,
                              "Get the device this worker is bound to");

@@ -72,6 +72,10 @@ using ShardId = boost::uuids::uuid;
 /// @brief Unique identifier for a copy operation (UUID)
 using CopyOperationId = boost::uuids::uuid;
 
+/// @brief Lookup table mapping (TensorName, ShardId) -> DevicePtr
+using ShardDevicePtrsLookup =
+    std::unordered_map<TensorName, std::unordered_map<ShardId, DevicePtr>>;
+
 // Binary serialization related types
 /// @brief Buffer for storing binary serialized data
 using BinaryBuffer = std::vector<std::uint8_t>;

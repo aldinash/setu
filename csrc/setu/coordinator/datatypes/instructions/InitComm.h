@@ -17,8 +17,7 @@
 #pragma once
 //==============================================================================
 #include <nccl.h>
-#include <utility>
-
+//==============================================================================
 #include "setu/commons/StdCommon.h"
 #include "setu/commons/Types.h"
 #include "setu/commons/utils/Serialization.h"
@@ -33,12 +32,16 @@ using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
 struct InitCommInstruction {
-  InitCommInstruction() = default;
-  InitCommInstruction(ncclUniqueId id,
-                      std::unordered_map<DeviceRank, int> device_to_rank)
-      : comm_id(std::move(id)), device_to_rank(std::move(device_to_rank)) {}
+  InitCommInstruction(ncclUniqueId comm_id,
+                      std::unordered_map<DeviceRank, std::int32_t> device_to_rank)
+      : comm_id(std::move(comm_id)),
+        device_to_rank(std::move(device_to_rank)) {}
 
   ~InitCommInstruction() = default;
+  InitCommInstruction(const InitCommInstruction&) = default;
+  InitCommInstruction& operator=(const InitCommInstruction&) = default;
+  InitCommInstruction(InitCommInstruction&&) = default;
+  InitCommInstruction& operator=(InitCommInstruction&&) = default;
 
   [[nodiscard]] std::string ToString() const {
     return std::format("InitCommInstruction(device_to_rank_size={})",
@@ -46,21 +49,20 @@ struct InitCommInstruction {
   }
 
   void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter w(buffer);
-    // ncclUniqueId is a POD containing bytes; write it directly
-    w.Write(comm_id);
-    w.Write(device_to_rank);
+    BinaryWriter writer(buffer);
+    writer.WriteFields(comm_id, device_to_rank);
   }
 
   static InitCommInstruction Deserialize(const BinaryRange& range) {
-    BinaryReader r(range);
-    ncclUniqueId id = r.Read<ncclUniqueId>();
-    auto map = r.Read<std::unordered_map<DeviceRank, int>>();
-    return InitCommInstruction(id, map);
+    BinaryReader reader(range);
+    auto [comm_id, device_to_rank] =
+        reader.ReadFields<ncclUniqueId,
+                          std::unordered_map<DeviceRank, std::int32_t>>();
+    return InitCommInstruction(comm_id, std::move(device_to_rank));
   }
 
-  const ncclUniqueId comm_id;
-  const std::unordered_map<DeviceRank, int> device_to_rank;
+  ncclUniqueId comm_id;
+  std::unordered_map<DeviceRank, std::int32_t> device_to_rank;
 };
 
 //==============================================================================

@@ -18,7 +18,7 @@
 //==============================================================================
 #include "setu/commons/StdCommon.h"
 #include "setu/commons/Types.h"
-#include "setu/commons/datatypes/TensorShardRegion.h"
+#include "setu/commons/enums/Enums.h"
 #include "setu/commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::coordinator::datatypes::instructions {
@@ -28,37 +28,61 @@ using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 using setu::commons::DeviceRank;
+using setu::commons::enums::DType;
+using setu::commons::TensorName;
+using setu::commons::ShardId;
 //==============================================================================
 
 struct SendInstruction {
   SendInstruction(DeviceRank dst_device_id,
-                  TensorShardRegion region)
-      : dst_device_id(std::move(dst_device_id)), src_shard_region(std::move(region)) {}
+                  std::pair<TensorName, ShardId> src_tensor,
+                  DType dtype,
+                  std::size_t memory_offset_bytes,
+                  std::size_t num_elements)
+      : dst_device_id(dst_device_id),
+        src_tensor(std::move(src_tensor)),
+        dtype(dtype),
+        memory_offset_bytes(memory_offset_bytes),
+        num_elements(num_elements) {}
 
   ~SendInstruction() = default;
+  SendInstruction(const SendInstruction&) = default;
+  SendInstruction& operator=(const SendInstruction&) = default;
+  SendInstruction(SendInstruction&&) = default;
+  SendInstruction& operator=(SendInstruction&&) = default;
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("SendInstruction(dst_device_id={}, src_shard_region={})", dst_device_id,
-                       src_shard_region.ToString());
+    return std::format(
+        "SendInstruction(dst_rank={}, tensor=({}, {}), dtype={}, "
+        "memory_offset={}, num_elements={})",
+        dst_device_id, src_tensor.first, src_tensor.second,
+        static_cast<int>(dtype), memory_offset_bytes, num_elements);
   }
 
   void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter w(buffer);
-    w.Write(dst_device_id);
-    src_shard_region.Serialize(buffer);
+    BinaryWriter writer(buffer);
+    writer.WriteFields(dst_device_id, src_tensor.first, src_tensor.second,
+                       dtype, memory_offset_bytes, num_elements);
   }
 
   static SendInstruction Deserialize(const BinaryRange& range) {
     BinaryReader reader(range);
-    auto dst_device_id = reader.Read<DeviceRank>();
-    auto src_shard_region = reader.Read<TensorShardRegion>();
-    return SendInstruction(dst_device_id, src_shard_region);
+    auto [dst_device_id, tensor_name, shard_id, dtype, memory_offset_bytes,
+          num_elements] =
+        reader.ReadFields<DeviceRank, TensorName, ShardId, DType, std::size_t,
+                          std::size_t>();
+    return SendInstruction(dst_device_id,
+                           {std::move(tensor_name), std::move(shard_id)}, dtype,
+                           memory_offset_bytes, num_elements);
   }
 
-  const DeviceRank dst_device_id;
-  const TensorShardRegion src_shard_region;
+  DeviceRank dst_device_id;
+  std::pair<TensorName, ShardId> src_tensor;
+  DType dtype;
+  std::size_t memory_offset_bytes;
+  std::size_t num_elements;
 };
 
 //==============================================================================
-}  // namespace setu::coordinator::datatypes
+}  // namespace setu::coordinator::datatypes::instructions
 //==============================================================================

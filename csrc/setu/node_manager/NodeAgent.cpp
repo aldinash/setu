@@ -102,6 +102,7 @@ void NodeAgent::AllocateTensor(const TensorName& tensor_id, ShardId shard_id,
   LOG_DEBUG("Allocating tensor shard: tensor_id={}, shard_id={}, device={}",
             tensor_id, boost::uuids::to_string(shard_id), device);
   // TODO: Implement allocation on device
+  // Update the device_ptrs_lookup_
 }
 
 void NodeAgent::CopyOperationFinished(CopyOperationId copy_op_id) {
@@ -342,7 +343,9 @@ void NodeAgent::EnsureWorkerIsReady(DeviceRank device_rank) {
     LOG_DEBUG("Creating new worker for device_rank: {}", device_rank);
     Device device = CreateDeviceForRank(device_rank);
     std::size_t worker_port = router_port_ + device_rank + 1;
-    auto worker = std::make_unique<Worker>(device, worker_port);
+    auto worker = std::make_unique<Worker>(device, worker_port,
+                                           device_ptrs_lookup_,
+                                           device_ptrs_mutex_);
     worker->Start();
 
     // Create REQ socket to communicate with the worker

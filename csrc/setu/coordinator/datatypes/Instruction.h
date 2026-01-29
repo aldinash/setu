@@ -18,12 +18,12 @@
 //==============================================================================
 #include "setu/commons/StdCommon.h"
 #include "setu/commons/utils/Serialization.h"
+//==============================================================================
 #include "setu/coordinator/datatypes/instructions/Copy.h"
-#include "setu/coordinator/datatypes/instructions/Send.h"
-#include "setu/coordinator/datatypes/instructions/Receive.h"
 #include "setu/coordinator/datatypes/instructions/InitComm.h"
+#include "setu/coordinator/datatypes/instructions/Receive.h"
+#include "setu/coordinator/datatypes/instructions/Send.h"
 #include "setu/coordinator/datatypes/instructions/UseComm.h"
-#include <variant>
 //==============================================================================
 namespace setu::coordinator::datatypes {
 //==============================================================================
@@ -31,6 +31,11 @@ using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
+using instructions::CopyInstruction;
+using instructions::InitCommInstruction;
+using instructions::ReceiveInstruction;
+using instructions::SendInstruction;
+using instructions::UseCommInstruction;
 //==============================================================================
 
 enum class InstructionType : std::uint8_t {
@@ -41,69 +46,73 @@ enum class InstructionType : std::uint8_t {
   kReceive = 5,
 };
 
+using InstructionVariant =
+    std::variant<InitCommInstruction, UseCommInstruction, CopyInstruction,
+                 SendInstruction, ReceiveInstruction>;
+
 struct Instruction {
   Instruction() = delete;
 
   template <typename T>
-  explicit Instruction(T inst) : instruction(std::move(inst)) {}
+  explicit Instruction(T inst) : instr(std::move(inst)) {}
+
+  ~Instruction() = default;
+  Instruction(const Instruction&) = default;
+  Instruction& operator=(const Instruction&) = default;
+  Instruction(Instruction&&) = default;
+  Instruction& operator=(Instruction&&) = default;
 
   [[nodiscard]] std::string ToString() const {
-    return std::visit([](auto&& instr) { return instr.ToString(); }, instruction);
+    return std::visit([](const auto& instr) { return instr.ToString(); },
+                      instr);
   }
 
   void Serialize(BinaryBuffer& buffer) const {
     BinaryWriter writer(buffer);
 
-    std::visit([&](auto&& inst) {
-      using T = std::decay_t<decltype(inst)>;
-      InstructionType t = InstructionType::kInitComm;
-      if constexpr (std::is_same_v<T, InitCommInstruction>)
-        t = InstructionType::kInitComm;
-      else if constexpr (std::is_same_v<T, UseCommInstruction>)
-        t = InstructionType::kUseComm;
-      else if constexpr (std::is_same_v<T, CopyInstruction>)
-        t = InstructionType::kCopy;
-      else if constexpr (std::is_same_v<T, SendInstruction>)
-        t = InstructionType::kSend;
-      else if constexpr (std::is_same_v<T, ReceiveInstruction>)
-        t = InstructionType::kReceive;
+    std::visit(
+        [&writer](const auto& inst) {
+          using T = std::decay_t<decltype(inst)>;
+          InstructionType type = InstructionType::kInitComm;
+          if constexpr (std::is_same_v<T, InitCommInstruction>) {
+            type = InstructionType::kInitComm;
+          } else if constexpr (std::is_same_v<T, UseCommInstruction>) {
+            type = InstructionType::kUseComm;
+          } else if constexpr (std::is_same_v<T, CopyInstruction>) {
+            type = InstructionType::kCopy;
+          } else if constexpr (std::is_same_v<T, SendInstruction>) {
+            type = InstructionType::kSend;
+          } else if constexpr (std::is_same_v<T, ReceiveInstruction>) {
+            type = InstructionType::kReceive;
+          }
 
-      writer.Write<std::uint8_t>(static_cast<std::uint8_t>(t));
-      writer.Write(inst);
-    }, instruction);
+          writer.Write<std::uint8_t>(static_cast<std::uint8_t>(type));
+          writer.Write(inst);
+        },
+        instr);
   }
 
   static Instruction Deserialize(const BinaryRange& range) {
     BinaryReader reader(range);
-    
+
     const auto type_id = reader.Read<std::uint8_t>();
     switch (static_cast<InstructionType>(type_id)) {
-      case InstructionType::kInitComm: {
-        auto v = reader.Read<InitCommInstruction>();
-        return Instruction(v);
-      }
-      case InstructionType::kUseComm: {
-        auto v = reader.Read<UseCommInstruction>();
-        return Instruction(v);
-      }
-      case InstructionType::kCopy: {
-        auto v = reader.Read<CopyInstruction>();
-        return Instruction(v);
-      }
-      case InstructionType::kSend: {
-        auto v = reader.Read<SendInstruction>();
-        return Instruction(v);
-      }
-      case InstructionType::kReceive: {
-        auto v = reader.Read<ReceiveInstruction>();
-        return Instruction(v);
-      }
+      case InstructionType::kInitComm:
+        return Instruction(reader.Read<InitCommInstruction>());
+      case InstructionType::kUseComm:
+        return Instruction(reader.Read<UseCommInstruction>());
+      case InstructionType::kCopy:
+        return Instruction(reader.Read<CopyInstruction>());
+      case InstructionType::kSend:
+        return Instruction(reader.Read<SendInstruction>());
+      case InstructionType::kReceive:
+        return Instruction(reader.Read<ReceiveInstruction>());
       default:
         RAISE_RUNTIME_ERROR("Unknown instruction type id {}", type_id);
     }
   }
 
-  std::variant<InitCommInstruction, UseCommInstruction, CopyInstruction, SendInstruction, ReceiveInstruction> instruction;
+  InstructionVariant instr;
 };
 
 //==============================================================================

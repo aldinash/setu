@@ -33,11 +33,13 @@
 namespace setu::node_manager {
 //==============================================================================
 using setu::commons::CopyOperationId;
+using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::Identity;
 using setu::commons::NodeRank;
 using setu::commons::Queue;
 using setu::commons::ShardId;
+using setu::commons::ShardDevicePtrsLookup;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
@@ -54,10 +56,13 @@ using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
 using setu::node_manager::worker::Worker;
 //==============================================================================
+
 class NodeAgent {
  public:
-  NodeAgent(NodeRank node_rank, std::size_t router_port,
-            std::size_t dealer_executor_port, std::size_t dealer_handler_port);
+  NodeAgent(NodeRank node_rank,
+            std::size_t router_port,
+            std::size_t dealer_executor_port,
+            std::size_t dealer_handler_port);
   ~NodeAgent();
 
   std::optional<TensorShardRef> RegisterTensorShard(
@@ -67,7 +72,8 @@ class NodeAgent {
 
   void WaitForCopy(CopyOperationId copy_op_id);
 
-  void AllocateTensor(const TensorName& tensor_id, ShardId shard_id,
+  void AllocateTensor(const TensorName& tensor_id,
+                      ShardId shard_id,
                       DeviceRank device);
 
   void CopyOperationFinished(CopyOperationId copy_op_id);
@@ -124,14 +130,18 @@ class NodeAgent {
 
   std::unordered_map<DeviceRank, std::unique_ptr<Worker>> workers_;
 
-  // Pending client waits: maps copy_op_id to list of client identities waiting
+  ShardDevicePtrsLookup device_ptrs_lookup_;
+  mutable std::shared_mutex device_ptrs_mutex_;
+
+  /// @brief Pending client waits: maps copy_op_id to list of client identities
   std::unordered_map<CopyOperationId, std::vector<Identity>,
                      boost::hash<CopyOperationId>>
       pending_waits_;
 
-  // Executor queue: (copy_op_id, node_plan) pairs for execution
+  /// @brief Executor queue: (copy_op_id, node_plan) pairs for execution
   Queue<std::pair<CopyOperationId, Plan>> executor_queue_;
 };
+
 //==============================================================================
 }  // namespace setu::node_manager
 //==============================================================================

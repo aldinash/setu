@@ -17,7 +17,7 @@
 #pragma once
 //==============================================================================
 #include <nccl.h>
-
+//==============================================================================
 #include "setu/commons/StdCommon.h"
 #include "setu/commons/Types.h"
 #include "setu/commons/utils/Serialization.h"
@@ -31,27 +31,31 @@ using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
 struct UseCommInstruction {
-  UseCommInstruction() = default;
-  explicit UseCommInstruction(ncclUniqueId id) : comm_id(std::move(id)) {}
+  explicit UseCommInstruction(ncclUniqueId comm_id)
+      : comm_id(std::move(comm_id)) {}
 
   ~UseCommInstruction() = default;
+  UseCommInstruction(const UseCommInstruction&) = default;
+  UseCommInstruction& operator=(const UseCommInstruction&) = default;
+  UseCommInstruction(UseCommInstruction&&) = default;
+  UseCommInstruction& operator=(UseCommInstruction&&) = default;
 
   [[nodiscard]] std::string ToString() const {
     return std::format("UseCommInstruction(comm_id_present={})", true);
   }
 
   void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter w(buffer);
-    w.Write(comm_id);
+    BinaryWriter writer(buffer);
+    writer.WriteFields(comm_id);
   }
 
   static UseCommInstruction Deserialize(const BinaryRange& range) {
-    BinaryReader r(range);
-    auto id = r.Read<ncclUniqueId>();
-    return UseCommInstruction(id);
+    BinaryReader reader(range);
+    auto [comm_id] = reader.ReadFields<ncclUniqueId>();
+    return UseCommInstruction(comm_id);
   }
 
-  const ncclUniqueId comm_id;
+  ncclUniqueId comm_id;
 };
 
 //==============================================================================

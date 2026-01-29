@@ -16,88 +16,105 @@
 //==============================================================================
 #pragma once
 //==============================================================================
+#include <cuda_runtime.h>
+#include <nccl.h>
+//==============================================================================
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
-#include "commons/datatypes/CopySpec.h"
 #include "commons/datatypes/Device.h"
-#include "commons/datatypes/TensorShardRef.h"
-#include "commons/datatypes/TensorShardSpec.h"
 #include "commons/enums/Enums.h"
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Instruction.h"
 #include "coordinator/datatypes/Program.h"
-
-#include <nccl.h>
-#include <cuda_runtime.h>
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
-using setu::commons::ClientRank;
-using setu::commons::CopyOperationId;
-using setu::commons::datatypes::CopySpec;
+using setu::commons::DevicePtr;
+using setu::commons::DeviceRank;
+using setu::commons::ShardId;
+using setu::commons::TensorName;
 using setu::commons::datatypes::Device;
-using setu::commons::datatypes::TensorShardRef;
-using setu::commons::datatypes::TensorShardSpec;
-using setu::commons::enums::ErrorCode;
+using setu::commons::enums::DType;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
+using setu::coordinator::datatypes::CopyInstruction;
+using setu::coordinator::datatypes::InitCommInstruction;
 using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::Program;
+using setu::coordinator::datatypes::ReceiveInstruction;
+using setu::coordinator::datatypes::SendInstruction;
+using setu::coordinator::datatypes::UseCommInstruction;
+using setu::commons::ShardDevicePtrsLookup;
 //==============================================================================
+
 class Worker {
  public:
-  Worker(Device device, std::size_t reply_port);
-  ~Worker();
+  Worker(Device device,
+         std::size_t reply_port,
+         const ShardDevicePtrsLookup& device_ptrs_lookup,
+         std::shared_mutex& shard_map_mutex);
+  virtual ~Worker();
 
   void Start();
   void Stop();
 
   [[nodiscard]] bool IsRunning() const { return worker_running_.load(); }
-
   [[nodiscard]] const Device& GetDevice() const { return device_; }
 
- private:
+ protected:
   void InitZmqSockets();
   void CloseZmqSockets();
 
-  void StartExecutorLoop();
-  void StopExecutorLoop();
-
   virtual void Setup();
   void WorkerLoop();
-  virtual void AllocateShardMemory(const TensorName& tensor_id, const ShardId shard_id, const std::size_t size, const Dtype dtype);
   virtual void Execute(const Program& program);
+  virtual void ExecuteInstruction(const Instruction& instruction);
 
-  // Zmq context and sockets
+  [[nodiscard]] DevicePtr LookupDevicePtr(
+      const std::pair<TensorName, ShardId>& key) const;
+
   ZmqContextPtr zmq_context_;
   ZmqSocketPtr reply_socket_;
-  
+
   Device device_;
   std::size_t reply_port_;
   std::atomic<bool> worker_running_;
   std::thread executor_thread_;
+  const ShardDevicePtrsLookup& device_ptrs_lookup_;
+  std::shared_mutex& shard_map_mutex_;
 };
 
+//==============================================================================
 
 class NCCLWorker : public Worker {
-public:
-  NCCLWorker(Device device, std::size_t reply_port);
-  ~NCCLWorker();
+ public:
+  NCCLWorker(Device device,
+             std::size_t reply_port,
+             const ShardDevicePtrsLookup& device_ptrs_lookup,
+             std::shared_mutex& shard_map_mutex);
+  ~NCCLWorker() override;
 
-private:
+ private:
   void Setup() override;
-  void Execute(const Program& program) override;
-  void AllocateShardMemory(const TensorName& tensor_id, const ShardId shard_id, const std::size_t size, const Dtype dtype) override;
+  void ExecuteInstruction(const Instruction& instruction) override;
+
+  void ExecuteInitComm(const InitCommInstruction& inst);
+  void ExecuteUseComm(const UseCommInstruction& inst);
+  void ExecuteCopy(const CopyInstruction& inst);
+  void ExecuteSend(const SendInstruction& inst);
+  void ExecuteReceive(const ReceiveInstruction& inst);
+
+  [[nodiscard]] static std::string CommIdToString(const ncclUniqueId& id);
+  [[nodiscard]] static ncclDataType_t ToNcclDataType(DType dtype);
+  [[nodiscard]] static std::size_t GetDTypeSizeBytes(DType dtype);
 
   struct CommCacheEntry {
-      ncclComm_t nccl_comm;
-      std::unordered_map<DeviceRank, int> device_to_rank;
+    ncclComm_t nccl_comm;
+    std::unordered_map<DeviceRank, std::int32_t> device_to_rank;
   };
+
   std::unordered_map<std::string, CommCacheEntry> comm_cache_;
   std::string active_comm_key_;
-
-
-  std::unordered_map<TensorName, std::unordered_map<ShardId, std::pair<DevicePtr, Dtype>>> device_ptrs_lookup_; 
   cudaStream_t stream_;
 };
 
