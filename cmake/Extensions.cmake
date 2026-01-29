@@ -17,6 +17,15 @@ target_link_libraries(
             backtrace
             setu_python)
 
+# Add NCCL support (required)
+if(NOT NCCL_FOUND)
+  message(FATAL_ERROR "NCCL is required but was not found. "
+                      "Set NCCL_ROOT, CUDA_HOME, or CUDA_PATH environment variable.")
+endif()
+target_include_directories(setu_common INTERFACE ${NCCL_INCLUDE_DIRS})
+target_link_libraries(setu_common INTERFACE ${NCCL_LIBRARIES})
+message(STATUS "NCCL support enabled")
+
 # Function to configure common target properties
 function(setu_target_config target_name is_module)
   target_link_libraries(${target_name} PRIVATE setu_common)
