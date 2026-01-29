@@ -1,3 +1,18 @@
+"""
+This example demonstrates tensor shard registration flow.
+
+1. Client sends RegisterTensorShardRequest to NodeAgent
+2. NodeAgent forwards request to Coordinator
+3. Coordinator generates a ShardId and returns TensorShardRef
+4. Client receives TensorShardRef confirming registration
+
+Expected Output:
+    - Client sends RegisterTensorShard requests for multiple tensors
+    - Each request returns a TensorShardRef with a generated UUID
+    - All processes shut down cleanly
+
+We also run with DEBUG=1 for visibility.
+"""
 from __future__ import annotations
 
 import torch
@@ -6,7 +21,6 @@ import os
 import time
 import traceback
 
-# Set debug logging to see the flow
 os.environ["SETU_LOG_LEVEL"] = "DEBUG"
 
 from setu._client import Client

@@ -1,3 +1,21 @@
+"""
+This example demonstrates tensor shard registering, allocation and modification.
+
+1. Client registers a TensorShardSpec with NodeAgent
+2. NodeAgent forwards request to Coordinator
+3. Coordinator generates a ShardId and returns TensorShardRef
+4. NodeAgent allocates the actual tensor
+5. Client requests an IPC handle to access the tensor
+6. Client rebuilds the tensor from IPC handle and modifies it
+7. A separate verifier process confirms the modification is visible
+
+Expected Output:
+    - Client rebuilds tensor from IPC handle and fills it with value 123.0
+    - Verifier process confirms tensor value is 123.0 (proves cross-process sharing)
+    - All processes shut down cleanly
+
+We also run with DEBUG=1 for visibility
+"""
 import os
 import torch
 import multiprocessing
