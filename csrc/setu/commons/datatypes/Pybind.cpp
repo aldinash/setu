@@ -22,6 +22,7 @@
 #include "commons/datatypes/CopySpec.h"
 #include "commons/datatypes/Device.h"
 #include "commons/datatypes/TensorDim.h"
+#include "commons/datatypes/TensorDimSpec.h"
 #include "commons/datatypes/TensorDimShard.h"
 #include "commons/datatypes/TensorSelection.h"
 #include "commons/datatypes/TensorShard.h"
@@ -74,6 +75,25 @@ void InitTensorDimPybind(py::module_& m) {
       .def("__repr__", &TensorDim::ToString);
 }
 //==============================================================================
+void InitTensorDimSpecPybind(py::module_& m) {
+  py::class_<TensorDimSpec>(m, "TensorDimSpec", py::module_local())
+      .def(py::init<TensorDimName, std::size_t, TensorIndex, TensorIndex>(),
+           py::arg("name"), py::arg("size"), py::arg("start"), py::arg("end"))
+      .def_readonly("name", &TensorDimSpec::name,
+                    "Name of the tensor dimension")
+      .def_readonly("size", &TensorDimSpec::size,
+                    "Total size of the dimension")
+      .def_readonly("start", &TensorDimSpec::start,
+                    "Start index of owned range (inclusive)")
+      .def_readonly("end", &TensorDimSpec::end,
+                    "End index of owned range (exclusive)")
+      .def("get_owned_size", &TensorDimSpec::GetOwnedSize,
+           "Get size of owned range")
+      .def("contains_index", &TensorDimSpec::ContainsIndex, py::arg("index"),
+           "Check if index is within owned range")
+      .def("__str__", &TensorDimSpec::ToString)
+      .def("__repr__", &TensorDimSpec::ToString);
+}
 //==============================================================================
 void InitTensorSelectionPybind(py::module_& m) {
   py::class_<TensorSelection, TensorSelectionPtr>(m, "TensorSelection",
@@ -177,18 +197,20 @@ void InitTensorShardPybind(py::module_& m) {
 //==============================================================================
 void InitTensorShardSpecPybind(py::module_& m) {
   py::class_<TensorShardSpec>(m, "TensorShardSpec", py::module_local())
-      .def(py::init<TensorName, std::vector<TensorDim>, torch::Dtype, Device>(),
+      .def(py::init<TensorName, std::vector<TensorDimSpec>, torch::Dtype,
+                    Device>(),
            py::arg("name"), py::arg("dims"), py::arg("dtype"),
            py::arg("device"))
       .def_readonly("name", &TensorShardSpec::name,
                     "Name/identifier for the tensor")
-      .def_readonly("dims", &TensorShardSpec::dims, "List of tensor dimensions")
+      .def_readonly("dims", &TensorShardSpec::dims,
+                    "List of tensor dimension specs")
       .def_readonly("dtype", &TensorShardSpec::dtype,
                     "Data type of tensor elements")
       .def_readonly("device", &TensorShardSpec::device,
                     "Device where tensor resides")
       .def("get_num_elements", &TensorShardSpec::GetNumElements,
-           "Get total number of elements in the tensor")
+           "Get total number of owned elements in the shard")
       .def("get_num_dims", &TensorShardSpec::GetNumDims,
            "Get number of dimensions")
       .def("__str__", &TensorShardSpec::ToString)
@@ -242,6 +264,7 @@ void InitDatatypesPybindSubmodule(py::module_& pm) {
   InitDevicePybind(m);
   InitTensorSlicePybind(m);
   InitTensorDimPybind(m);
+  InitTensorDimSpecPybind(m);
   InitTensorSelectionPybind(m);
   InitCopySpecPybind(m);
   InitTensorDimShardPybind(m);

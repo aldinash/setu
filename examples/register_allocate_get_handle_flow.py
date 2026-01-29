@@ -8,7 +8,7 @@ from torch.multiprocessing.reductions import rebuild_cuda_tensor
 os.environ["SETU_LOG_LEVEL"] = "DEBUG"
 
 from setu._client import Client
-from setu._commons.datatypes import Device, TensorDim, TensorShardSpec
+from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 from setu._coordinator import Coordinator
 from setu._node_manager import NodeAgent
 
@@ -21,7 +21,9 @@ def create_tensor_shard_spec(name, shape) -> TensorShardSpec:
         torch_device=torch.device("cuda:0"),
     )
 
-    dims = [TensorDim(f"dim_{i}", size) for i, size in enumerate(shape)]
+    # TensorDimSpec: name, size, start, end
+    # When shard owns entire dimension: start=0, end=size
+    dims = [TensorDimSpec(f"dim_{i}", size, 0, size) for i, size in enumerate(shape)]
 
     return TensorShardSpec(
         name=name,
@@ -221,9 +223,9 @@ def main():
         return
 
     # Port configuration
-    coordinator_executor_port = 19500
-    coordinator_handler_port = 19501
-    node_agent_router_port = 19502
+    coordinator_executor_port = 20500
+    coordinator_handler_port = 20501
+    node_agent_router_port = 20502
     node_agent_endpoint = f"tcp://localhost:{node_agent_router_port}"
 
     # Synchronization events

@@ -114,11 +114,11 @@ void NodeAgent::WaitForCopy(CopyOperationId copy_op_id) {
 void NodeAgent::AllocateTensor(const TensorShardSpec& tensor_shard_spec) {
   LOG_DEBUG("Allocating tensor shard: tensor_shard_spec={}", tensor_shard_spec);
 
-  // Build the shape from dims
+  // Build the shape from dims (using owned size for each dimension)
   std::vector<std::int64_t> shape;
   shape.reserve(tensor_shard_spec.dims.size());
-  for (const auto& dim : tensor_shard_spec.dims) {
-    shape.push_back(static_cast<std::int64_t>(dim.size));
+  for (const auto& dim_spec : tensor_shard_spec.dims) {
+    shape.push_back(static_cast<std::int64_t>(dim_spec.GetOwnedSize()));
   }
 
   // Create tensor options with dtype and device from spec

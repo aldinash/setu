@@ -24,6 +24,7 @@ namespace setu::coordinator {
 using setu::commons::GenerateUUID;
 using setu::commons::RequestId;
 using setu::commons::ShardId;
+using setu::commons::datatypes::TensorDim;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::enums::ErrorCode;
@@ -173,10 +174,10 @@ void Coordinator::HandleNodeAgentRequest(
   // Generate a shard ID
   ShardId shard_id = GenerateUUID();
 
-  // Build TensorDimMap from the spec's dims
+  // Build TensorDimMap from the spec's dims (using owned size for shard ref)
   TensorDimMap dim_map;
-  for (const auto& dim : request.tensor_shard_spec.dims) {
-    dim_map.emplace(dim.name, dim);
+  for (const auto& dim_spec : request.tensor_shard_spec.dims) {
+    dim_map.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.GetOwnedSize()));
   }
 
   // Create TensorShardRef
