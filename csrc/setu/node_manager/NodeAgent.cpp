@@ -40,6 +40,7 @@ using setu::commons::utils::SetuCommHelper;
 using setu::commons::utils::ZmqHelper;
 using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::Program;
+using setu::node_manager::worker::NCCLWorker;
 //==============================================================================
 constexpr std::int32_t kPollTimeoutMs = 100;
 //==============================================================================
@@ -343,9 +344,9 @@ void NodeAgent::EnsureWorkerIsReady(DeviceRank device_rank) {
     LOG_DEBUG("Creating new worker for device_rank: {}", device_rank);
     Device device = CreateDeviceForRank(device_rank);
     std::size_t worker_port = router_port_ + device_rank + 1;
-    auto worker = std::make_unique<Worker>(device, worker_port,
-                                           device_ptrs_lookup_,
-                                           device_ptrs_mutex_);
+    auto worker = std::make_unique<NCCLWorker>(device, worker_port,
+                                               device_ptrs_lookup_,
+                                               device_ptrs_mutex_);
     worker->Start();
 
     // Create REQ socket to communicate with the worker

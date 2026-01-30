@@ -99,28 +99,17 @@ void Worker::CloseZmqSockets() {
   }
 }
 
-void Worker::Setup() {
-  // Base class setup - override in derived classes
-}
-
 void Worker::WorkerLoop() {
   LOG_DEBUG("WorkerLoop started on device {}", device_);
 
-  Setup();
+  this->Setup();
 
   while (worker_running_) {
     auto request = SetuCommHelper::Recv<ExecuteProgramRequest>(reply_socket_);
-    Execute(request.program);
+    this->Execute(request.program);
+
     ExecuteProgramResponse response(ErrorCode::kSuccess);
     SetuCommHelper::Send(reply_socket_, response);
-  }
-}
-
-void Worker::Execute(const Program& program) {
-  LOG_DEBUG("Executing program with {} instructions", program.instrs.size());
-
-  for (const auto& instruction : program.instrs) {
-    ExecuteInstruction(instruction);
   }
 }
 
@@ -166,9 +155,25 @@ void NCCLWorker::Setup() {
   LOG_DEBUG("NCCLWorker setup complete for device {}", device_);
 }
 
-void NCCLWorker::ExecuteInstruction(const Instruction& instruction) {
+void NCCLWorker::Execute(const Program& program) {
+  LOG_DEBUG("Executing program with {} instructions", program.instrs.size());
+
+  bool group_started = false;
+
+  for (const auto& instruction : program.instrs) {
+    ExecuteInstruction(instruction, group_started);
+  }
+
+  if (group_started) {
+    NCCL_CHECK(ncclGroupEnd());
+    CUDA_CHECK(cudaStreamSynchronize(stream_));
+  }
+}
+
+void NCCLWorker::ExecuteInstruction(const Instruction& instruction,
+                                    bool& group_started) {
   std::visit(
-      [this](auto&& inst) {
+      [this, &group_started](const auto& inst) {
         using T = std::decay_t<decltype(inst)>;
 
         if constexpr (std::is_same_v<T, InitCommInstruction>) {
@@ -178,8 +183,16 @@ void NCCLWorker::ExecuteInstruction(const Instruction& instruction) {
         } else if constexpr (std::is_same_v<T, CopyInstruction>) {
           ExecuteCopy(inst);
         } else if constexpr (std::is_same_v<T, SendInstruction>) {
+          if (!group_started) {
+            NCCL_CHECK(ncclGroupStart());
+            group_started = true;
+          }
           ExecuteSend(inst);
         } else if constexpr (std::is_same_v<T, ReceiveInstruction>) {
+          if (!group_started) {
+            NCCL_CHECK(ncclGroupStart());
+            group_started = true;
+          }
           ExecuteReceive(inst);
         }
       },

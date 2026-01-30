@@ -1,0 +1,16 @@
+/coc/scratch/docker_safe/bhumika/forks/setu/scripts/dev/build.sh smart
+🔨 Intelligent build - analyzing requirements...
+ℹ️ CI context: 0
+ℹ️ Strategy: incremental_build - C++ files modified (no additions/deletions)
+ℹ️ Running: make build/native_incremental (incremental)
+🔨 Building native extension (incremental build)...
+ℹ️ Using RAM disk for build: /dev/shm/setu-build-45b981cd6f38260b
+ℹ️ ccache configured - Dir: /dev/shm/setu-ccache-45b981cd6f38260b, Size: (/dev/shm/setu-ccache-45b981cd6f38260b/ccache.conf) max_size = 15.0 GB (Total RAM: 755GB)
+ℹ️ Created directories: build/debug/, test_reports/, logs/
+ℹ️ Build log: logs/cmake_build_native_incr_20260128_210841.log
+[1/4] Building CXX object CMakeFiles/_node_manager.dir/csrc/setu/node_manager/worker/Worker.cpp.o
+[2/4] Linking CXX shared module /coc/scratch/docker_safe/bhumika/forks/setu/setu/_node_manager.cpython-312-x86_64-linux-gnu.so
+[3/4] Building CXX object CMakeFiles/_node_manager_static.dir/csrc/setu/node_manager/worker/Worker.cpp.o
+[4/4] Linking CXX static library lib_node_manager_static.a
+✅ Native extension incremental build complete
+✅ Intelligent build completed successfully

@@ -61,14 +61,13 @@ class Worker {
   [[nodiscard]] bool IsRunning() const { return worker_running_.load(); }
   [[nodiscard]] const Device& GetDevice() const { return device_; }
 
- protected:
+  virtual void Execute(const Program& program) = 0;
+  virtual void Setup();
+
+ private:
   void InitZmqSockets();
   void CloseZmqSockets();
-
-  virtual void Setup();
   void WorkerLoop();
-  virtual void Execute(const Program& program);
-  virtual void ExecuteInstruction(const Instruction& instruction);
 
   [[nodiscard]] DevicePtr LookupDevicePtr(
       const std::pair<TensorName, ShardId>& key) const;
@@ -94,9 +93,11 @@ class NCCLWorker : public Worker {
              std::shared_mutex& shard_map_mutex);
   ~NCCLWorker() override;
 
- private:
+  void Execute(const Program& program) override;
   void Setup() override;
-  void ExecuteInstruction(const Instruction& instruction) override;
+
+ private:
+  void ExecuteInstruction(const Instruction& instruction, bool& group_started);
 
   void ExecuteInitComm(const InitCommInstruction& inst);
   void ExecuteUseComm(const UseCommInstruction& inst);
