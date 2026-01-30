@@ -108,6 +108,38 @@ struct TensorSelection {
   }
 
   /**
+   * @brief Check equality with another TensorSelection
+   *
+   * Two TensorSelections are equal if they have the same name and identical
+   * index bitsets for all dimensions.
+   *
+   * @param other The TensorSelection to compare against
+   * @return true if both selections are identical, false otherwise
+   */
+  [[nodiscard]] bool operator==(const TensorSelection& other) const {
+    if (name != other.name) {
+      return false;
+    }
+    if (indices.size() != other.indices.size()) {
+      return false;
+    }
+    for (const auto& [dim_name, dim] : indices) {
+      auto it = other.indices.find(dim_name);
+      if (it == other.indices.end()) {
+        return false;
+      }
+      if (dim != it->second) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool operator!=(const TensorSelection& other) const {
+    return !(*this == other);
+  }
+
+  /**
    * @brief Create a new TensorSelection with specified indices for a dimension
    *
    * @param dim_name The name of the dimension to select from

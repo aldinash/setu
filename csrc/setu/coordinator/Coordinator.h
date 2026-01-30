@@ -27,6 +27,7 @@
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Plan.h"
+#include "coordinator/metastore/MetaStore.h"
 //==============================================================================
 namespace setu::coordinator {
 //==============================================================================
@@ -35,6 +36,7 @@ using setu::commons::DeviceRank;
 using setu::commons::Identity;
 using setu::commons::NodeRank;
 using setu::commons::Queue;
+using setu::commons::RequestId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::TensorShardRef;
@@ -45,6 +47,7 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
+using setu::coordinator::metastore::MetaStore;
 //==============================================================================
 class Coordinator {
  public:
@@ -73,12 +76,13 @@ class Coordinator {
   void HandlerLoop();
   void ExecutorLoop();
 
-  void HandleNodeAgentRequest(const Identity& node_agent_identity,
-                              const RegisterTensorShardRequest& request);
-  void HandleNodeAgentRequest(const Identity& node_agent_identity,
-                              const SubmitCopyRequest& request);
-  void HandleNodeAgentRequest(const Identity& node_agent_identity,
-                              const WaitForCopyRequest& request);
+  void HandleRegisterTensorShardRequest(
+      const Identity& node_agent_identity,
+      const RegisterTensorShardRequest& request);
+  void HandleSubmitCopyRequest(const Identity& node_agent_identity,
+                               const SubmitCopyRequest& request);
+  void HandleWaitForCopyRequest(const Identity& node_agent_identity,
+                                const WaitForCopyRequest& request);
 
   void InitZmqSockets();
   void CloseZmqSockets();
@@ -95,6 +99,25 @@ class Coordinator {
 
   std::atomic<bool> handler_running_{false};
   std::atomic<bool> executor_running_{false};
+
+  MetaStore metastore_;
+
+  /// Tracks number of SubmitCopyRequests received per (src, dst) pair
+  std::map<std::pair<TensorName, TensorName>, std::size_t> copies_received_;
+
+  /// Stores the first CopySpec received for each (src, dst) pair for validation
+  std::map<std::pair<TensorName, TensorName>, CopySpec> pending_copy_specs_;
+
+  /// Tracks clients waiting for SubmitCopy response: (identity, request_id)
+  std::map<std::pair<TensorName, TensorName>,
+           std::vector<std::pair<Identity, RequestId>>>
+      pending_copy_clients_;
+
+  /// Maps CopyOperationId to CopySpec
+  std::map<CopyOperationId, CopySpec> copy_operations_;
+
+  /// Queue of CopySpecs for the Planner to process
+  Queue<CopySpec> planner_queue_;
 };
 //==============================================================================
 }  // namespace setu::coordinator
