@@ -28,7 +28,6 @@ using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 using setu::commons::DeviceRank;
-using setu::commons::enums::DType;
 using setu::commons::TensorName;
 using setu::commons::ShardId;
 using setu::commons::DevicePtr;
@@ -37,7 +36,7 @@ using setu::commons::DevicePtr;
 struct ReceiveInstruction {
   ReceiveInstruction(DeviceRank src_device_id,
                      std::pair<TensorName, ShardId> dst_tensor,
-                     DType dtype,
+                     torch::Dtype dtype,
                      std::size_t memory_offset_bytes,
                      std::size_t num_elements,
                      DevicePtr dst_ptr=nullptr)
@@ -73,7 +72,7 @@ struct ReceiveInstruction {
     BinaryReader reader(range);
     auto [src_device_id, tensor_name, shard_id, dtype, memory_offset_bytes,
           num_elements, dst_ptr_value] =
-        reader.ReadFields<DeviceRank, TensorName, ShardId, DType, std::size_t,
+        reader.ReadFields<DeviceRank, TensorName, ShardId, torch::Dtype, std::size_t,
                           std::size_t, std::uintptr_t>();
     const auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_value);
     return ReceiveInstruction(src_device_id,
@@ -92,7 +91,7 @@ struct ReceiveInstruction {
 
   DeviceRank src_device_id;
   std::pair<TensorName, ShardId> dst_tensor;
-  DType dtype;
+  torch::Dtype dtype;
   std::size_t memory_offset_bytes;
   std::size_t num_elements;
 

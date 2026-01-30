@@ -22,7 +22,6 @@
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorSelection.h"
 #include "commons/datatypes/TensorShard.h"
-#include "commons/enums/Enums.h"
 #include "coordinator/datatypes/Instruction.h"
 #include "coordinator/datatypes/Plan.h"
 #include "coordinator/datatypes/Program.h"
@@ -39,23 +38,22 @@ using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
 using setu::commons::datatypes::TensorShardsMap;
-using setu::commons::enums::DType;
-using setu::coordinator::datatypes::CopyInstruction;
-using setu::coordinator::datatypes::InitCommInstruction;
-using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::Plan;
 using setu::coordinator::datatypes::Program;
-using setu::coordinator::datatypes::ReceiveInstruction;
-using setu::coordinator::datatypes::SendInstruction;
 using setu::coordinator::datatypes::TensorMetadata;
 using setu::coordinator::datatypes::TensorOwnershipMap;
 using setu::coordinator::datatypes::TensorOwnershipMapPtr;
+using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::UseCommInstruction;
+using setu::coordinator::datatypes::CopyInstruction;
+using setu::coordinator::datatypes::InitCommInstruction;
+using setu::coordinator::datatypes::ReceiveInstruction;
+using setu::coordinator::datatypes::SendInstruction;
 //==============================================================================
 void InitCopyInstructionPybind(py::module_& m) {
   py::class_<CopyInstruction>(m, "CopyInstruction")
       .def(py::init<std::pair<TensorName, ShardId>, std::size_t,
-                    std::pair<TensorName, ShardId>, std::size_t, DType,
+                    std::pair<TensorName, ShardId>, std::size_t, torch::Dtype,
                     std::size_t>(),
            py::arg("src_tensor"), py::arg("src_memory_offset_bytes"),
            py::arg("dst_tensor"), py::arg("dst_memory_offset_bytes"),
@@ -80,7 +78,7 @@ void InitCopyInstructionPybind(py::module_& m) {
 //==============================================================================
 void InitSendInstructionPybind(py::module_& m) {
   py::class_<SendInstruction>(m, "SendInstruction")
-      .def(py::init<DeviceRank, std::pair<TensorName, ShardId>, DType,
+      .def(py::init<DeviceRank, std::pair<TensorName, ShardId>, torch::Dtype,
                     std::size_t, std::size_t>(),
            py::arg("dst_device_id"), py::arg("src_tensor"), py::arg("dtype"),
            py::arg("memory_offset_bytes"), py::arg("num_elements"),
@@ -100,7 +98,7 @@ void InitSendInstructionPybind(py::module_& m) {
 //==============================================================================
 void InitReceiveInstructionPybind(py::module_& m) {
   py::class_<ReceiveInstruction>(m, "ReceiveInstruction")
-      .def(py::init<DeviceRank, std::pair<TensorName, ShardId>, DType,
+      .def(py::init<DeviceRank, std::pair<TensorName, ShardId>, torch::Dtype,
                     std::size_t, std::size_t>(),
            py::arg("src_device_id"), py::arg("dst_tensor"), py::arg("dtype"),
            py::arg("memory_offset_bytes"), py::arg("num_elements"),
@@ -196,7 +194,7 @@ void InitProgramPybind(py::module_& m) {
 //==============================================================================
 void InitTensorMetadataPybind(py::module_& m) {
   py::class_<TensorMetadata>(m, "TensorMetadata", py::module_local())
-      .def(py::init<TensorName, TensorDimMap, DType, TensorShardsMap>(),
+      .def(py::init<TensorName, TensorDimMap, torch::Dtype, TensorShardsMap>(),
            py::arg("name"), py::arg("dims"), py::arg("dtype"),
            py::arg("shards"))
       .def_readonly("name", &TensorMetadata::name, "Name of the tensor")

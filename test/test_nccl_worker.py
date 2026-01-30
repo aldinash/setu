@@ -14,14 +14,14 @@ def _get_extensions():
     try:
         # Load setu package first so torch is in process (required for extension symbols)
         from setu._commons.datatypes import Device, make_shard_id
-        from setu._commons.enums import DType, DeviceKind
+        from setu._commons.enums import DeviceKind
         from setu._coordinator.datatypes import (
             CopyInstruction,
             Instruction,
             Program,
         )
         from setu._node_manager import NCCLWorker
-        return NCCLWorker, Device, DeviceKind, DType, Program, Instruction, CopyInstruction, make_shard_id
+        return NCCLWorker, Device, DeviceKind, Program, Instruction, CopyInstruction, make_shard_id
     except ImportError as e:
         print(f"setu extensions not available: {e}")
         pytest.skip(f"setu extensions not available: {e}")
@@ -37,7 +37,6 @@ def test_nccl_worker_copy_instruction():
         NCCLWorker,
         Device,
         DeviceKind,
-        DType,
         Program,
         Instruction,
         CopyInstruction,
@@ -60,7 +59,7 @@ def test_nccl_worker_copy_instruction():
         0,
         ("dst", shard_id_dst),
         0,
-        DType.FLOAT32,
+        torch.float32,
         num_elements,
     )
     program = Program()
@@ -90,7 +89,6 @@ def test_nccl_worker_copy_instruction_with_offset():
         NCCLWorker,
         Device,
         DeviceKind,
-        DType,
         Program,
         Instruction,
         CopyInstruction,
@@ -119,7 +117,7 @@ def test_nccl_worker_copy_instruction_with_offset():
         offset_bytes,
         ("dst", shard_id_dst),
         offset_bytes,
-        DType.FLOAT32,
+        torch.float32,
         num_elements,
     )
     program = Program()
@@ -151,7 +149,6 @@ def test_nccl_worker_empty_program():
         NCCLWorker,
         Device,
         DeviceKind,
-        DType,
         Program,
         Instruction,
         CopyInstruction,

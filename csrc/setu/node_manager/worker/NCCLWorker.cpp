@@ -65,7 +65,7 @@ NCCLWorker::~NCCLWorker() {
 }
 
 void NCCLWorker::Setup() {
-  CUDA_CHECK(cudaSetDevice(device_.local_device_rank));
+  CUDA_CHECK(cudaSetDevice(device_.torch_device.index()));
   CUDA_CHECK(cudaStreamCreate(&stream_));
   LOG_DEBUG("NCCLWorker setup complete for device {}", device_);
 }
@@ -196,27 +196,23 @@ std::string NCCLWorker::CommIdToString(const ncclUniqueId& id) {
   return std::string(id.internal, id.internal + NCCL_UNIQUE_ID_BYTES);
 }
 
-ncclDataType_t NCCLWorker::ToNcclDataType(DType dtype) {
+ncclDataType_t NCCLWorker::ToNcclDataType(torch::Dtype dtype) {
   switch (dtype) {
-    case DType::kFloat16:
-      return ncclFloat16;
-    case DType::kBFloat16:
+    case torch::Dtype::Float:
+      return ncclFloat;
+    case torch::Dtype::BFloat16:
       return ncclBfloat16;
-    case DType::kFloat32:
-      return ncclFloat32;
     default:
       RAISE_RUNTIME_ERROR("Unsupported dtype: {}", static_cast<int>(dtype));
   }
 }
 
-std::size_t NCCLWorker::GetDTypeSizeBytes(DType dtype) {
+std::size_t NCCLWorker::GetDTypeSizeBytes(torch::Dtype dtype) {
   switch (dtype) {
-    case DType::kFloat16:
-      return 2;
-    case DType::kBFloat16:
-      return 2;
-    case DType::kFloat32:
+    case torch::Dtype::Float:
       return 4;
+    case torch::Dtype::BFloat16:
+      return 2;
     default:
       RAISE_RUNTIME_ERROR("Unsupported dtype: {}", static_cast<int>(dtype));
   }

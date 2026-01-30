@@ -27,7 +27,6 @@ using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
-using setu::commons::enums::DType;
 using setu::commons::TensorName;
 using setu::commons::ShardId;
 using setu::commons::DevicePtr;
@@ -39,7 +38,7 @@ struct CopyInstruction {
                   std::size_t src_memory_offset_bytes,
                   std::pair<TensorName, ShardId> dst_tensor,
                   std::size_t dst_memory_offset_bytes,
-                  DType dtype,
+                  torch::Dtype dtype,
                   std::size_t num_elements,
                   DevicePtr src_ptr=nullptr,
                   DevicePtr dst_ptr=nullptr)
@@ -83,7 +82,7 @@ struct CopyInstruction {
           dst_tensor_name, dst_shard_id, dst_memory_offset_bytes, dtype,
           num_elements, src_ptr_val, dst_ptr_val] =
         reader.ReadFields<TensorName, ShardId, std::size_t, TensorName, ShardId,
-                          std::size_t, DType, std::size_t, std::uintptr_t, std::uintptr_t>();
+                          std::size_t, torch::Dtype, std::size_t, std::uintptr_t, std::uintptr_t>();
 
     auto src_ptr = reinterpret_cast<DevicePtr>(src_ptr_val);
     auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_val);
@@ -106,7 +105,7 @@ struct CopyInstruction {
   std::size_t src_memory_offset_bytes;
   std::pair<TensorName, ShardId> dst_tensor;
   std::size_t dst_memory_offset_bytes;
-  DType dtype;
+  torch::Dtype dtype;
   std::size_t num_elements;
 
   // Embellished pointers

@@ -35,7 +35,6 @@ using setu::commons::DeviceRank;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::Device;
-using setu::commons::enums::DType;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::CopyInstruction;
@@ -66,8 +65,8 @@ class NCCLWorker : public Worker {
   void ExecuteReceive(const ReceiveInstruction& inst);
 
   [[nodiscard]] static std::string CommIdToString(const ncclUniqueId& id);
-  [[nodiscard]] static ncclDataType_t ToNcclDataType(DType dtype);
-  [[nodiscard]] static std::size_t GetDTypeSizeBytes(DType dtype);
+  [[nodiscard]] static ncclDataType_t ToNcclDataType(torch::Dtype dtype);
+  [[nodiscard]] static std::size_t GetDTypeSizeBytes(torch::Dtype dtype);
 
   struct CommCacheEntry {
     ncclComm_t nccl_comm;

@@ -23,6 +23,7 @@
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
+using setu::commons::RequestId;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::ExecuteProgramRequest;
 using setu::commons::messages::ExecuteProgramResponse;
@@ -103,7 +104,7 @@ void Worker::WorkerLoop() {
     LOG_DEBUG("Worker completed executing all instructions");
 
     // Send acknowledgment back to NodeAgent
-    ExecuteProgramResponse response(ErrorCode::kSuccess);
+    ExecuteProgramResponse response(RequestId{}, ErrorCode::kSuccess);
     SetuCommHelper::Send(reply_socket_, response);
   }
 }

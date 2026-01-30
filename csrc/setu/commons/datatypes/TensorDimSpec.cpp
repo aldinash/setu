@@ -14,36 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "commons/datatypes/TensorDimSpec.h"
 //==============================================================================
-#include "commons/StdCommon.h"
+namespace setu::commons::datatypes {
 //==============================================================================
-#include "commons/Types.h"
-#include "commons/messages/BaseResponse.h"
-#include "commons/utils/Serialization.h"
-//==============================================================================
-namespace setu::commons::messages {
-//==============================================================================
-using setu::commons::RequestId;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
+void TensorDimSpec::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(name, size, start, end);
+}
 
-struct ExecuteResponse : public BaseResponse {
-  explicit ExecuteResponse(RequestId request_id_param,
-                           ErrorCode error_code_param = ErrorCode::kSuccess)
-      : BaseResponse(request_id_param, error_code_param) {}
-
-  [[nodiscard]] std::string ToString() const {
-    return std::format("ExecuteResponse(error_code={})", error_code);
-  }
-
-  void Serialize(BinaryBuffer& buffer) const;
-
-  static ExecuteResponse Deserialize(const BinaryRange& range);
-};
-using ExecuteResponsePtr = std::shared_ptr<ExecuteResponse>;
-
+TensorDimSpec TensorDimSpec::Deserialize(const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [name_val, size_val, start_val, end_val] =
+      reader.ReadFields<TensorDimName, std::size_t, TensorIndex, TensorIndex>();
+  return TensorDimSpec(name_val, size_val, start_val, end_val);
+}
 //==============================================================================
-}  // namespace setu::commons::messages
+}  // namespace setu::commons::datatypes
 //==============================================================================
