@@ -31,6 +31,7 @@ using setu::commons::DeviceRank;
 using setu::commons::enums::DType;
 using setu::commons::TensorName;
 using setu::commons::ShardId;
+using setu::commons::DevicePtr;
 //==============================================================================
 
 struct ReceiveInstruction {
@@ -38,12 +39,14 @@ struct ReceiveInstruction {
                      std::pair<TensorName, ShardId> dst_tensor,
                      DType dtype,
                      std::size_t memory_offset_bytes,
-                     std::size_t num_elements)
+                     std::size_t num_elements,
+                     DevicePtr dst_ptr=nullptr)
       : src_device_id(src_device_id),
         dst_tensor(std::move(dst_tensor)),
         dtype(dtype),
         memory_offset_bytes(memory_offset_bytes),
-        num_elements(num_elements) {}
+        num_elements(num_elements),
+        dst_ptr(dst_ptr) {}
 
   ~ReceiveInstruction() = default;
   ReceiveInstruction(const ReceiveInstruction&) = default;
@@ -54,26 +57,37 @@ struct ReceiveInstruction {
   [[nodiscard]] std::string ToString() const {
     return std::format(
         "ReceiveInstruction(src_rank={}, tensor=({}, {}), dtype={}, "
-        "memory_offset={}, num_elements={})",
+        "memory_offset={}, num_elements={}, dst_device_ptr = {})",
         src_device_id, dst_tensor.first, dst_tensor.second,
-        static_cast<int>(dtype), memory_offset_bytes, num_elements);
+        static_cast<int>(dtype), memory_offset_bytes, num_elements, dst_ptr);
   }
 
   void Serialize(BinaryBuffer& buffer) const {
     BinaryWriter writer(buffer);
+    const auto dst_ptr_value = reinterpret_cast<std::uintptr_t>(dst_ptr);
     writer.WriteFields(src_device_id, dst_tensor.first, dst_tensor.second,
-                       dtype, memory_offset_bytes, num_elements);
+                       dtype, memory_offset_bytes, num_elements, dst_ptr_value);
   }
 
   static ReceiveInstruction Deserialize(const BinaryRange& range) {
     BinaryReader reader(range);
     auto [src_device_id, tensor_name, shard_id, dtype, memory_offset_bytes,
-          num_elements] =
+          num_elements, dst_ptr_value] =
         reader.ReadFields<DeviceRank, TensorName, ShardId, DType, std::size_t,
-                          std::size_t>();
+                          std::size_t, std::uintptr_t>();
+    const auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_value);
     return ReceiveInstruction(src_device_id,
                               {std::move(tensor_name), std::move(shard_id)},
-                              dtype, memory_offset_bytes, num_elements);
+                              dtype, memory_offset_bytes, num_elements, dst_ptr);
+  }
+
+  /**
+   * @brief Populates the device pointers by looking up the base address
+   * * @param resolver A callable that takes (TensorName, ShardId) and returns the base DevicePtr.
+   */
+  void Embellish(const std::function<DevicePtr(const TensorName, ShardId)> resolver) {
+    // Resolve base pointers
+    dst_ptr = resolver(dst_tensor.first, dst_tensor.second);
   }
 
   DeviceRank src_device_id;
@@ -81,6 +95,9 @@ struct ReceiveInstruction {
   DType dtype;
   std::size_t memory_offset_bytes;
   std::size_t num_elements;
+
+  // Embellished pointers
+  DevicePtr dst_ptr;
 };
 
 //==============================================================================

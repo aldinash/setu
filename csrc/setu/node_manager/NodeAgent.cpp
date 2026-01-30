@@ -308,7 +308,7 @@ void NodeAgent::ExecutorLoop() {
     LOG_DEBUG("Executor received plan for copy_op_id: {}", copy_op_id);
 
     // For each worker program in the plan, send it to the corresponding worker
-    for (const auto& [device_rank, program] : plan.worker_programs) {
+    for (auto& [device_rank, program] : plan.worker_programs) {
       // Ensure worker is ready before sending
       EnsureWorkerIsReady(device_rank);
 
@@ -319,6 +319,9 @@ void NodeAgent::ExecutorLoop() {
       // Send ExecuteProgramRequest to worker
       LOG_DEBUG("Sending program with {} instructions to worker {}",
                 program.instrs.size(), device_rank);
+      
+      EmbellishProgram(program);
+
       ExecuteProgramRequest request(program);
       SetuCommHelper::Send(it->second, request);
 
@@ -336,6 +339,22 @@ void NodeAgent::ExecutorLoop() {
   }
 }
 
+void NodeAgent::EmbellishProgram(Program& program)
+{
+  auto const DevicePtrLookup = [this](const TensorName& name, const ShardId& shard_id) -> DevicePtr {
+    try {
+      return this->device_ptrs_lookup_.at(name).at(shard_id);
+    } catch (const std::out_of_range&) {
+      RAISE_RUNTIME_ERROR("Embellish failed: Tensor {} (Shard {}) not found in NodeAgent registry.", 
+                          name, shard_id);
+    }
+  };
+
+  for (auto& instr : program.instrs) {
+    instr.Embellish(DevicePtrLookup);
+  }
+}
+
 void NodeAgent::EnsureWorkerIsReady(DeviceRank device_rank) {
   auto it = workers_.find(device_rank);
 
@@ -344,9 +363,7 @@ void NodeAgent::EnsureWorkerIsReady(DeviceRank device_rank) {
     LOG_DEBUG("Creating new worker for device_rank: {}", device_rank);
     Device device = CreateDeviceForRank(device_rank);
     std::size_t worker_port = router_port_ + device_rank + 1;
-    auto worker = std::make_unique<NCCLWorker>(device, worker_port,
-                                               device_ptrs_lookup_,
-                                               device_ptrs_mutex_);
+    auto worker = std::make_unique<NCCLWorker>(device, worker_port);
     worker->Start();
 
     // Create REQ socket to communicate with the worker

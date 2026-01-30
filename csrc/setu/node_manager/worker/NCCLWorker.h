@@ -26,6 +26,7 @@
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Instruction.h"
 #include "coordinator/datatypes/Program.h"
+#include "node_manager/worker/Worker.h"
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
@@ -46,33 +47,36 @@ using setu::coordinator::datatypes::SendInstruction;
 using setu::coordinator::datatypes::UseCommInstruction;
 //==============================================================================
 
-class Worker {
+class NCCLWorker : public Worker {
  public:
-  Worker(Device device,
-         std::size_t reply_port);
-  virtual ~Worker();
+  NCCLWorker(Device device,
+             std::size_t reply_port);
+  ~NCCLWorker() override;
 
-  void Start();
-  void Stop();
+  void Execute(const Program& program) override;
+  void Setup() override;
 
-  [[nodiscard]] bool IsRunning() const { return worker_running_.load(); }
-  [[nodiscard]] const Device& GetDevice() const { return device_; }
+ private:
+  void ExecuteInstruction(const Instruction& instruction, bool& group_started);
 
-  virtual void Execute(const Program& program) = 0;
-  virtual void Setup();
+  void ExecuteInitComm(const InitCommInstruction& inst);
+  void ExecuteUseComm(const UseCommInstruction& inst);
+  void ExecuteCopy(const CopyInstruction& inst);
+  void ExecuteSend(const SendInstruction& inst);
+  void ExecuteReceive(const ReceiveInstruction& inst);
 
- protected:
-  void InitZmqSockets();
-  void CloseZmqSockets();
-  void WorkerLoop();
+  [[nodiscard]] static std::string CommIdToString(const ncclUniqueId& id);
+  [[nodiscard]] static ncclDataType_t ToNcclDataType(DType dtype);
+  [[nodiscard]] static std::size_t GetDTypeSizeBytes(DType dtype);
 
-  ZmqContextPtr zmq_context_;
-  ZmqSocketPtr reply_socket_;
+  struct CommCacheEntry {
+    ncclComm_t nccl_comm;
+    std::unordered_map<DeviceRank, std::int32_t> device_to_rank;
+  };
 
-  Device device_;
-  std::size_t reply_port_;
-  std::atomic<bool> worker_running_;
-  std::thread executor_thread_;
+  std::unordered_map<std::string, CommCacheEntry> comm_cache_;
+  std::string active_comm_key_;
+  cudaStream_t stream_;
 };
 
 //==============================================================================

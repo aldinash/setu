@@ -36,6 +36,9 @@ using instructions::InitCommInstruction;
 using instructions::ReceiveInstruction;
 using instructions::SendInstruction;
 using instructions::UseCommInstruction;
+using setu::commons::TensorName;
+using setu::commons::ShardId;
+using setu::commons::DevicePtr;
 //==============================================================================
 
 enum class InstructionType : std::uint8_t {
@@ -111,6 +114,17 @@ struct Instruction {
         RAISE_RUNTIME_ERROR("Unknown instruction type id {}", type_id);
     }
   }
+
+  void Embellish(const std::function<DevicePtr(const TensorName, const ShardId)> resolver) {
+  std::visit(
+      [resolver](auto& inst) {
+        // Use a compile-time check to see if the instruction has an Embellish method
+        if constexpr (requires { inst.Embellish(resolver); }) {
+          inst.Embellish(resolver);
+        }
+      },
+      instr);
+}
 
   InstructionVariant instr;
 };

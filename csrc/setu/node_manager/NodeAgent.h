@@ -28,7 +28,7 @@
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/Plan.h"
-#include "node_manager/worker/Worker.h"
+#include "node_manager/worker/NCCLWorker.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
@@ -39,7 +39,6 @@ using setu::commons::Identity;
 using setu::commons::NodeRank;
 using setu::commons::Queue;
 using setu::commons::ShardId;
-using setu::commons::ShardDevicePtrsLookup;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
@@ -54,6 +53,7 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
+using setu::coordinator::datatypes::Program;
 using setu::node_manager::worker::Worker;
 //==============================================================================
 
@@ -110,6 +110,8 @@ class NodeAgent {
 
   Device CreateDeviceForRank(DeviceRank device_rank) const;
 
+  void EmbellishProgram(Program& program);
+
   NodeRank node_rank_;
 
   std::shared_ptr<zmq::context_t> zmq_context_;
@@ -130,8 +132,10 @@ class NodeAgent {
 
   std::unordered_map<DeviceRank, std::unique_ptr<Worker>> workers_;
 
+  /// @brief Lookup table mapping (TensorName, ShardId) -> DevicePtr
+  using ShardDevicePtrsLookup =
+    std::unordered_map<TensorName, std::unordered_map<ShardId, DevicePtr>>;
   ShardDevicePtrsLookup device_ptrs_lookup_;
-  mutable std::shared_mutex device_ptrs_mutex_;
 
   /// @brief Pending client waits: maps copy_op_id to list of client identities
   std::unordered_map<CopyOperationId, std::vector<Identity>,

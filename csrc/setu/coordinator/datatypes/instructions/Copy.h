@@ -30,21 +30,27 @@ using setu::commons::utils::BinaryWriter;
 using setu::commons::enums::DType;
 using setu::commons::TensorName;
 using setu::commons::ShardId;
+using setu::commons::DevicePtr;
 //==============================================================================
 
+// TODO: Move method definitions to cpp
 struct CopyInstruction {
   CopyInstruction(std::pair<TensorName, ShardId> src_tensor,
                   std::size_t src_memory_offset_bytes,
                   std::pair<TensorName, ShardId> dst_tensor,
                   std::size_t dst_memory_offset_bytes,
                   DType dtype,
-                  std::size_t num_elements)
+                  std::size_t num_elements,
+                  DevicePtr src_ptr=nullptr,
+                  DevicePtr dst_ptr=nullptr)
       : src_tensor(std::move(src_tensor)),
         src_memory_offset_bytes(src_memory_offset_bytes),
         dst_tensor(std::move(dst_tensor)),
         dst_memory_offset_bytes(dst_memory_offset_bytes),
         dtype(dtype),
-        num_elements(num_elements) {}
+        num_elements(num_elements),
+        src_ptr{src_ptr},
+        dst_ptr{dst_ptr} {}
 
   ~CopyInstruction() = default;
   CopyInstruction(const CopyInstruction&) = default;
@@ -55,32 +61,45 @@ struct CopyInstruction {
   [[nodiscard]] std::string ToString() const {
     return std::format(
         "CopyInstruction(src_tensor=({}, {}), src_offset={}, dst_tensor=({}, "
-        "{}), dst_offset={}, dtype={}, num_elements={})",
+        "{}), dst_offset={}, dtype={}, num_elements={}, src_ptr={}, dst_ptr={})",
         src_tensor.first, src_tensor.second, src_memory_offset_bytes,
         dst_tensor.first, dst_tensor.second, dst_memory_offset_bytes,
-        static_cast<int>(dtype), num_elements);
+        static_cast<int>(dtype), num_elements, src_ptr, dst_ptr);
   }
 
   void Serialize(BinaryBuffer& buffer) const {
     BinaryWriter writer(buffer);
+    const auto src_ptr_value = reinterpret_cast<std::uintptr_t>(src_ptr);
+    const auto dst_ptr_value = reinterpret_cast<std::uintptr_t>(dst_ptr);
     writer.WriteFields(src_tensor.first, src_tensor.second,
                        src_memory_offset_bytes, dst_tensor.first,
                        dst_tensor.second, dst_memory_offset_bytes, dtype,
-                       num_elements);
+                       num_elements, src_ptr_value, dst_ptr_value);
   }
 
   static CopyInstruction Deserialize(const BinaryRange& range) {
     BinaryReader reader(range);
     auto [src_tensor_name, src_shard_id, src_memory_offset_bytes,
           dst_tensor_name, dst_shard_id, dst_memory_offset_bytes, dtype,
-          num_elements] =
+          num_elements, src_ptr_val, dst_ptr_val] =
         reader.ReadFields<TensorName, ShardId, std::size_t, TensorName, ShardId,
-                          std::size_t, DType, std::size_t>();
+                          std::size_t, DType, std::size_t, std::uintptr_t, std::uintptr_t>();
 
+    auto src_ptr = reinterpret_cast<DevicePtr>(src_ptr_val);
+    auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_val);
     return CopyInstruction({std::move(src_tensor_name), std::move(src_shard_id)},
                            src_memory_offset_bytes,
                            {std::move(dst_tensor_name), std::move(dst_shard_id)},
-                           dst_memory_offset_bytes, dtype, num_elements);
+                           dst_memory_offset_bytes, dtype, num_elements, src_ptr, dst_ptr);
+  }
+
+  /**
+   * @brief Populates the device pointers by looking up the base address
+   * * @param resolver A callable that takes (TensorName, ShardId) and returns the base DevicePtr.
+   */
+  void Embellish(const std::function<DevicePtr(const TensorName, ShardId)> resolver) {
+    src_ptr = resolver(src_tensor.first, src_tensor.second);
+    dst_ptr = resolver(dst_tensor.first, dst_tensor.second);
   }
 
   std::pair<TensorName, ShardId> src_tensor;
@@ -89,6 +108,10 @@ struct CopyInstruction {
   std::size_t dst_memory_offset_bytes;
   DType dtype;
   std::size_t num_elements;
+
+  // Embellished pointers
+  DevicePtr src_ptr;
+  DevicePtr dst_ptr;
 };
 
 //==============================================================================
