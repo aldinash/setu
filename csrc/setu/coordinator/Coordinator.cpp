@@ -29,7 +29,6 @@ using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyResponse;
-using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::SetuCommHelper;
 using setu::commons::utils::ZmqHelper;
 //==============================================================================
@@ -160,8 +159,6 @@ void Coordinator::HandlerLoop() {
             HandleRegisterTensorShardRequest(node_agent_identity, msg);
           } else if constexpr (std::is_same_v<T, SubmitCopyRequest>) {
             HandleSubmitCopyRequest(node_agent_identity, msg);
-          } else if constexpr (std::is_same_v<T, WaitForCopyRequest>) {
-            HandleWaitForCopyRequest(node_agent_identity, msg);
           }
         },
         request);
@@ -271,20 +268,6 @@ void Coordinator::HandleSubmitCopyRequest(const Identity& node_agent_identity,
     pending_copy_specs_.erase(copy_key);
     pending_copy_clients_.erase(copy_key);
   }
-}
-
-void Coordinator::HandleWaitForCopyRequest(const Identity& node_agent_identity,
-                                           const WaitForCopyRequest& request) {
-  LOG_INFO("Coordinator received WaitForCopyRequest for copy operation ID: {}",
-           request.copy_operation_id);
-
-  // TODO: Actually wait for the copy operation
-  // For now, just log and respond with success
-  LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
-
-  WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
 }
 
 void Coordinator::ExecutorLoop() {

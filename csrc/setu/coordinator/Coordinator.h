@@ -43,7 +43,6 @@ using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
-using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::Plan;
@@ -81,8 +80,6 @@ class Coordinator {
       const RegisterTensorShardRequest& request);
   void HandleSubmitCopyRequest(const Identity& node_agent_identity,
                                const SubmitCopyRequest& request);
-  void HandleWaitForCopyRequest(const Identity& node_agent_identity,
-                                const WaitForCopyRequest& request);
 
   void InitZmqSockets();
   void CloseZmqSockets();
