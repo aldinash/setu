@@ -254,19 +254,28 @@ class ZmqHelper : public NonCopyableNonMovable {
    * @brief Create and connect a ZMQ socket with standard configuration
    *
    * Automatically configures linger=0 and sets subscribe="" for SUB sockets.
+   * Optionally sets routing_id for DEALER/REQ sockets.
    *
    * @param context [in] ZMQ context to create socket in
    * @param socket_type [in] Type of ZMQ socket to create
    * @param endpoint [in] Endpoint to connect to (e.g., "tcp://host:port")
+   * @param identity [in] Optional identity to set on socket (for DEALER/REQ)
    * @return Created and configured socket
    */
   [[nodiscard]] static ZmqSocketPtr CreateAndConnectSocket(
       ZmqContextPtr context /*[in]*/, zmq::socket_type socket_type /*[in]*/,
-      const std::string& endpoint /*[in]*/) {
+      const std::string& endpoint /*[in]*/,
+      const std::optional<std::string>& identity /*[in]*/ = std::nullopt) {
     ASSERT_VALID_POINTER_ARGUMENT(context);
 
     auto socket = std::make_shared<zmq::socket_t>(*context, socket_type);
     socket->set(zmq::sockopt::linger, 0);
+
+    // Set identity before connecting (must be set before connect)
+    if (identity.has_value()) {
+      socket->set(zmq::sockopt::routing_id, identity.value());
+    }
+
     socket->connect(endpoint);
 
     // SUB sockets need subscribe filter
