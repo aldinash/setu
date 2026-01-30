@@ -177,7 +177,8 @@ void Coordinator::HandleNodeAgentRequest(
   // Build TensorDimMap from the spec's dims (using owned size for shard ref)
   TensorDimMap dim_map;
   for (const auto& dim_spec : request.tensor_shard_spec.dims) {
-    dim_map.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.GetOwnedSize()));
+    dim_map.emplace(dim_spec.name,
+                    TensorDim(dim_spec.name, dim_spec.GetOwnedSize()));
   }
 
   // Create TensorShardRef

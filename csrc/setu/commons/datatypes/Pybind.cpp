@@ -22,8 +22,8 @@
 #include "commons/datatypes/CopySpec.h"
 #include "commons/datatypes/Device.h"
 #include "commons/datatypes/TensorDim.h"
-#include "commons/datatypes/TensorDimSpec.h"
 #include "commons/datatypes/TensorDimShard.h"
+#include "commons/datatypes/TensorDimSpec.h"
 #include "commons/datatypes/TensorSelection.h"
 #include "commons/datatypes/TensorShard.h"
 #include "commons/datatypes/TensorShardHandle.h"
@@ -81,8 +81,7 @@ void InitTensorDimSpecPybind(py::module_& m) {
            py::arg("name"), py::arg("size"), py::arg("start"), py::arg("end"))
       .def_readonly("name", &TensorDimSpec::name,
                     "Name of the tensor dimension")
-      .def_readonly("size", &TensorDimSpec::size,
-                    "Total size of the dimension")
+      .def_readonly("size", &TensorDimSpec::size, "Total size of the dimension")
       .def_readonly("start", &TensorDimSpec::start,
                     "Start index of owned range (inclusive)")
       .def_readonly("end", &TensorDimSpec::end,

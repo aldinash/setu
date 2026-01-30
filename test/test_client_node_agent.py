@@ -94,11 +94,13 @@ def _run_client_register_tensor(endpoint: str, tensor_name: str, result_queue):
         shard_ref = client.register_tensor_shard(shard_spec)
         client.disconnect()
 
-        result_queue.put({
-            "success": True,
-            "has_shard_ref": shard_ref is not None,
-            "tensor_name": tensor_name,
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "has_shard_ref": shard_ref is not None,
+                "tensor_name": tensor_name,
+            }
+        )
 
     except Exception as e:
         traceback.print_exc()
@@ -140,11 +142,13 @@ def _run_client_get_handle(endpoint: str, tensor_name: str, result_queue):
         spec_dict = tensor_ipc_spec.to_dict()
         client.disconnect()
 
-        result_queue.put({
-            "success": True,
-            "spec_dict": spec_dict,
-            "tensor_size": spec_dict.get("tensor_size"),
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "spec_dict": spec_dict,
+                "tensor_size": spec_dict.get("tensor_size"),
+            }
+        )
 
     except Exception as e:
         traceback.print_exc()
@@ -172,8 +176,12 @@ def test_register_tensor_shard():
     # Start Coordinator
     coordinator_proc = ctx.Process(
         target=_run_coordinator,
-        args=(coordinator_executor_port, coordinator_handler_port,
-              coordinator_ready, stop_event),
+        args=(
+            coordinator_executor_port,
+            coordinator_handler_port,
+            coordinator_ready,
+            stop_event,
+        ),
     )
     coordinator_proc.start()
     assert coordinator_ready.wait(timeout=10), "Coordinator failed to start"
@@ -181,8 +189,13 @@ def test_register_tensor_shard():
     # Start NodeAgent
     node_agent_proc = ctx.Process(
         target=_run_node_agent,
-        args=(node_agent_router_port, coordinator_executor_port,
-              coordinator_handler_port, node_agent_ready, stop_event),
+        args=(
+            node_agent_router_port,
+            coordinator_executor_port,
+            coordinator_handler_port,
+            node_agent_ready,
+            stop_event,
+        ),
     )
     node_agent_proc.start()
     assert node_agent_ready.wait(timeout=10), "NodeAgent failed to start"
@@ -199,7 +212,9 @@ def test_register_tensor_shard():
         client_proc.start()
         client_proc.join(timeout=15)
 
-        assert client_proc.exitcode == 0, f"Client process failed: {client_proc.exitcode}"
+        assert (
+            client_proc.exitcode == 0
+        ), f"Client process failed: {client_proc.exitcode}"
 
         result = result_queue.get(timeout=5)
         assert result["success"], f"Client error: {result.get('error')}"
@@ -237,8 +252,12 @@ def test_get_tensor_handle():
     # Start Coordinator
     coordinator_proc = ctx.Process(
         target=_run_coordinator,
-        args=(coordinator_executor_port, coordinator_handler_port,
-              coordinator_ready, stop_event),
+        args=(
+            coordinator_executor_port,
+            coordinator_handler_port,
+            coordinator_ready,
+            stop_event,
+        ),
     )
     coordinator_proc.start()
     assert coordinator_ready.wait(timeout=10), "Coordinator failed to start"
@@ -246,8 +265,13 @@ def test_get_tensor_handle():
     # Start NodeAgent
     node_agent_proc = ctx.Process(
         target=_run_node_agent,
-        args=(node_agent_router_port, coordinator_executor_port,
-              coordinator_handler_port, node_agent_ready, stop_event),
+        args=(
+            node_agent_router_port,
+            coordinator_executor_port,
+            coordinator_handler_port,
+            node_agent_ready,
+            stop_event,
+        ),
     )
     node_agent_proc.start()
     assert node_agent_ready.wait(timeout=10), "NodeAgent failed to start"
@@ -263,17 +287,26 @@ def test_get_tensor_handle():
         client_proc.start()
         client_proc.join(timeout=20)
 
-        assert client_proc.exitcode == 0, f"Client process failed: {client_proc.exitcode}"
+        assert (
+            client_proc.exitcode == 0
+        ), f"Client process failed: {client_proc.exitcode}"
 
         result = result_queue.get(timeout=5)
         assert result["success"], f"Client error: {result.get('error')}"
-        assert result["tensor_size"] == [4, 8], f"Unexpected tensor size: {result['tensor_size']}"
+        assert result["tensor_size"] == [
+            4,
+            8,
+        ], f"Unexpected tensor size: {result['tensor_size']}"
 
         # Verify spec contains required fields
         spec_dict = result["spec_dict"]
         required_fields = [
-            "tensor_size", "tensor_stride", "storage_handle",
-            "storage_size_bytes", "ref_counter_handle", "event_handle",
+            "tensor_size",
+            "tensor_stride",
+            "storage_handle",
+            "storage_size_bytes",
+            "ref_counter_handle",
+            "event_handle",
         ]
         for field in required_fields:
             assert field in spec_dict, f"Missing field: {field}"
@@ -306,16 +339,25 @@ def test_multiple_tensor_registrations():
 
     coordinator_proc = ctx.Process(
         target=_run_coordinator,
-        args=(coordinator_executor_port, coordinator_handler_port,
-              coordinator_ready, stop_event),
+        args=(
+            coordinator_executor_port,
+            coordinator_handler_port,
+            coordinator_ready,
+            stop_event,
+        ),
     )
     coordinator_proc.start()
     assert coordinator_ready.wait(timeout=10)
 
     node_agent_proc = ctx.Process(
         target=_run_node_agent,
-        args=(node_agent_router_port, coordinator_executor_port,
-              coordinator_handler_port, node_agent_ready, stop_event),
+        args=(
+            node_agent_router_port,
+            coordinator_executor_port,
+            coordinator_handler_port,
+            node_agent_ready,
+            stop_event,
+        ),
     )
     node_agent_proc.start()
     assert node_agent_ready.wait(timeout=10)
