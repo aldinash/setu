@@ -64,6 +64,19 @@ struct TensorShardIdentifier {
   ShardId shard_id;        ///< Unique UUID for the shard
 };
 //==============================================================================
+/**
+ * @brief boost::hash_value specialization for TensorShardIdentifier
+ *
+ * Required for use with boost::concurrent_flat_map which uses boost::hash
+ * by default. Defined in the same namespace for ADL lookup.
+ */
+inline std::size_t hash_value(const TensorShardIdentifier& id) {
+  std::size_t seed = 0;
+  boost::hash_combine(seed, id.tensor_name);
+  boost::hash_combine(seed, id.shard_id);
+  return seed;
+}
+//==============================================================================
 }  // namespace setu::commons::datatypes
 //==============================================================================
 template <>

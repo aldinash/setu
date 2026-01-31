@@ -22,6 +22,7 @@
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
+using setu::commons::ConcurrentMap;
 using setu::commons::DeviceRank;
 using setu::commons::RequestId;
 using setu::commons::ShardId;
@@ -52,40 +53,47 @@ using setu::commons::utils::PrepareTensorIPCSpec;
 using setu::commons::utils::ZmqHelper;
 using setu::ir::Instruction;
 using setu::ir::Program;
-using setu::node_manager::worker::NCCLWorker;
 using setu::planner::Plan;
 //==============================================================================
 constexpr std::int32_t kPollTimeoutMs = 100;
+//==============================================================================
+// NodeAgent Implementation
 //==============================================================================
 NodeAgent::NodeAgent(NodeId node_id, std::size_t port,
                      std::string coordinator_endpoint,
                      const std::vector<Device>& devices)
     : node_id_(node_id),
       port_(port),
-      coordinator_endpoint_(std::move(coordinator_endpoint)) {
-  InitZmqSockets();
-  InitWorkers(devices);
+      coordinator_endpoint_(std::move(coordinator_endpoint)),
+      devices_(devices),
+      zmq_context_(std::make_shared<zmq::context_t>()) {
+  handler_ =
+      std::make_unique<Handler>(zmq_context_, port_, coordinator_endpoint_,
+                                executor_queue_, device_ptrs_lookup_);
+  executor_ =
+      std::make_unique<Executor>(zmq_context_, coordinator_endpoint_, devices_,
+                                 executor_queue_, device_ptrs_lookup_);
 }
 
 NodeAgent::~NodeAgent() {
   Stop();
-  CloseZmqSockets();
+  if (zmq_context_) {
+    zmq_context_->close();
+  }
 }
 
 void NodeAgent::Start() {
   LOG_DEBUG("Starting NodeAgent");
-  if (!handler_running_.load()) {
-    StartHandlerLoop();
-  }
-  if (!executor_running_.load()) {
-    StartExecutorLoop();
-  }
+  handler_->Start();
+  executor_->Start();
 }
 
 void NodeAgent::Stop() {
   LOG_DEBUG("Stopping NodeAgent");
-  StopHandlerLoop();
-  StopExecutorLoop();
+
+  executor_queue_.close();
+  handler_->Stop();
+  executor_->Stop();
 }
 
 std::optional<TensorShardRef> NodeAgent::RegisterTensorShard(
@@ -111,37 +119,6 @@ void NodeAgent::WaitForCopy(CopyOperationId copy_op_id) {
   // TODO: Implement wait for copy
 }
 
-void NodeAgent::AllocateTensor(const TensorShardIdentifier& tensor_shard_id,
-                               const TensorShardSpec& tensor_shard_spec) {
-  LOG_DEBUG("Allocating tensor shard: tensor_shard_id={}, tensor_shard_spec={}",
-            tensor_shard_id, tensor_shard_spec);
-
-  // Build the shape from dims (using owned size for each dimension)
-  std::vector<std::int64_t> shape;
-  shape.reserve(tensor_shard_spec.dims.size());
-  for (const auto& dim_spec : tensor_shard_spec.dims) {
-    shape.push_back(static_cast<std::int64_t>(dim_spec.GetOwnedSize()));
-  }
-
-  // Create tensor options with dtype and device from spec
-  auto options = torch::TensorOptions()
-                     .dtype(tensor_shard_spec.dtype)
-                     .device(tensor_shard_spec.device.torch_device);
-
-  torch::Tensor tensor = torch::empty(shape, options);
-
-  // Register the device pointer for this shard
-  device_ptrs_lookup_[tensor_shard_id] =
-      reinterpret_cast<DevicePtr>(tensor.data_ptr());
-
-  // Store the tensor
-  tensor_name_to_tensor_[tensor_shard_spec.name] = std::move(tensor);
-
-  LOG_DEBUG("Successfully allocated tensor '{}' with shape {} on device {}",
-            tensor_shard_spec.name, shape,
-            tensor_shard_spec.device.torch_device.str());
-}
-
 void NodeAgent::CopyOperationFinished(CopyOperationId copy_op_id) {
   LOG_DEBUG("Marking copy operation ID: {} as finished", copy_op_id);
 }
@@ -150,10 +127,29 @@ void NodeAgent::Execute(Plan plan) {
   LOG_DEBUG("Executing Plan {}", plan.ToString());
 }
 
-void NodeAgent::InitZmqSockets() {
-  LOG_DEBUG("Initializing ZMQ sockets");
+//==============================================================================
+// Handler Implementation
+//==============================================================================
+NodeAgent::Handler::Handler(
+    std::shared_ptr<zmq::context_t> zmq_context, std::size_t port,
+    const std::string& coordinator_endpoint,
+    Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
+    ConcurrentMap<TensorShardIdentifier, DevicePtr>& device_ptrs_lookup)
+    : zmq_context_(zmq_context),
+      port_(port),
+      coordinator_endpoint_(coordinator_endpoint),
+      executor_queue_(executor_queue),
+      device_ptrs_lookup_(device_ptrs_lookup) {
+  InitSockets();
+}
 
-  zmq_context_ = std::make_shared<zmq::context_t>();
+NodeAgent::Handler::~Handler() {
+  Stop();
+  CloseSockets();
+}
+
+void NodeAgent::Handler::InitSockets() {
+  LOG_DEBUG("Handler: Initializing ZMQ sockets");
 
   client_socket_ = ZmqHelper::CreateAndBindSocket(
       zmq_context_, zmq::socket_type::router, port_);
@@ -161,74 +157,46 @@ void NodeAgent::InitZmqSockets() {
   coordinator_socket_ = ZmqHelper::CreateAndConnectSocket(
       zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_);
 
-  LOG_DEBUG("Initialized ZMQ sockets successfully");
+  LOG_DEBUG("Handler: Initialized ZMQ sockets successfully");
 }
 
-void NodeAgent::CloseZmqSockets() {
-  LOG_DEBUG("Closing ZMQ sockets");
+void NodeAgent::Handler::CloseSockets() {
+  LOG_DEBUG("Handler: Closing ZMQ sockets");
 
-  // Close worker REQ sockets
-  for (auto& [device_rank, socket] : worker_sockets_) {
-    if (socket) {
-      socket->close();
-    }
+  if (client_socket_) {
+    client_socket_->close();
   }
-  worker_sockets_.clear();
+  if (coordinator_socket_) {
+    coordinator_socket_->close();
+  }
 
-  if (client_socket_) client_socket_->close();
-  if (coordinator_socket_) coordinator_socket_->close();
-  if (zmq_context_) zmq_context_->close();
-
-  LOG_DEBUG("Closed ZMQ sockets successfully");
+  LOG_DEBUG("Handler: Closed ZMQ sockets successfully");
 }
 
-void NodeAgent::InitWorkers(const std::vector<Device>& devices) {
-  LOG_DEBUG("{}", devices);
-}
-
-void NodeAgent::StartHandlerLoop() {
+void NodeAgent::Handler::Start() {
+  if (running_.load()) {
+    return;
+  }
   LOG_DEBUG("Starting handler loop");
-
-  handler_thread_ = std::thread(SETU_LAUNCH_THREAD(
-      [this]() { this->HandlerLoop(); }, "HandlerLoopThread"));
+  thread_ = std::thread(
+      SETU_LAUNCH_THREAD([this]() { this->Loop(); }, "HandlerLoopThread"));
 }
 
-void NodeAgent::StopHandlerLoop() {
+void NodeAgent::Handler::Stop() {
   LOG_DEBUG("Stopping handler loop");
+  running_ = false;
 
-  handler_running_ = false;
-
-  if (handler_thread_.joinable()) {
-    handler_thread_.join();
+  if (thread_.joinable()) {
+    thread_.join();
   }
-
   LOG_DEBUG("Handler loop stopped");
 }
 
-void NodeAgent::StartExecutorLoop() {
-  LOG_DEBUG("Starting executor loop");
-
-  executor_thread_ = std::thread(SETU_LAUNCH_THREAD(
-      [this]() { this->ExecutorLoop(); }, "ExecutorLoopThread"));
-}
-
-void NodeAgent::StopExecutorLoop() {
-  LOG_DEBUG("Stopping executor loop");
-
-  executor_running_ = false;
-
-  if (executor_thread_.joinable()) {
-    executor_thread_.join();
-  }
-
-  LOG_DEBUG("Executor loop stopped");
-}
-
-void NodeAgent::HandlerLoop() {
+void NodeAgent::Handler::Loop() {
   LOG_DEBUG("Entering handler loop");
 
-  handler_running_ = true;
-  while (handler_running_) {
+  running_ = true;
+  while (running_) {
     auto ready = Comm::PollForRead({client_socket_, coordinator_socket_},
                                    kPollTimeoutMs);
 
@@ -245,8 +213,8 @@ void NodeAgent::HandlerLoop() {
   }
 }
 
-void NodeAgent::HandleClientMessage(const Identity& client_identity,
-                                    const ClientRequest& request) {
+void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
+                                             const ClientRequest& request) {
   std::visit(
       [&](const auto& msg) {
         using T = std::decay_t<decltype(msg)>;
@@ -263,7 +231,8 @@ void NodeAgent::HandleClientMessage(const Identity& client_identity,
       request);
 }
 
-void NodeAgent::HandleCoordinatorMessage(const CoordinatorMessage& message) {
+void NodeAgent::Handler::HandleCoordinatorMessage(
+    const CoordinatorMessage& message) {
   std::visit(
       [&](const auto& msg) {
         using T = std::decay_t<decltype(msg)>;
@@ -284,7 +253,7 @@ void NodeAgent::HandleCoordinatorMessage(const CoordinatorMessage& message) {
       message);
 }
 
-void NodeAgent::HandleRegisterTensorShardRequest(
+void NodeAgent::Handler::HandleRegisterTensorShardRequest(
     const Identity& client_identity,
     const RegisterTensorShardRequest& request) {
   LOG_DEBUG("Handling RegisterTensorShardRequest for tensor: {}",
@@ -300,8 +269,8 @@ void NodeAgent::HandleRegisterTensorShardRequest(
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
-void NodeAgent::HandleSubmitCopyRequest(const Identity& client_identity,
-                                        const SubmitCopyRequest& request) {
+void NodeAgent::Handler::HandleSubmitCopyRequest(
+    const Identity& client_identity, const SubmitCopyRequest& request) {
   LOG_DEBUG("Handling SubmitCopyRequest from {} to {}",
             request.copy_spec.src_name, request.copy_spec.dst_name);
 
@@ -310,8 +279,8 @@ void NodeAgent::HandleSubmitCopyRequest(const Identity& client_identity,
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
-void NodeAgent::HandleWaitForCopyRequest(const Identity& client_identity,
-                                         const WaitForCopyRequest& request) {
+void NodeAgent::Handler::HandleWaitForCopyRequest(
+    const Identity& client_identity, const WaitForCopyRequest& request) {
   LOG_DEBUG("Handling WaitForCopyRequest for copy operation ID: {}",
             request.copy_operation_id);
 
@@ -320,7 +289,7 @@ void NodeAgent::HandleWaitForCopyRequest(const Identity& client_identity,
   WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
 }
 
-void NodeAgent::HandleGetTensorHandleRequest(
+void NodeAgent::Handler::HandleGetTensorHandleRequest(
     const Identity& client_identity, const GetTensorHandleRequest& request) {
   LOG_DEBUG("Handling GetTensorHandleRequest for tensor: {}",
             request.tensor_name);
@@ -344,14 +313,47 @@ void NodeAgent::HandleGetTensorHandleRequest(
   LOG_DEBUG("Sent tensor handle response for tensor: {}", request.tensor_name);
 }
 
-void NodeAgent::HandleAllocateTensorRequest(
+void NodeAgent::Handler::HandleAllocateTensorRequest(
     const AllocateTensorRequest& request) {
   LOG_DEBUG("Handling AllocateTensorRequest for request: {}", request);
   AllocateTensor(request.tensor_shard_id,
                  tensor_name_to_spec_.at(request.tensor_shard_id.tensor_name));
 }
 
-void NodeAgent::HandleCopyOperationFinishedRequest(
+void NodeAgent::Handler::AllocateTensor(
+    const TensorShardIdentifier& tensor_shard_id,
+    const TensorShardSpec& tensor_shard_spec) {
+  LOG_DEBUG("Allocating tensor shard: tensor_shard_id={}, tensor_shard_spec={}",
+            tensor_shard_id, tensor_shard_spec);
+
+  // Build the shape from dims (using owned size for each dimension)
+  std::vector<std::int64_t> shape;
+  shape.reserve(tensor_shard_spec.dims.size());
+  for (const auto& dim_spec : tensor_shard_spec.dims) {
+    shape.push_back(static_cast<std::int64_t>(dim_spec.GetOwnedSize()));
+  }
+
+  // Create tensor options with dtype and device from spec
+  auto options = torch::TensorOptions()
+                     .dtype(tensor_shard_spec.dtype)
+                     .device(tensor_shard_spec.device.torch_device);
+
+  torch::Tensor tensor = torch::empty(shape, options);
+
+  // Register the device pointer in the shared concurrent lookup (Executor reads
+  // this) Using insert_or_assign for thread-safe insertion
+  device_ptrs_lookup_.insert_or_assign(
+      tensor_shard_id, reinterpret_cast<DevicePtr>(tensor.data_ptr()));
+
+  // Store the tensor to keep it alive
+  tensor_name_to_tensor_[tensor_shard_spec.name] = std::move(tensor);
+
+  LOG_DEBUG("Allocated tensor '{}' with shape {} on device {}",
+            tensor_shard_spec.name, shape,
+            tensor_shard_spec.device.torch_device.str());
+}
+
+void NodeAgent::Handler::HandleCopyOperationFinishedRequest(
     const CopyOperationFinishedRequest& request) {
   LOG_DEBUG("Handling CopyOperationFinishedRequest for request: {}", request);
 
@@ -369,14 +371,14 @@ void NodeAgent::HandleCopyOperationFinishedRequest(
   }
 }
 
-void NodeAgent::HandleExecuteRequest(const ExecuteRequest& request) {
+void NodeAgent::Handler::HandleExecuteRequest(const ExecuteRequest& request) {
   LOG_DEBUG("Handling ExecuteRequest for request: {}", request);
 
   // Put (copy_op_id, node_plan) into executor queue
   executor_queue_.push(std::make_pair(request.copy_op_id, request.node_plan));
 }
 
-void NodeAgent::HandleRegisterTensorShardResponse(
+void NodeAgent::Handler::HandleRegisterTensorShardResponse(
     const RegisterTensorShardResponse& response) {
   auto it = request_id_to_client_identity_.find(response.request_id);
   if (it == request_id_to_client_identity_.end()) {
@@ -394,7 +396,8 @@ void NodeAgent::HandleRegisterTensorShardResponse(
   request_id_to_client_identity_.erase(it);
 }
 
-void NodeAgent::HandleSubmitCopyResponse(const SubmitCopyResponse& response) {
+void NodeAgent::Handler::HandleSubmitCopyResponse(
+    const SubmitCopyResponse& response) {
   auto it = request_id_to_client_identity_.find(response.request_id);
   if (it == request_id_to_client_identity_.end()) {
     LOG_WARNING(
@@ -410,7 +413,8 @@ void NodeAgent::HandleSubmitCopyResponse(const SubmitCopyResponse& response) {
   request_id_to_client_identity_.erase(it);
 }
 
-void NodeAgent::HandleWaitForCopyResponse(const WaitForCopyResponse& response) {
+void NodeAgent::Handler::HandleWaitForCopyResponse(
+    const WaitForCopyResponse& response) {
   auto it = request_id_to_client_identity_.find(response.request_id);
   if (it == request_id_to_client_identity_.end()) {
     LOG_WARNING(
@@ -426,58 +430,136 @@ void NodeAgent::HandleWaitForCopyResponse(const WaitForCopyResponse& response) {
   request_id_to_client_identity_.erase(it);
 }
 
-void NodeAgent::ExecutorLoop() {
+//==============================================================================
+// Executor Implementation
+//==============================================================================
+NodeAgent::Executor::Executor(
+    std::shared_ptr<zmq::context_t> zmq_context,
+    const std::string& coordinator_endpoint, const std::vector<Device>& devices,
+    Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
+    ConcurrentMap<TensorShardIdentifier, DevicePtr>& device_ptrs_lookup)
+    : zmq_context_(zmq_context),
+      coordinator_endpoint_(coordinator_endpoint),
+      devices_(devices),
+      executor_queue_(executor_queue),
+      device_ptrs_lookup_(device_ptrs_lookup) {
+  InitSockets();
+}
+
+NodeAgent::Executor::~Executor() {
+  Stop();
+  CloseSockets();
+}
+
+void NodeAgent::Executor::InitSockets() {
+  LOG_DEBUG("Executor: Initializing ZMQ sockets");
+
+  coordinator_socket_ = ZmqHelper::CreateAndConnectSocket(
+      zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_);
+
+  // TODO: Initialize worker sockets based on devices
+  LOG_DEBUG("Executor: devices={}", devices_);
+
+  LOG_DEBUG("Executor: Initialized ZMQ sockets successfully");
+}
+
+void NodeAgent::Executor::CloseSockets() {
+  LOG_DEBUG("Executor: Closing ZMQ sockets");
+
+  // Close worker REQ sockets
+  for (auto& [device_rank, socket] : worker_sockets_) {
+    if (socket) {
+      socket->close();
+    }
+  }
+  worker_sockets_.clear();
+
+  if (coordinator_socket_) {
+    coordinator_socket_->close();
+  }
+
+  LOG_DEBUG("Executor: Closed ZMQ sockets successfully");
+}
+
+void NodeAgent::Executor::Start() {
+  if (running_.load()) {
+    return;
+  }
+  LOG_DEBUG("Starting executor loop");
+  thread_ = std::thread(
+      SETU_LAUNCH_THREAD([this]() { this->Loop(); }, "ExecutorLoopThread"));
+}
+
+void NodeAgent::Executor::Stop() {
+  LOG_DEBUG("Stopping executor loop");
+  running_ = false;
+
+  if (thread_.joinable()) {
+    thread_.join();
+  }
+  LOG_DEBUG("Executor loop stopped");
+}
+
+void NodeAgent::Executor::Loop() {
   LOG_DEBUG("Entering executor loop");
 
-  executor_running_ = true;
-  while (executor_running_) {
+  running_ = true;
+  while (running_) {
     // Block until we receive a (copy_op_id, plan) pair from the queue
-    std::pair<CopyOperationId, Plan> queue_item;
-    executor_queue_.pull(queue_item);
-    auto [copy_op_id, plan] = std::move(queue_item);
+    try {
+      auto [copy_op_id, plan] = executor_queue_.pull();
 
-    LOG_DEBUG("Executor received plan for copy_op_id: {}", copy_op_id);
+      LOG_DEBUG("Executor received plan for copy_op_id: {}", copy_op_id);
 
-    // For each worker program in the plan, send it to the corresponding worker
-    for (auto& [participant, program] : plan.program) {
-      // Ensure worker is ready before sending
-      auto device_rank = participant.device_rank;
-      auto it = worker_sockets_.find(device_rank);
-      ASSERT_VALID_RUNTIME(it != worker_sockets_.end(),
-                           "No socket found for device_rank: {}", device_rank);
+      // For each worker program in the plan, send it to the corresponding
+      // worker
+      for (auto& [participant, program] : plan.program) {
+        // Ensure worker is ready before sending
+        auto device_rank = participant.device_rank;
+        auto it = worker_sockets_.find(device_rank);
+        ASSERT_VALID_RUNTIME(it != worker_sockets_.end(),
+                             "No socket found for device_rank: {}",
+                             device_rank);
 
-      // Populate device ptrs for instructions
-      EmbellishProgram(program);
+        // Populate device ptrs for instructions
+        EmbellishProgram(program);
 
-      // Send ExecuteProgramRequest to worker
-      LOG_DEBUG("Sending program with {} instructions to worker {}",
-                program.size(), device_rank);
-      ExecuteProgramRequest request(program);
-      Comm::Send(it->second, request);
+        // Send ExecuteProgramRequest to worker
+        LOG_DEBUG("Sending program with {} instructions to worker {}",
+                  program.size(), device_rank);
+        ExecuteProgramRequest request(program);
+        Comm::Send(it->second, request);
 
-      // Wait for acknowledgment from worker
-      auto response = Comm::Recv<ExecuteProgramResponse>(it->second);
-      LOG_DEBUG("Received acknowledgment from worker {}: {}", device_rank,
-                response);
+        // Wait for acknowledgment from worker
+        auto response = Comm::Recv<ExecuteProgramResponse>(it->second);
+        LOG_DEBUG("Received acknowledgment from worker {}: {}", device_rank,
+                  response);
+      }
+
+      LOG_DEBUG("All workers completed execution for copy_op_id: {}",
+                copy_op_id);
+
+      // Notify coordinator that execution is complete
+      ExecuteResponse response(RequestId{}, ErrorCode::kSuccess);
+      Comm::Send(coordinator_socket_, response);
+    } catch (const boost::concurrent::sync_queue_is_closed&) {
+      LOG_DEBUG("Executor: executor_queue_ closed, exiting");
+      return;
     }
-
-    LOG_DEBUG("All workers completed execution for copy_op_id: {}", copy_op_id);
-
-    // Notify coordinator that execution is complete
-    ExecuteResponse response(RequestId{}, ErrorCode::kSuccess);
-    Comm::Send(coordinator_socket_, response);
   }
 }
 
-void NodeAgent::EmbellishProgram(Program& program) {
+void NodeAgent::Executor::EmbellishProgram(Program& program) {
   auto const DevicePtrLookup =
       [this](const TensorShardIdentifier& id) -> DevicePtr {
-    auto it = this->device_ptrs_lookup_.find(id);
-    ASSERT_VALID_RUNTIME(it != this->device_ptrs_lookup_.end(),
+    DevicePtr result = 0;
+    bool found = this->device_ptrs_lookup_.visit(
+        id, [&result](const auto& entry) { result = entry.second; });
+    ASSERT_VALID_RUNTIME(found,
                          "Embellish failed: Tensor {} (Shard {}) not found in "
                          "NodeAgent registry.",
                          id.tensor_name, id.shard_id);
-    return it->second;
+    return result;
   };
 
   for (auto& instr : program) {
