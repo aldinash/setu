@@ -19,19 +19,22 @@
 #include "commons/ClassTraits.h"
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
+#include "commons/Types.h"
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorSelection.h"
-#include "commons/datatypes/TensorShard.h"
+#include "commons/datatypes/TensorShardSpec.h"
 #include "coordinator/datatypes/TensorOwnershipMap.h"
 #include "coordinator/datatypes/TensorShardUtils.h"
 //==============================================================================
 namespace setu::coordinator::datatypes {
 //==============================================================================
 // Type aliases for convenience
+using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardsMap;
+using setu::commons::datatypes::TensorShardSpec;
+using setu::commons::datatypes::TensorShardSpecPtr;
 //==============================================================================
 /**
  * @brief Complete metadata for a tensor including dimensions, data type, and
@@ -57,7 +60,8 @@ struct TensorMetadata {
    * shards don't fully cover the tensor
    */
   TensorMetadata(TensorName name_param, TensorDimMap dims_param,
-                 torch::Dtype dtype_param, TensorShardsMap shards_param)
+                 torch::Dtype dtype_param,
+                 std::unordered_map<ShardId, TensorShardSpecPtr> shards_param)
       : name(name_param),
         dims(dims_param),
         dtype(dtype_param),
@@ -123,8 +127,9 @@ struct TensorMetadata {
   const TensorName name;     ///< Name of the tensor
   const TensorDimMap dims;   ///< Map of dimension names to TensorDim objects
   const torch::Dtype dtype;  ///< Data type of tensor elements
-  const TensorShardsMap shards;  ///< Map of node IDs to tensor shards
-  const std::size_t size;        ///< Total number of elements in the tensor
+  const std::unordered_map<ShardId, TensorShardSpecPtr>
+      shards;              ///< Map of node IDs to tensor shards
+  const std::size_t size;  ///< Total number of elements in the tensor
 
  private:
   /**
@@ -140,7 +145,7 @@ struct TensorMetadata {
     std::size_t total_shard_size = 0;
 
     for (const auto& [_, shard] : shards) {
-      total_shard_size += shard->shard_size;
+      total_shard_size += shard->GetNumElements();
     }
 
     ASSERT_VALID_ARGUMENTS(total_shard_size == size,

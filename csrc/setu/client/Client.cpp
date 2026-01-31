@@ -23,6 +23,7 @@
 //==============================================================================
 namespace setu::client {
 //==============================================================================
+using setu::commons::Identity;
 using setu::commons::messages::ClientRequest;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
@@ -56,13 +57,17 @@ void Client::Connect(const std::string& endpoint) {
 
   LOG_DEBUG("Client connecting to {}", endpoint);
 
+  // Use client_rank as ZMQ identity
+  Identity identity = std::to_string(client_rank_);
+
   request_socket_ = ZmqHelper::CreateAndConnectSocket(
-      zmq_context_, zmq::socket_type::req, endpoint);
+      zmq_context_, zmq::socket_type::req, endpoint, identity);
 
   endpoint_ = endpoint;
   is_connected_ = true;
 
-  LOG_DEBUG("Client connected to {} successfully", endpoint_);
+  LOG_DEBUG("Client connected to {} with identity '{}' successfully", endpoint,
+            identity);
 }
 
 void Client::Disconnect() {

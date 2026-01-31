@@ -150,18 +150,21 @@ void NodeAgent::InitZmqSockets() {
   client_router_socket_ = ZmqHelper::CreateAndBindSocket(
       zmq_context_, zmq::socket_type::router, router_port_);
 
+  // Use node_rank as ZMQ identity for coordinator dealer sockets
+  Identity identity = std::to_string(node_rank_);
+
   // TODO: change "tcp://localhost:{}" to ip parameter
   std::string executor_endpoint =
       std::format("tcp://localhost:{}", dealer_executor_port_);
   coordinator_dealer_executor_socket_ = ZmqHelper::CreateAndConnectSocket(
-      zmq_context_, zmq::socket_type::dealer, executor_endpoint);
+      zmq_context_, zmq::socket_type::dealer, executor_endpoint, identity);
 
   std::string handler_endpoint =
       std::format("tcp://localhost:{}", dealer_handler_port_);
   coordinator_dealer_handler_socket_ = ZmqHelper::CreateAndConnectSocket(
-      zmq_context_, zmq::socket_type::dealer, handler_endpoint);
+      zmq_context_, zmq::socket_type::dealer, handler_endpoint, identity);
 
-  LOG_DEBUG("Initialized ZMQ sockets successfully");
+  LOG_DEBUG("Initialized ZMQ sockets with identity '{}' successfully", identity);
 }
 
 void NodeAgent::CloseZmqSockets() {

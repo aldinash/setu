@@ -23,17 +23,12 @@ namespace setu::coordinator {
 //==============================================================================
 using setu::commons::GenerateUUID;
 using setu::commons::RequestId;
-using setu::commons::ShardId;
-using setu::commons::datatypes::TensorDim;
-using setu::commons::datatypes::TensorDimMap;
-using setu::commons::datatypes::TensorShardRef;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyResponse;
-using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::SetuCommHelper;
 using setu::commons::utils::ZmqHelper;
 //==============================================================================
@@ -67,8 +62,8 @@ std::optional<TensorShardRef> Coordinator::RegisterTensorShard(
     const TensorShardSpec& shard_spec) {
   LOG_DEBUG("Registering tensor shard: {}", shard_spec.name);
 
-  // TODO: Implement tensor shard registration
-  return std::nullopt;
+  TensorShardRef shard_ref = metastore_.RegisterTensorShard(shard_spec);
+  return shard_ref;
 }
 
 std::optional<CopyOperationId> Coordinator::SubmitCopy(
@@ -158,73 +153,121 @@ void Coordinator::HandlerLoop() {
         SetuCommHelper::RecvWithIdentity<NodeAgentRequest, false>(
             node_agent_router_handler_socket_);
     std::visit(
-        [&](const auto& req) {
-          HandleNodeAgentRequest(node_agent_identity, req);
+        [&](const auto& msg) {
+          using T = std::decay_t<decltype(msg)>;
+          if constexpr (std::is_same_v<T, RegisterTensorShardRequest>) {
+            HandleRegisterTensorShardRequest(node_agent_identity, msg);
+          } else if constexpr (std::is_same_v<T, SubmitCopyRequest>) {
+            HandleSubmitCopyRequest(node_agent_identity, msg);
+          }
         },
         request);
   }
 }
 
-void Coordinator::HandleNodeAgentRequest(
+void Coordinator::HandleRegisterTensorShardRequest(
     const Identity& node_agent_identity,
     const RegisterTensorShardRequest& request) {
   LOG_INFO("Coordinator received RegisterTensorShardRequest for tensor: {}",
            request.tensor_shard_spec.name);
 
-  // Generate a shard ID
-  ShardId shard_id = GenerateUUID();
+  // Register the tensor shard in the metastore
+  TensorShardRef shard_ref =
+      metastore_.RegisterTensorShard(request.tensor_shard_spec);
 
-  // Build TensorDimMap from the spec's dims (using owned size for shard ref)
-  TensorDimMap dim_map;
-  for (const auto& dim_spec : request.tensor_shard_spec.dims) {
-    dim_map.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.GetOwnedSize()));
-  }
-
-  // Create TensorShardRef
-  TensorShardRef shard_ref(request.tensor_shard_spec.name, shard_id, dim_map);
-
-  // Send response to client
+  // Send response
   RegisterTensorShardResponse response(request.request_id, ErrorCode::kSuccess,
                                        shard_ref);
   SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
       node_agent_router_handler_socket_, node_agent_identity, response);
 
-  // Send AllocateTensorRequest to NodeAgent to allocate the tensor
-  AllocateTensorRequest allocate_request(request.tensor_shard_spec.name);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, allocate_request);
+  // Check if all shards for this tensor are registered
+  if (metastore_.AllShardsRegistered(request.tensor_shard_spec.name)) {
+    LOG_INFO(
+        "All shards registered for tensor: {}, sending AllocateTensorRequest",
+        request.tensor_shard_spec.name);
 
-  LOG_INFO("Sent AllocateTensorRequest for tensor: {}",
-           request.tensor_shard_spec.name);
+    // Send AllocateTensorRequest to NodeAgent to allocate the tensor
+    AllocateTensorRequest allocate_request(request.tensor_shard_spec.name);
+    SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
+        node_agent_router_handler_socket_, node_agent_identity,
+        allocate_request);
+  }
 }
 
-void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
-                                         const SubmitCopyRequest& request) {
+void Coordinator::HandleSubmitCopyRequest(const Identity& node_agent_identity,
+                                          const SubmitCopyRequest& request) {
   LOG_INFO("Coordinator received SubmitCopyRequest from {} to {}",
            request.copy_spec.src_name, request.copy_spec.dst_name);
 
-  // TODO: Actually submit the copy operation
-  // For now, just log and respond with success
-  LOG_INFO("Submitted copy operation: {} -> {} (stub implementation)",
-           request.copy_spec.src_name, request.copy_spec.dst_name);
+  auto copy_key =
+      std::make_pair(request.copy_spec.src_name, request.copy_spec.dst_name);
 
-  SubmitCopyResponse response(RequestId(), ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
-}
+  // Check if this is the first request for this (src, dst) pair
+  auto pending_it = pending_copy_specs_.find(copy_key);
+  if (pending_it == pending_copy_specs_.end()) {
+    // First request - store the CopySpec for validation
+    pending_copy_specs_.emplace(copy_key, request.copy_spec);
+    copies_received_[copy_key] = 1;
+  } else {
+    // Subsequent request - verify TensorSelections match
+    const CopySpec& first_spec = pending_it->second;
 
-void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
-                                         const WaitForCopyRequest& request) {
-  LOG_INFO("Coordinator received WaitForCopyRequest for copy operation ID: {}",
-           request.copy_operation_id);
+    ASSERT_VALID_RUNTIME(
+        *request.copy_spec.src_selection == *first_spec.src_selection,
+        "SubmitCopy {} -> {}: source selection mismatch",
+        request.copy_spec.src_name, request.copy_spec.dst_name);
 
-  // TODO: Actually wait for the copy operation
-  // For now, just log and respond with success
-  LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
+    ASSERT_VALID_RUNTIME(
+        *request.copy_spec.dst_selection == *first_spec.dst_selection,
+        "SubmitCopy {} -> {}: destination selection mismatch",
+        request.copy_spec.src_name, request.copy_spec.dst_name);
 
-  WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+    copies_received_[copy_key]++;
+  }
+
+  // Track this client for later response
+  pending_copy_clients_[copy_key].emplace_back(node_agent_identity,
+                                               request.request_id);
+
+  // Get the expected number of clients (number of shards for source tensor)
+  std::size_t expected_clients =
+      metastore_.GetNumShardsForTensor(request.copy_spec.src_name);
+
+  LOG_DEBUG("SubmitCopy {} -> {}: received {}/{} requests",
+            request.copy_spec.src_name, request.copy_spec.dst_name,
+            copies_received_[copy_key], expected_clients);
+
+  // Check if all clients have sent the request
+  if (copies_received_[copy_key] == expected_clients) {
+    // Generate CopyOperationId
+    CopyOperationId copy_op_id = GenerateUUID();
+
+    LOG_INFO(
+        "All clients submitted copy request {} -> {}, "
+        "copy_op_id={}, adding to planner queue",
+        request.copy_spec.src_name, request.copy_spec.dst_name, copy_op_id);
+
+    // Store the mapping
+    copy_operations_.emplace(copy_op_id, request.copy_spec);
+
+    // Add to planner queue
+    planner_queue_.push(request.copy_spec);
+
+    // Send responses to all waiting clients with copy_op_id
+    for (const auto& [client_identity, client_request_id] :
+         pending_copy_clients_[copy_key]) {
+      SubmitCopyResponse response(client_request_id, copy_op_id,
+                                  ErrorCode::kSuccess);
+      SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
+          node_agent_router_handler_socket_, client_identity, response);
+    }
+
+    // Clean up maps
+    copies_received_.erase(copy_key);
+    pending_copy_specs_.erase(copy_key);
+    pending_copy_clients_.erase(copy_key);
+  }
 }
 
 void Coordinator::ExecutorLoop() {
