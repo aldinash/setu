@@ -552,7 +552,7 @@ void NodeAgent::Executor::Loop() {
 void NodeAgent::Executor::EmbellishProgram(Program& program) {
   auto const DevicePtrLookup =
       [this](const TensorShardIdentifier& id) -> DevicePtr {
-    DevicePtr result = 0;
+    DevicePtr result = nullptr;
     bool found = this->device_ptrs_lookup_.visit(
         id, [&result](const auto& entry) { result = entry.second; });
     ASSERT_VALID_RUNTIME(found,

@@ -60,18 +60,17 @@ using ConcurrentMap = ::boost::concurrent_flat_map<Key, Value, Hash, Pred>;
 }
 //==============================================================================
 template <typename T>
-struct is_boost_queue : ::std::false_type {};
+struct is_boost_queue : std::false_type {};
 
 template <typename T>
-struct is_boost_queue<boost::sync_queue<T>> : ::std::true_type {};
+struct is_boost_queue<boost::sync_queue<T>> : std::true_type {};
 
 template <typename T, typename Comp>
-struct is_boost_queue<boost::sync_priority_queue<T, Comp>> : ::std::true_type {
-};
+struct is_boost_queue<boost::sync_priority_queue<T, Comp>> : std::true_type {};
 
 template <typename T, typename Container, typename Comp>
 struct is_boost_queue<boost::sync_priority_queue<T, Container, Comp>>
-    : ::std::true_type {};
+    : std::true_type {};
 //==============================================================================
 }  // namespace setu::commons
 //==============================================================================
