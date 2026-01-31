@@ -73,6 +73,7 @@ struct Instruction {
   InstructionVariant instr;
 };
 
+using Program = std::vector<Instruction>;
 //==============================================================================
 }  // namespace setu::ir
 //==============================================================================

@@ -29,8 +29,9 @@
 #include "commons/messages/Messages.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
-#include "coordinator/datatypes/Plan.h"
+#include "ir/Instruction.h"
 #include "node_manager/worker/NCCLWorker.h"
+#include "planner/Planner.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
@@ -38,7 +39,7 @@ using setu::commons::CopyOperationId;
 using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::Identity;
-using setu::commons::NodeRank;
+using setu::commons::NodeId;
 using setu::commons::Queue;
 using setu::commons::RequestId;
 using setu::commons::ShardId;
@@ -63,15 +64,14 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
-using setu::coordinator::datatypes::Plan;
-using setu::coordinator::datatypes::Program;
+using setu::ir::Program;
 using setu::node_manager::worker::Worker;
+using setu::planner::Plan;
 //==============================================================================
 
 class NodeAgent {
  public:
-  NodeAgent(NodeRank node_rank, std::size_t router_port,
-            std::size_t dealer_executor_port, std::size_t dealer_handler_port,
+  NodeAgent(NodeId node_id, std::size_t port, std::string coordinator_endpoint,
             const std::vector<Device>& devices);
   ~NodeAgent();
 
@@ -136,13 +136,16 @@ class NodeAgent {
   Device CreateDeviceForRank(DeviceRank device_rank) const;
 
   void EmbellishProgram(Program& program);
+  NodeId node_id_;
 
-  NodeRank node_rank_;
+  std::size_t port_;
+  std::string coordinator_endpoint_;
+
+  NodeId node_rank_;
   std::shared_ptr<zmq::context_t> zmq_context_;
-  ZmqSocketPtr client_router_socket_;
-  ZmqSocketPtr coordinator_dealer_executor_socket_;
-  ZmqSocketPtr coordinator_dealer_handler_socket_;
-  std::unordered_map<DeviceRank, ZmqSocketPtr> workers_req_sockets_;
+  ZmqSocketPtr client_socket_;
+  ZmqSocketPtr coordinator_socket_;
+  std::unordered_map<DeviceRank, ZmqSocketPtr> worker_sockets_;
 
   // stores mapping from request id to the client identity who sent this request
   // Used to route coordinator responses back to the client that initiated the
@@ -151,10 +154,6 @@ class NodeAgent {
 
   std::thread handler_thread_;
   std::thread executor_thread_;
-
-  std::size_t router_port_;
-  std::size_t dealer_executor_port_;
-  std::size_t dealer_handler_port_;
 
   std::atomic<bool> handler_running_{false};
   std::atomic<bool> executor_running_{false};

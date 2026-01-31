@@ -16,44 +16,45 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include "setu/commons/StdCommon.h"
-#include "setu/commons/Types.h"
-#include "setu/commons/utils/Serialization.h"
-#include "setu/coordinator/datatypes/Program.h"
+#include "commons/StdCommon.h"
+#include "commons/Types.h"
 //==============================================================================
-namespace setu::coordinator::datatypes {
+#include "commons/datatypes/CopySpec.h"
+#include "commons/datatypes/Device.h"
+#include "ir/Instruction.h"
+#include "metastore/MetaStore.h"
+namespace setu::planner {
 //==============================================================================
-using setu::commons::DeviceRank;
-using setu::commons::utils::BinaryBuffer;
-using setu::commons::utils::BinaryRange;
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
-//==============================================================================
+
+using setu::commons::NodeId;
+using setu::commons::datatypes::CopySpec;
+using setu::commons::datatypes::Device;
+using setu::ir::Program;
+using setu::metastore::MetaStore;
+
+using NodeAgentId = std::size_t;
+using DeviceId = std::size_t;
+
+using Participant = Device;
+using Participants = std::vector<Device>;
 
 struct Plan {
-  Plan() = default;
-  ~Plan() = default;
+  std::unordered_map<NodeId, Plan> Fragments();
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("Plan(worker_programs={})", worker_programs.size());
+    return std::format("Plan(participants={}, programs={})",
+                       participants.size(), program.size());
   }
 
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    writer.WriteFields(worker_programs);
-  }
-
-  static Plan Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    Plan plan;
-    std::tie(plan.worker_programs) =
-        reader.ReadFields<std::unordered_map<DeviceRank, Program>>();
-    return plan;
-  }
-
-  std::unordered_map<DeviceRank, Program> worker_programs;
+  Participants participants;
+  std::unordered_map<Participant, Program> program;
 };
 
+class Planner {
+ public:
+  virtual ~Planner() = default;
+  virtual Plan Compile(CopySpec& spec, MetaStore& metastore) = 0;
+};
 //==============================================================================
-}  // namespace setu::coordinator::datatypes
+}  // namespace setu::planner
 //==============================================================================

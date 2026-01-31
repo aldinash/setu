@@ -18,37 +18,20 @@
 //==============================================================================
 #include <nccl.h>
 //==============================================================================
-#include "setu/commons/StdCommon.h"
-#include "setu/commons/Types.h"
-#include "setu/commons/utils/Serialization.h"
+#include "planner/Planner.h"
 //==============================================================================
-namespace setu::ir {
+namespace setu::planner::backends::nccl {
 //==============================================================================
-using setu::commons::utils::BinaryBuffer;
-using setu::commons::utils::BinaryRange;
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
-//==============================================================================
+using setu::commons::datatypes::CopySpec;
+using setu::metastore::MetaStore;
 
-struct UseCommInstruction {
-  explicit UseCommInstruction(ncclUniqueId comm_id)
-      : comm_id(std::move(comm_id)) {}
+class NCCLPlanner : public Planner {
+ public:
+  Plan Compile(CopySpec& copy_spec, const MetaStore& metastore) override;
 
-  ~UseCommInstruction() = default;
-  UseCommInstruction(const UseCommInstruction&) = default;
-  UseCommInstruction& operator=(const UseCommInstruction&) = default;
-  UseCommInstruction(UseCommInstruction&&) = default;
-  UseCommInstruction& operator=(UseCommInstruction&&) = default;
-
-  [[nodiscard]] std::string ToString() const;
-
-  void Serialize(BinaryBuffer& buffer) const;
-
-  static UseCommInstruction Deserialize(const BinaryRange& range);
-
-  ncclUniqueId comm_id;
+ private:
+  std::map<std::set<Device>, ncclUniqueId> comm_cache_;
 };
-
 //==============================================================================
-}  // namespace setu::ir
+}  // namespace setu::planner::backends::nccl
 //==============================================================================

@@ -7,6 +7,7 @@ when given an embellished Program. Requires CUDA and the setu extensions
 """
 
 import threading
+import uuid
 
 import pytest
 import torch
@@ -17,8 +18,6 @@ def _get_extensions():
     try:
         # Load setu package first so torch is in process (required for extension symbols)
         from setu._commons.datatypes import Device, TensorShardIdentifier, make_shard_id
-        from setu._commons.enums import DeviceKind
-        from setu._coordinator.datatypes import Program
         from setu._ir import (
             CopyInstruction,
             InitCommInstruction,
@@ -32,8 +31,6 @@ def _get_extensions():
         return {
             "NCCLWorker": NCCLWorker,
             "Device": Device,
-            "DeviceKind": DeviceKind,
-            "Program": Program,
             "Instruction": Instruction,
             "CopyInstruction": CopyInstruction,
             "SendInstruction": SendInstruction,
@@ -57,15 +54,14 @@ def test_nccl_worker_copy_instruction():
     ext = _get_extensions()
     NCCLWorker = ext["NCCLWorker"]
     Device = ext["Device"]
-    DeviceKind = ext["DeviceKind"]
-    Program = ext["Program"]
     Instruction = ext["Instruction"]
     CopyInstruction = ext["CopyInstruction"]
     make_shard_id = ext["make_shard_id"]
     TensorShardIdentifier = ext["TensorShardIdentifier"]
 
+    node_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
     torch_device = torch.device("cuda:0")
-    device = Device(DeviceKind.CUDA, 0, torch_device)
+    device = Device(node_id, 0, torch_device)
     worker = NCCLWorker(device, reply_port=0)
     worker.setup()
 
@@ -84,16 +80,14 @@ def test_nccl_worker_copy_instruction():
         torch.float32,
         num_elements,
     )
-    program = Program()
-    program.participating_workers = [0]
-    program.instrs = [Instruction(copy_instr)]
+    program = [Instruction(copy_instr)]
 
     ptr_lookup = {
         ("src", "00000000-0000-0000-0000-000000000001"): src.data_ptr(),
         ("dst", "00000000-0000-0000-0000-000000000002"): dst.data_ptr(),
     }
 
-    for instr in program.instrs:
+    for instr in program:
         instr.embellish(lambda n, s: ptr_lookup[(n, s)])
 
     worker.execute(program)
@@ -110,15 +104,14 @@ def test_nccl_worker_copy_instruction_with_offset():
     ext = _get_extensions()
     NCCLWorker = ext["NCCLWorker"]
     Device = ext["Device"]
-    DeviceKind = ext["DeviceKind"]
-    Program = ext["Program"]
     Instruction = ext["Instruction"]
     CopyInstruction = ext["CopyInstruction"]
     make_shard_id = ext["make_shard_id"]
     TensorShardIdentifier = ext["TensorShardIdentifier"]
 
+    node_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
     torch_device = torch.device("cuda:0")
-    device = Device(DeviceKind.CUDA, 0, torch_device)
+    device = Device(node_id, 0, torch_device)
     worker = NCCLWorker(device, reply_port=0)
     worker.setup()
 
@@ -143,15 +136,13 @@ def test_nccl_worker_copy_instruction_with_offset():
         torch.float32,
         num_elements,
     )
-    program = Program()
-    program.participating_workers = [0]
-    program.instrs = [Instruction(copy_instr)]
+    program = [Instruction(copy_instr)]
 
     ptr_lookup = {
         ("src", "00000000-0000-0000-0000-000000000001"): src.data_ptr(),
         ("dst", "00000000-0000-0000-0000-000000000002"): dst.data_ptr(),
     }
-    for instr in program.instrs:
+    for instr in program:
         instr.embellish(lambda name, shard: ptr_lookup[(name, shard)])
 
     worker.execute(program)
@@ -171,17 +162,14 @@ def test_nccl_worker_empty_program():
     ext = _get_extensions()
     NCCLWorker = ext["NCCLWorker"]
     Device = ext["Device"]
-    DeviceKind = ext["DeviceKind"]
-    Program = ext["Program"]
 
+    node_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
     torch_device = torch.device("cuda:0")
-    device = Device(DeviceKind.CUDA, 0, torch_device)
+    device = Device(node_id, 0, torch_device)
     worker = NCCLWorker(device, reply_port=0)
     worker.setup()
 
-    program = Program()
-    program.participating_workers = [0]
-    program.instrs = []
+    program = []
 
     worker.execute(program)  # should not raise
 
@@ -197,8 +185,6 @@ def test_nccl_worker_send_receive():
     ext = _get_extensions()
     NCCLWorker = ext["NCCLWorker"]
     Device = ext["Device"]
-    DeviceKind = ext["DeviceKind"]
-    Program = ext["Program"]
     Instruction = ext["Instruction"]
     SendInstruction = ext["SendInstruction"]
     ReceiveInstruction = ext["ReceiveInstruction"]
@@ -207,31 +193,24 @@ def test_nccl_worker_send_receive():
     TensorShardIdentifier = ext["TensorShardIdentifier"]
     generate_nccl_id = ext["generate_nccl_id"]
 
-    # print("\n=== Starting send/receive test ===")
-
     # Create workers for device 0 and device 1
+    node_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
     torch_device_0 = torch.device("cuda:0")
     torch_device_1 = torch.device("cuda:1")
-    # print(f"Creating devices: cuda:0 and cuda:1")
 
-    device_0 = Device(DeviceKind.CUDA, 0, torch_device_0)
-    device_1 = Device(DeviceKind.CUDA, 1, torch_device_1)
+    device_0 = Device(node_id, 0, torch_device_0)
+    device_1 = Device(node_id, 1, torch_device_1)
 
     # Generate a shared NCCL unique ID for the communicator
     nccl_id = generate_nccl_id()
-    # print(f"Generated NCCL ID: {nccl_id}")
 
     # Device rank to NCCL rank mapping (both devices participate)
     device_to_rank = {0: 0, 1: 1}
-    # print(f"Device to rank mapping: {device_to_rank}")
 
     # Create source tensor on device 0, destination on device 1
     num_elements = 128
     src = torch.randn(num_elements, device="cuda:0", dtype=torch.float32)
     dst = torch.zeros(num_elements, device="cuda:1", dtype=torch.float32)
-    # print(f"Created tensors: src on cuda:0, dst on cuda:1, {num_elements} elements")
-    # print(f"src[:5] = {src[:5]}")
-    # print(f"dst[:5] = {dst[:5]}")
 
     shard_id_src = make_shard_id("00000000-0000-0000-0000-000000000001")
     shard_id_dst = make_shard_id("00000000-0000-0000-0000-000000000002")
@@ -245,12 +224,8 @@ def test_nccl_worker_send_receive():
         0,  # memory_offset_bytes
         num_elements,
     )
-    # print(f"Created SendInstruction: {send_instr}")
 
-    program_0 = Program()
-    program_0.participating_workers = [0, 1]
-    program_0.instrs = [Instruction(init_comm_0), Instruction(send_instr)]
-    # print(f"Program 0 has {len(program_0.instrs)} instructions")
+    program_0 = [Instruction(init_comm_0), Instruction(send_instr)]
 
     # Program for worker 1: InitComm, then Receive from device 0
     init_comm_1 = InitCommInstruction(nccl_id, device_to_rank)
@@ -261,12 +236,8 @@ def test_nccl_worker_send_receive():
         0,  # memory_offset_bytes
         num_elements,
     )
-    # print(f"Created ReceiveInstruction: {recv_instr}")
 
-    program_1 = Program()
-    program_1.participating_workers = [0, 1]
-    program_1.instrs = [Instruction(init_comm_1), Instruction(recv_instr)]
-    # print(f"Program 1 has {len(program_1.instrs)} instructions")
+    program_1 = [Instruction(init_comm_1), Instruction(recv_instr)]
 
     # Embellish programs with device pointers
     ptr_lookup_0 = {
@@ -275,15 +246,11 @@ def test_nccl_worker_send_receive():
     ptr_lookup_1 = {
         ("dst", "00000000-0000-0000-0000-000000000002"): dst.data_ptr(),
     }
-    # print(f"ptr_lookup_0: {ptr_lookup_0}")
-    # print(f"ptr_lookup_1: {ptr_lookup_1}")
 
-    # print("Embellishing program 0...")
-    for instr in program_0.instrs:
+    for instr in program_0:
         instr.embellish(lambda name, shard: ptr_lookup_0.get((name, shard), 0))
 
-    # print("Embellishing program 1...")
-    for instr in program_1.instrs:
+    for instr in program_1:
         instr.embellish(lambda name, shard: ptr_lookup_1.get((name, shard), 0))
 
     # Execute both programs in parallel (NCCL requires both sides to participate)
@@ -294,51 +261,35 @@ def test_nccl_worker_send_receive():
 
     def run_worker_0():
         try:
-            # print("[Thread 0] Creating and setting up worker...")
             worker = NCCLWorker(device_0, reply_port=0)
             worker.setup()
             workers[0] = worker
-            # print("[Thread 0] Starting execution...")
             worker.execute(program_0)
-            # print("[Thread 0] Execution complete")
         except Exception as e:
             errors.append(f"Worker 0: {e}")
 
     def run_worker_1():
         try:
-            # print("[Thread 1] Creating and setting up worker...")
             worker = NCCLWorker(device_1, reply_port=0)
             worker.setup()
             workers[1] = worker
-            # print("[Thread 1] Starting execution...")
             worker.execute(program_1)
-            # print("[Thread 1] Execution complete")
         except Exception as e:
             errors.append(f"Worker 1: {e}")
 
-    # print("Starting threads...")
     thread_0 = threading.Thread(target=run_worker_0)
     thread_1 = threading.Thread(target=run_worker_1)
 
     thread_0.start()
     thread_1.start()
 
-    # print("Waiting for threads to complete (timeout=10s)...")
     thread_0.join(timeout=10)
     thread_1.join(timeout=10)
-
-    # print(f"Thread 0 alive: {thread_0.is_alive()}")
-    # print(f"Thread 1 alive: {thread_1.is_alive()}")
-    # print(f"Errors: {errors}")
 
     assert not errors, f"Workers encountered errors: {errors}"
     assert not thread_0.is_alive(), "Worker 0 did not complete in time"
     assert not thread_1.is_alive(), "Worker 1 did not complete in time"
 
     # Verify the data was transferred correctly
-    # print(f"After transfer - dst[:5] = {dst[:5]}")
-    # print(f"Expected (src[:5]) = {src[:5]}")
-
     # Move dst to CPU for comparison, src to CPU as well
     assert torch.allclose(dst.cpu(), src.cpu()), "Send/Receive data mismatch"
-    # print("=== Test passed! ===")

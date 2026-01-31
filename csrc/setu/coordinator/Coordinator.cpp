@@ -17,7 +17,8 @@
 #include "coordinator/Coordinator.h"
 //==============================================================================
 #include "commons/Logging.h"
-#include "commons/utils/SetuCommHelper.h"
+#include "commons/QueueUtils.h"
+#include "commons/utils/Comm.h"
 //==============================================================================
 namespace setu::coordinator {
 //==============================================================================
@@ -35,17 +36,12 @@ using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyResponse;
-using setu::commons::utils::SetuCommHelper;
+using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 //==============================================================================
 constexpr std::chrono::milliseconds kHandleLoopSleepMs(10);
 //==============================================================================
-Coordinator::Coordinator(std::size_t router_executor_port,
-                         std::size_t router_handler_port)
-    : router_executor_port_(router_executor_port),
-      router_handler_port_(router_handler_port) {
-  InitZmqSockets();
-}
+Coordinator::Coordinator(std::size_t port) : port_(port) { InitZmqSockets(); }
 
 Coordinator::~Coordinator() {
   Stop();
@@ -91,11 +87,8 @@ void Coordinator::InitZmqSockets() {
   LOG_DEBUG("Initializing ZMQ sockets");
 
   zmq_context_ = std::make_shared<zmq::context_t>();
-
-  node_agent_router_executor_socket_ = ZmqHelper::CreateAndBindSocket(
-      zmq_context_, zmq::socket_type::router, router_executor_port_);
-  node_agent_router_handler_socket_ = ZmqHelper::CreateAndBindSocket(
-      zmq_context_, zmq::socket_type::router, router_handler_port_);
+  node_agent_socket_ = ZmqHelper::CreateAndBindSocket(
+      zmq_context_, zmq::socket_type::router, port_);
 
   LOG_DEBUG("Initialized ZMQ sockets successfully");
 }
@@ -103,10 +96,7 @@ void Coordinator::InitZmqSockets() {
 void Coordinator::CloseZmqSockets() {
   LOG_DEBUG("Closing ZMQ sockets");
 
-  if (node_agent_router_executor_socket_)
-    node_agent_router_executor_socket_->close();
-  if (node_agent_router_handler_socket_)
-    node_agent_router_handler_socket_->close();
+  if (node_agent_socket_) node_agent_socket_->close();
   if (zmq_context_) zmq_context_->close();
 
   LOG_DEBUG("Closed ZMQ sockets successfully");
@@ -156,8 +146,7 @@ void Coordinator::HandlerLoop() {
   handler_running_ = true;
   while (handler_running_) {
     auto [node_agent_identity, request] =
-        SetuCommHelper::RecvWithIdentity<NodeAgentRequest, false>(
-            node_agent_router_handler_socket_);
+        Comm::RecvWithIdentity<NodeAgentRequest, false>(node_agent_socket_);
     std::visit(
         [&](const auto& req) {
           HandleNodeAgentRequest(node_agent_identity, req);
@@ -188,15 +177,15 @@ void Coordinator::HandleNodeAgentRequest(
   // Send response to client
   RegisterTensorShardResponse response(request.request_id, ErrorCode::kSuccess,
                                        shard_ref);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+  Comm::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_socket_, node_agent_identity, response);
 
   // Send AllocateTensorRequest to NodeAgent to allocate the tensor
   TensorShardIdentifier tensor_shard_id(request.tensor_shard_spec.name,
                                         shard_id);
   AllocateTensorRequest allocate_request(tensor_shard_id);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, allocate_request);
+  Comm::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_socket_, node_agent_identity, allocate_request);
 
   LOG_INFO("Sent AllocateTensorRequest for tensor: {}", tensor_shard_id);
 }
@@ -212,8 +201,8 @@ void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
            request.copy_spec.src_name, request.copy_spec.dst_name);
 
   SubmitCopyResponse response(RequestId(), ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+  Comm::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_socket_, node_agent_identity, response);
 }
 
 void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
@@ -226,8 +215,8 @@ void Coordinator::HandleNodeAgentRequest(const Identity& node_agent_identity,
   LOG_INFO("WaitForCopy: {} (stub implementation)", request.copy_operation_id);
 
   WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
-  SetuCommHelper::SendWithIdentity<CoordinatorMessage, false>(
-      node_agent_router_handler_socket_, node_agent_identity, response);
+  Comm::SendWithIdentity<CoordinatorMessage, false>(
+      node_agent_socket_, node_agent_identity, response);
 }
 
 void Coordinator::ExecutorLoop() {

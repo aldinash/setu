@@ -16,16 +16,14 @@
 //==============================================================================
 #include "setu/coordinator/datatypes/Pybind.h"
 //==============================================================================
-#include "setu/commons/Logging.h"
-#include "setu/commons/StdCommon.h"
-#include "setu/commons/TorchCommon.h"
-#include "setu/commons/datatypes/TensorDim.h"
-#include "setu/commons/datatypes/TensorSelection.h"
-#include "setu/commons/datatypes/TensorShard.h"
-#include "setu/coordinator/datatypes/Plan.h"
-#include "setu/coordinator/datatypes/Program.h"
-#include "setu/coordinator/datatypes/TensorMetadata.h"
-#include "setu/coordinator/datatypes/TensorOwnershipMap.h"
+#include "commons/Logging.h"
+#include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
+#include "commons/datatypes/TensorDim.h"
+#include "commons/datatypes/TensorSelection.h"
+#include "commons/datatypes/TensorShard.h"
+#include "coordinator/datatypes/TensorMetadata.h"
+#include "coordinator/datatypes/TensorOwnershipMap.h"
 //==============================================================================
 namespace setu::coordinator::datatypes {
 //==============================================================================
@@ -34,26 +32,9 @@ using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
 using setu::commons::datatypes::TensorShardsMap;
-//==============================================================================
-void InitPlanPybind(py::module_& m) {
-  py::class_<Plan>(m, "Plan")
-      .def(py::init<>(), "Create an empty plan")
-      .def_readwrite("worker_programs", &Plan::worker_programs,
-                     "Mapping of device ranks to worker programs")
-      .def("__str__", &Plan::ToString)
-      .def("__repr__", &Plan::ToString);
-}
-//==============================================================================
-void InitProgramPybind(py::module_& m) {
-  py::class_<Program>(m, "Program")
-      .def(py::init<>(), "Create an empty program")
-      .def_readwrite("participating_workers", &Program::participating_workers,
-                     "Participating worker device ranks")
-      .def_readwrite("instrs", &Program::instrs,
-                     "Instructions to execute in order")
-      .def("__str__", &Program::ToString)
-      .def("__repr__", &Program::ToString);
-}
+using setu::coordinator::datatypes::TensorMetadata;
+using setu::coordinator::datatypes::TensorOwnershipMap;
+using setu::coordinator::datatypes::TensorOwnershipMapPtr;
 //==============================================================================
 void InitTensorMetadataPybind(py::module_& m) {
   py::class_<TensorMetadata>(m, "TensorMetadata", py::module_local())
@@ -93,8 +74,6 @@ void InitTensorOwnershipMapPybind(py::module_& m) {
 void InitDatatypesPybindSubmodule(py::module_& pm) {
   auto m = pm.def_submodule("datatypes", "Coordinator datatypes submodule");
 
-  InitProgramPybind(m);
-  InitPlanPybind(m);
   InitTensorMetadataPybind(m);
   InitTensorOwnershipMapPybind(m);
 }

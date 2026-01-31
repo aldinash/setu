@@ -24,12 +24,10 @@
 #include "commons/datatypes/TensorShardSpec.h"
 #include "commons/enums/Enums.h"
 #include "commons/utils/ZmqHelper.h"
-#include "coordinator/datatypes/Program.h"
 #include "ir/Instruction.h"
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
-using setu::commons::ClientRank;
 using setu::commons::CopyOperationId;
 using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
@@ -42,16 +40,16 @@ using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::enums::ErrorCode;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
-using setu::coordinator::datatypes::Program;
 using setu::ir::CopyInstruction;
 using setu::ir::Instruction;
+using setu::ir::Program;
 using setu::ir::ReceiveInstruction;
 using setu::ir::SendInstruction;
 using setu::ir::UseCommInstruction;
 //==============================================================================
 class Worker {
  public:
-  Worker(Device device, std::size_t reply_port);
+  Worker(Device device, std::size_t port);
   ~Worker();
 
   void Start();
@@ -70,11 +68,10 @@ class Worker {
   void WorkerLoop();
 
   Device device_;
-  // Zmq context and sockets
-  ZmqContextPtr zmq_context_;
-  ZmqSocketPtr reply_socket_;
 
-  std::size_t reply_port_;
+  std::size_t port_;
+  ZmqContextPtr zmq_context_;
+  ZmqSocketPtr socket_;
 
   std::atomic<bool> worker_running_;
 

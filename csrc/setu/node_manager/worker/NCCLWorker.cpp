@@ -20,7 +20,7 @@
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/messages/Messages.h"
-#include "commons/utils/SetuCommHelper.h"
+#include "commons/utils/Comm.h"
 #include "commons/utils/ThreadingUtils.h"
 //==============================================================================
 namespace setu::node_manager::worker {
@@ -28,7 +28,7 @@ namespace setu::node_manager::worker {
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::ExecuteProgramRequest;
 using setu::commons::messages::ExecuteProgramResponse;
-using setu::commons::utils::SetuCommHelper;
+using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 //==============================================================================
 
@@ -69,11 +69,11 @@ void NCCLWorker::Setup() {
 }
 
 void NCCLWorker::Execute(const Program& program) {
-  LOG_DEBUG("Executing program with {} instructions", program.instrs.size());
+  LOG_DEBUG("Executing program with {} instructions", program.size());
 
   bool group_started = false;
 
-  for (const auto& instruction : program.instrs) {
+  for (const auto& instruction : program) {
     ExecuteInstruction(instruction, group_started);
   }
 

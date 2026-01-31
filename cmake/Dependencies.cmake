@@ -24,12 +24,7 @@ set(ZMQ_BUILD_DRAFT_API
 
 FetchContent_MakeAvailable(googletest Boost zmq cppzmq)
 
-# ---------------------------------------------------------------------------
-# NCCL: required (nccl.h + libnccl) We try to locate nccl.h and libnccl from various locations
-# including pip packages
-# ---------------------------------------------------------------------------
-
-# Optional: derive site-packages from Python (conda / venv safe)
+# NCCL
 if(DEFINED SETU_PYTHON_EXECUTABLE)
   execute_process(
     COMMAND ${SETU_PYTHON_EXECUTABLE} -c "import site; print(site.getsitepackages()[0])"
