@@ -27,93 +27,96 @@ using setu::commons::datatypes::TensorDimMap;
 //==============================================================================
 TensorShardRef MetaStore::RegisterTensorShard(
     const TensorShardSpec& shard_spec) {
-  // Generate a unique shard ID
   ShardId shard_id = GenerateUUID();
 
-  // Convert TensorDimSpec vector to TensorDimMap
+  auto& tensor_data = tensor_shards_data_[shard_spec.name];
+
+  // Store the shard spec
+  tensor_data.shards_specs.emplace(shard_id,
+                             std::make_shared<TensorShardSpec>(shard_spec));
+
+  // Convert TensorDimSpec vector to TensorDimMap for the reference
   TensorDimMap dims;
   for (const auto& dim_spec : shard_spec.dims) {
     dims.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.size));
   }
 
-  // Create the shard reference
   TensorShardRef shard_ref(shard_spec.name, shard_id, dims);
-
-  shards_by_id_.emplace(shard_id, shard_ref);
-  shards_by_tensor_name_[shard_spec.name].push_back(shard_id);
 
   // Calculate and track sizes
   std::size_t shard_num_elements = shard_spec.GetNumElements();
-  std::size_t total_tensor_size = 1;
-  for (const auto& dim_spec : shard_spec.dims) {
-    total_tensor_size *= dim_spec.size;
+
+  // Initialize expected size on first shard registration
+  if (tensor_data.expected_size == 0) {
+    std::size_t total_tensor_size = 1;
+    for (const auto& dim_spec : shard_spec.dims) {
+      total_tensor_size *= dim_spec.size;
+    }
+    tensor_data.expected_size = total_tensor_size;
   }
 
-  if (tensor_expected_size_.find(shard_spec.name) ==
-      tensor_expected_size_.end()) {
-    tensor_expected_size_[shard_spec.name] = total_tensor_size;
-    tensor_registered_size_[shard_spec.name] = 0;
-  }
-
-  tensor_registered_size_[shard_spec.name] += shard_num_elements;
+  tensor_data.registered_size += shard_num_elements;
 
   LOG_DEBUG(
       "Registered tensor shard: id={}, name={}, num_dims={}, "
       "shard_elements={}, registered={}/{}",
       shard_id, shard_spec.name, dims.size(), shard_num_elements,
-      tensor_registered_size_[shard_spec.name],
-      tensor_expected_size_[shard_spec.name]);
+      tensor_data.registered_size, tensor_data.expected_size);
 
   return shard_ref;
 }
 //==============================================================================
-std::optional<TensorShardRef> MetaStore::GetShardById(
-    const ShardId& shard_id) const {
-  auto it = shards_by_id_.find(shard_id);
-  if (it != shards_by_id_.end()) {
-    return it->second;
-  }
-  return std::nullopt;
-}
-//==============================================================================
-std::vector<TensorShardRef> MetaStore::GetShardsByTensorName(
-    const TensorName& tensor_name) const {
-  std::vector<TensorShardRef> result;
-
-  auto it = shards_by_tensor_name_.find(tensor_name);
-  if (it != shards_by_tensor_name_.end()) {
-    for (const auto& shard_id : it->second) {
-      auto shard_it = shards_by_id_.find(shard_id);
-      if (shard_it != shards_by_id_.end()) {
-        result.push_back(shard_it->second);
-      }
-    }
-  }
-
-  return result;
-}
-//==============================================================================
-std::size_t MetaStore::GetNumShards() const { return shards_by_id_.size(); }
-//==============================================================================
 bool MetaStore::AllShardsRegistered(const TensorName& tensor_name) const {
-  auto expected_it = tensor_expected_size_.find(tensor_name);
-  auto registered_it = tensor_registered_size_.find(tensor_name);
-
-  if (expected_it == tensor_expected_size_.end() ||
-      registered_it == tensor_registered_size_.end()) {
+  auto it = tensor_shards_data_.find(tensor_name);
+  if (it == tensor_shards_data_.end()) {
     return false;
   }
-
-  return registered_it->second == expected_it->second;
+  return it->second.registered_size == it->second.expected_size;
 }
 //==============================================================================
 std::size_t MetaStore::GetNumShardsForTensor(
     const TensorName& tensor_name) const {
-  auto it = shards_by_tensor_name_.find(tensor_name);
-  if (it != shards_by_tensor_name_.end()) {
-    return it->second.size();
+  auto it = tensor_shards_data_.find(tensor_name);
+  if (it != tensor_shards_data_.end()) {
+    return it->second.shards_specs.size();
   }
   return 0;
+}
+//==============================================================================
+std::optional<TensorMetadata> MetaStore::GetTensorMetadata(
+    const TensorName& tensor_name) {
+  // Check cache first
+  auto cache_it = tensor_metadata_cache_.find(tensor_name);
+  if (cache_it != tensor_metadata_cache_.end()) {
+    return cache_it->second;
+  }
+
+  // Check if all shards are registered
+  if (!AllShardsRegistered(tensor_name)) {
+    return std::nullopt;
+  }
+
+  auto tensor_it = tensor_shards_data_.find(tensor_name);
+  ASSERT_VALID_RUNTIME(tensor_it != tensor_shards_data_.end(),
+                       "Tensor {} should exist if all shards are registered",
+                       tensor_name);
+
+  const auto& shards = tensor_it->second.shards_specs;
+  ASSERT_VALID_RUNTIME(!shards.empty(),
+                       "Tensor {} should have at least one shard", tensor_name);
+
+  // Get dims and dtype from first shard
+  const auto& first_shard_spec = shards.begin()->second;
+  TensorDimMap dims;
+  for (const auto& dim_spec : first_shard_spec->dims) {
+    dims.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.size));
+  }
+
+  // Build and cache TensorMetadata
+  TensorMetadata metadata(tensor_name, dims, first_shard_spec->dtype, shards);
+  tensor_metadata_cache_.emplace(tensor_name, metadata);
+
+  return metadata;
 }
 //==============================================================================
 }  // namespace setu::coordinator::metastore

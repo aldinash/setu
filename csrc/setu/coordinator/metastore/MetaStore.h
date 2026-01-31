@@ -19,24 +19,29 @@
 #include "commons/ClassTraits.h"
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 #include "commons/Types.h"
 //==============================================================================
+#include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
+#include "coordinator/datatypes/TensorMetadata.h"
 //==============================================================================
 namespace setu::coordinator::metastore {
 //==============================================================================
 using setu::commons::ShardId;
 using setu::commons::TensorName;
+using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
+using setu::commons::datatypes::TensorShardSpecPtr;
+using setu::coordinator::datatypes::TensorMetadata;
 //==============================================================================
 /**
  * @brief Metadata store for managing tensor shard registrations
  *
  * MetaStore is responsible for tracking all registered tensor shards in the
- * system. It assigns unique identifiers to shards and provides lookup
- * capabilities for retrieving shard metadata.
+ * system.
  */
 class MetaStore {
  public:
@@ -55,31 +60,6 @@ class MetaStore {
   [[nodiscard]] TensorShardRef RegisterTensorShard(
       const TensorShardSpec& shard_spec /*[in]*/);
 
-  /**
-   * @brief Looks up a tensor shard by its unique identifier
-   *
-   * @param shard_id The UUID of the shard to look up
-   * @return Optional containing the TensorShardRef if found, empty otherwise
-   */
-  [[nodiscard]] std::optional<TensorShardRef> GetShardById(
-      const ShardId& shard_id /*[in]*/) const;
-
-  /**
-   * @brief Gets all shards registered for a given tensor name
-   *
-   * @param tensor_name The name of the tensor to query
-   * @return Vector of TensorShardRef for all shards of the specified tensor
-   */
-  [[nodiscard]] std::vector<TensorShardRef> GetShardsByTensorName(
-      const TensorName& tensor_name /*[in]*/) const;
-
-  /**
-   * @brief Returns the total number of registered shards
-   *
-   * @return Number of shards in the metadata store
-   */
-  [[nodiscard]] std::size_t GetNumShards() const;
-
   [[nodiscard]] bool AllShardsRegistered(const TensorName& tensor_name) const;
 
   /**
@@ -91,18 +71,29 @@ class MetaStore {
   [[nodiscard]] std::size_t GetNumShardsForTensor(
       const TensorName& tensor_name /*[in]*/) const;
 
+  /**
+   * @brief Returns the tensor metadata for a fully registered tensor
+   *
+   * Builds and caches TensorMetadata when all shards have been registered.
+   * Returns std::nullopt if the tensor is not found or not fully registered.
+   *
+   * @param tensor_name The name of the tensor to query
+   * @return Optional containing TensorMetadata if fully registered, nullopt
+   * otherwise
+   */
+  [[nodiscard]] std::optional<TensorMetadata> GetTensorMetadata(
+      const TensorName& tensor_name /*[in]*/);
+
  private:
-  /// Map from shard ID to shard reference
-  std::unordered_map<ShardId, TensorShardRef> shards_by_id_;
+  /// Tensor shard data: expected size, retgisered size, and shards
+  struct TensorShardsData {
+    std::size_t expected_size{0};
+    std::size_t registered_size{0};
+    std::unordered_map<ShardId, TensorShardSpecPtr> shards_specs;
+  };
 
-  /// Map from tensor name to list of shard IDs for that tensor
-  std::unordered_map<TensorName, std::vector<ShardId>> shards_by_tensor_name_;
-
-  /// Map from tensor name to expected total number of elements
-  std::unordered_map<TensorName, std::size_t> tensor_expected_size_;
-
-  /// Map from tensor name to currently registered number of elements
-  std::unordered_map<TensorName, std::size_t> tensor_registered_size_;
+  std::unordered_map<TensorName, TensorShardsData> tensor_shards_data_;
+  std::unordered_map<TensorName, TensorMetadata> tensor_metadata_cache_;
 };
 //==============================================================================
 }  // namespace setu::coordinator::metastore

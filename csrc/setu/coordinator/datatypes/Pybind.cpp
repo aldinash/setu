@@ -21,7 +21,7 @@
 #include "commons/TorchCommon.h"
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorSelection.h"
-#include "commons/datatypes/TensorShard.h"
+#include "commons/datatypes/TensorShardSpec.h"
 #include "coordinator/datatypes/Instruction.h"
 #include "coordinator/datatypes/Plan.h"
 #include "coordinator/datatypes/Program.h"
@@ -30,10 +30,11 @@
 //==============================================================================
 namespace setu::coordinator::datatypes {
 //==============================================================================
+using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardsMap;
+using setu::commons::datatypes::TensorShardSpecPtr;
 using setu::coordinator::datatypes::Instruction;
 using setu::coordinator::datatypes::Plan;
 using setu::coordinator::datatypes::Program;
@@ -70,7 +71,8 @@ void InitPlanPybind(py::module_& m) {
 //==============================================================================
 void InitTensorMetadataPybind(py::module_& m) {
   py::class_<TensorMetadata>(m, "TensorMetadata", py::module_local())
-      .def(py::init<TensorName, TensorDimMap, torch::Dtype, TensorShardsMap>(),
+      .def(py::init<TensorName, TensorDimMap, torch::Dtype,
+                    std::unordered_map<ShardId, TensorShardSpecPtr>>(),
            py::arg("name"), py::arg("dims"), py::arg("dtype"),
            py::arg("shards"))
       .def_readonly("name", &TensorMetadata::name, "Name of the tensor")
@@ -93,7 +95,8 @@ void InitTensorMetadataPybind(py::module_& m) {
 void InitTensorOwnershipMapPybind(py::module_& m) {
   py::class_<TensorOwnershipMap, TensorOwnershipMapPtr>(m, "TensorOwnershipMap",
                                                         py::module_local())
-      .def(py::init<TensorSelectionPtr, TensorShardsMap>(),
+      .def(py::init<TensorSelectionPtr,
+                    const std::unordered_map<ShardId, TensorShardSpecPtr>&>(),
            py::arg("selection"), py::arg("shards"))
       .def_readonly("shard_mapping", &TensorOwnershipMap::shard_mapping,
                     "Vector of (selection subset, owning shard) pairs")
