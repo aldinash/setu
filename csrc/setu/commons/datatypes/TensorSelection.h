@@ -21,7 +21,6 @@
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorDimShard.h"
 #include "commons/datatypes/TensorShard.h"
-#include "commons/datatypes/TensorShardSpec.h"
 #include "commons/datatypes/TensorSlice.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
@@ -85,11 +84,11 @@ struct TensorSelection {
 
   [[nodiscard]] bool IsEmpty() const {
     for (const auto& [dim_name, dim] : indices) {
-      if (!dim.none()) {
-        return false;
+      if (dim.none()) {
+        return true;
       }
     }
-    return true;
+    return false;
   }
 
   [[nodiscard]] bool IsCompatible(TensorSelectionPtr other) const {
@@ -109,16 +108,35 @@ struct TensorSelection {
   }
 
   /**
-   * @brief Get the index bitset for a specific dimension
+   * @brief Check equality with another TensorSelection
    *
-   * @param dim_name The name of the dimension
-   * @return const reference to the TensorIndicesBitset for the dimension
+   * Two TensorSelections are equal if they have the same name and identical
+   * index bitsets for all dimensions.
+   *
+   * @param other The TensorSelection to compare against
+   * @return true if both selections are identical, false otherwise
    */
-  [[nodiscard]] const TensorIndicesBitset& GetDimIndices(
-      const TensorDimName& dim_name) const {
-    ASSERT_VALID_ARGUMENTS(indices.find(dim_name) != indices.end(),
-                           "Dimension {} not found in selection", dim_name);
-    return indices.at(dim_name);
+  [[nodiscard]] bool operator==(const TensorSelection& other) const {
+    if (name != other.name) {
+      return false;
+    }
+    if (indices.size() != other.indices.size()) {
+      return false;
+    }
+    for (const auto& [dim_name, dim] : indices) {
+      auto it = other.indices.find(dim_name);
+      if (it == other.indices.end()) {
+        return false;
+      }
+      if (dim != it->second) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool operator!=(const TensorSelection& other) const {
+    return !(*this == other);
   }
 
   /**
@@ -188,21 +206,6 @@ struct TensorSelection {
     return std::make_shared<TensorSelection>(name, new_indices);
   }
 
-  /**
-   * @brief Narrow the selection to only include indices within a shard spec
-   *
-   * Creates a new TensorSelection that represents the intersection of the
-   * current selection with the region defined by the shard specification.
-   * This is useful for restricting a selection to a specific shard's bounds.
-   *
-   * @param spec The shard specification defining the region to narrow to.
-   *             Must have the same tensor name as this selection.
-   * @return New TensorSelection containing only indices that are both in the
-   *         current selection and within the shard spec's bounds
-   * @throws std::invalid_argument if the tensor names do not match
-   */
-  [[nodiscard]] TensorSelectionPtr Narrow(TensorShardSpecPtr spec) const;
-
   const TensorName name;
 
  private:
@@ -219,57 +222,6 @@ struct TensorSelection {
 
   const TensorIndicesMap indices;
 };
-//==============================================================================
-/**
- * @brief Create a TensorSelection from a TensorShardSpec
- *
- * This utility function creates a TensorSelection that represents the exact
- * region of the tensor defined by the given shard specification. Unlike
- * CreateSelectionFromShard, this works with TensorShardSpec which uses a vector
- * of TensorDimSpec instead of a map of TensorDimShard.
- *
- * @param spec The TensorShardSpec to create a selection from
- * @return TensorSelectionPtr A selection covering the spec's region
- */
-inline TensorSelectionPtr CreateSelectionFromShardSpec(
-    TensorShardSpecPtr spec) {
-  ASSERT_VALID_POINTER_ARGUMENT(spec);
-
-  TensorIndicesMap result_indices;
-  for (const auto& dim_spec : spec->dims) {
-    // Create bitset for the full dimension size
-    TensorIndicesBitset bitset(dim_spec.size);
-    // Set bits only for the range owned by this shard [start, end)
-    for (TensorIndex i = dim_spec.start; i < dim_spec.end; ++i) {
-      bitset[static_cast<std::size_t>(i)] = true;
-    }
-    result_indices[dim_spec.name] = bitset;
-  }
-  return std::make_shared<TensorSelection>(spec->name, result_indices);
-}
-//==============================================================================
-/**
- * @brief Create a TensorSelection from a TensorShard
- *
- * This utility function creates a TensorSelection that represents the exact
- * region of the tensor owned by the given shard.
- *
- * @param shard The TensorShard to create a selection from
- * @return TensorSelectionPtr A selection covering the shard's region
- */
-inline TensorSelectionPtr CreateSelectionFromShard(TensorShardPtr shard) {
-  ASSERT_VALID_POINTER_ARGUMENT(shard);
-  return CreateSelectionFromShardSpec(
-      std::make_shared<TensorShardSpec>(shard->metadata.spec));
-}
-//==============================================================================
-inline TensorSelectionPtr TensorSelection::Narrow(
-    TensorShardSpecPtr spec) const {
-  ASSERT_VALID_ARGUMENTS(name == spec->name,
-                         "Tried to narrow {} using shard spec of tensor {}",
-                         name, spec->name);
-  return GetIntersection(CreateSelectionFromShardSpec(spec));
-}
 //==============================================================================
 }  // namespace setu::commons::datatypes
 //==============================================================================
