@@ -140,6 +140,21 @@ struct TensorSelection {
   }
 
   /**
+   * @brief Get the indices bitset for a specific dimension
+   *
+   * @param dim_name The name of the dimension
+   * @return const reference to the TensorIndicesBitset for the dimension
+   * @throws std::invalid_argument if dimension is not found
+   */
+  [[nodiscard]] const TensorIndicesBitset& GetDimIndices(
+      const TensorDimName& dim_name) const {
+    auto it = indices.find(dim_name);
+    ASSERT_VALID_ARGUMENTS(it != indices.end(),
+                           "Dimension {} not found in selection", dim_name);
+    return it->second;
+  }
+
+  /**
    * @brief Create a new TensorSelection with specified indices for a dimension
    *
    * @param dim_name The name of the dimension to select from

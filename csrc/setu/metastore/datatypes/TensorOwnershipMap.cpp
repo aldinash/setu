@@ -14,13 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "coordinator/datatypes/TensorOwnershipMap.h"
+#include "metastore/datatypes/TensorOwnershipMap.h"
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 //==============================================================================
-namespace setu::coordinator::datatypes {
+namespace setu::metastore::datatypes {
 //==============================================================================
 using setu::commons::datatypes::CreateSelectionFromShardMetadata;
 using setu::commons::datatypes::TensorSelectionPtr;
@@ -55,5 +55,5 @@ TensorOwnershipMap::BuildOwnershipMapping(TensorSelectionPtr selection,
   return ownership_map;
 }
 //==============================================================================
-}  // namespace setu::coordinator::datatypes
+}  // namespace setu::metastore::datatypes
 //==============================================================================
