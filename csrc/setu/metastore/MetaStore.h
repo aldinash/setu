@@ -23,6 +23,7 @@
 #include "commons/Types.h"
 //==============================================================================
 #include "commons/datatypes/TensorDim.h"
+#include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
 #include "metastore/datatypes/TensorMetadata.h"
@@ -33,10 +34,13 @@ using setu::commons::NodeId;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
+using setu::commons::datatypes::TensorShardMetadataMap;
+using setu::commons::datatypes::TensorShardMetadataPtr;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::datatypes::TensorShardSpecPtr;
 using setu::metastore::datatypes::TensorMetadata;
+using setu::metastore::datatypes::TensorMetadataMap;
 using setu::metastore::datatypes::TensorMetadataPtr;
 //==============================================================================
 /**
@@ -89,17 +93,16 @@ class MetaStore {
       const TensorName& tensor_name /*[in]*/);
 
  private:
-  /// Tensor shard data: expected size, registered size, shards, and owners
+  /// Tensor shard data: expected size, registered size, and shard metadata
   struct TensorShardsData {
     std::size_t expected_size{0};
     std::size_t registered_size{0};
-    std::unordered_map<ShardId, TensorShardSpecPtr> shards_specs;
-    std::unordered_map<ShardId, NodeId> shard_owners;
+    TensorShardMetadataMap shards;
   };
 
   mutable std::recursive_mutex mutex_;
   std::unordered_map<TensorName, TensorShardsData> tensor_shards_data_;
-  std::unordered_map<TensorName, TensorMetadataPtr> tensor_metadata_cache_;
+  TensorMetadataMap tensor_metadata_cache_;
 };
 //==============================================================================
 }  // namespace setu::metastore

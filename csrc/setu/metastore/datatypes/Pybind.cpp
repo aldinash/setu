@@ -21,36 +21,30 @@
 #include "commons/TorchCommon.h"
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorSelection.h"
-#include "commons/datatypes/TensorShardSpec.h"
+#include "commons/datatypes/TensorShardMetadata.h"
 #include "metastore/datatypes/TensorMetadata.h"
 #include "metastore/datatypes/TensorOwnershipMap.h"
 //==============================================================================
 namespace setu::metastore::datatypes {
 //==============================================================================
-using setu::commons::NodeId;
-using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardSpecPtr;
-using TensorShardSpecMap = std::unordered_map<ShardId, TensorShardSpecPtr>;
-using ShardOwnerMap = std::unordered_map<ShardId, NodeId>;
+using setu::commons::datatypes::TensorShardMetadataMap;
 //==============================================================================
 void InitTensorMetadataPybind(py::module_& m) {
   py::class_<TensorMetadata>(m, "TensorMetadata", py::module_local())
-      .def(py::init<TensorName, TensorDimMap, torch::Dtype, TensorShardSpecMap,
-                    ShardOwnerMap>(),
+      .def(py::init<TensorName, TensorDimMap, torch::Dtype,
+                    TensorShardMetadataMap>(),
            py::arg("name"), py::arg("dims"), py::arg("dtype"),
-           py::arg("shards"), py::arg("shard_owners"))
+           py::arg("shards"))
       .def_readonly("name", &TensorMetadata::name, "Name of the tensor")
       .def_readonly("dims", &TensorMetadata::dims,
                     "Map of dimension names to TensorDim objects")
       .def_readonly("dtype", &TensorMetadata::dtype,
                     "Data type of tensor elements")
       .def_readonly("shards", &TensorMetadata::shards,
-                    "Map of shard IDs to tensor shard specs")
-      .def_readonly("shard_owners", &TensorMetadata::shard_owners,
-                    "Map of shard IDs to owning NodeIds")
+                    "Map of shard IDs to tensor shard metadata")
       .def_readonly("size", &TensorMetadata::size,
                     "Total number of elements in the tensor")
       .def("get_size", &TensorMetadata::GetSize,
@@ -66,10 +60,10 @@ void InitTensorMetadataPybind(py::module_& m) {
 void InitTensorOwnershipMapPybind(py::module_& m) {
   py::class_<TensorOwnershipMap, TensorOwnershipMapPtr>(m, "TensorOwnershipMap",
                                                         py::module_local())
-      .def(py::init<TensorSelectionPtr, const TensorShardSpecMap&>(),
+      .def(py::init<TensorSelectionPtr, TensorShardMetadataMap>(),
            py::arg("selection"), py::arg("shards"))
       .def_readonly("shard_mapping", &TensorOwnershipMap::shard_mapping,
-                    "Vector of (selection subset, owning shard spec) pairs")
+                    "Vector of (selection subset, owning shard metadata) pairs")
       .def("get_num_shards", &TensorOwnershipMap::GetNumShards,
            "Get number of shard ownership mappings")
       .def("__str__", &TensorOwnershipMap::ToString)

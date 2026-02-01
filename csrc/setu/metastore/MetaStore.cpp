@@ -21,22 +21,23 @@
 //==============================================================================
 namespace setu::metastore {
 //==============================================================================
-using setu::commons::GenerateUUID;
 using setu::commons::datatypes::TensorDim;
 using setu::commons::datatypes::TensorDimMap;
+using setu::commons::datatypes::TensorShardMetadata;
 //==============================================================================
 TensorShardRef MetaStore::RegisterTensorShard(const TensorShardSpec& shard_spec,
                                               const NodeId& owner_node_id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-  ShardId shard_id = GenerateUUID();
-
   auto& tensor_data = tensor_shards_data_[shard_spec.name];
 
-  // Store the shard spec and owner
-  tensor_data.shards_specs.emplace(
-      shard_id, std::make_shared<TensorShardSpec>(shard_spec));
-  tensor_data.shard_owners.emplace(shard_id, owner_node_id);
+  // Create TensorShardMetadata with auto-generated ID
+  auto shard_metadata =
+      std::make_shared<TensorShardMetadata>(shard_spec, owner_node_id);
+  ShardId shard_id = shard_metadata->id;
+
+  // Store the shard metadata
+  tensor_data.shards.emplace(shard_id, shard_metadata);
 
   // Convert TensorDimSpec vector to TensorDimMap for the reference
   TensorDimMap dims;
@@ -85,13 +86,12 @@ std::size_t MetaStore::GetNumShardsForTensor(
 
   auto it = tensor_shards_data_.find(tensor_name);
   if (it != tensor_shards_data_.end()) {
-    return it->second.shards_specs.size();
+    return it->second.shards.size();
   }
   return 0;
 }
 //==============================================================================
-TensorMetadataPtr MetaStore::GetTensorMetadata(
-    const TensorName& tensor_name) {
+TensorMetadataPtr MetaStore::GetTensorMetadata(const TensorName& tensor_name) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   // Check cache first
@@ -111,21 +111,20 @@ TensorMetadataPtr MetaStore::GetTensorMetadata(
                        tensor_name);
 
   const auto& tensor_data = tensor_it->second;
-  const auto& shards = tensor_data.shards_specs;
-  const auto& shard_owners = tensor_data.shard_owners;
+  const auto& shards = tensor_data.shards;
   ASSERT_VALID_RUNTIME(!shards.empty(),
                        "Tensor {} should have at least one shard", tensor_name);
 
   // Get dims and dtype from first shard
-  const auto& first_shard_spec = shards.begin()->second;
+  const auto& first_shard = shards.begin()->second;
   TensorDimMap dims;
-  for (const auto& dim_spec : first_shard_spec->dims) {
+  for (const auto& dim_spec : first_shard->spec.dims) {
     dims.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.size));
   }
 
   // Build and cache TensorMetadata
   auto metadata = std::make_shared<TensorMetadata>(
-      tensor_name, dims, first_shard_spec->dtype, shards, shard_owners);
+      tensor_name, dims, first_shard->spec.dtype, shards);
   tensor_metadata_cache_.emplace(tensor_name, metadata);
 
   return metadata;

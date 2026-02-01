@@ -22,24 +22,25 @@
 //==============================================================================
 namespace setu::coordinator::datatypes {
 //==============================================================================
-using setu::commons::datatypes::CreateSelectionFromShard;
+using setu::commons::datatypes::CreateSelectionFromShardMetadata;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardPtr;
-using setu::commons::datatypes::TensorShardsMap;
+using setu::commons::datatypes::TensorShardMetadataMap;
+using setu::commons::datatypes::TensorShardMetadataPtr;
 //==============================================================================
-std::vector<std::pair<TensorSelectionPtr, TensorShardPtr>>
+std::vector<std::pair<TensorSelectionPtr, TensorShardMetadataPtr>>
 TensorOwnershipMap::BuildOwnershipMapping(TensorSelectionPtr selection,
-                                          TensorShardsMap shards) {
+                                          TensorShardMetadataMap shards) {
   ASSERT_VALID_POINTER_ARGUMENT(selection);
 
-  std::vector<std::pair<TensorSelectionPtr, TensorShardPtr>> ownership_map;
+  std::vector<std::pair<TensorSelectionPtr, TensorShardMetadataPtr>>
+      ownership_map;
 
   // For each shard, determine which subset of the selection it owns
   for (const auto& [shard_id, shard] : shards) {
     ASSERT_VALID_POINTER_ARGUMENT(shard);
 
-    // Create selection from shard and compute intersection
-    TensorSelectionPtr shard_selection = CreateSelectionFromShard(shard);
+    // Create selection from shard metadata and compute intersection
+    TensorSelectionPtr shard_selection = CreateSelectionFromShardMetadata(shard);
     TensorSelectionPtr intersection =
         selection->GetIntersection(shard_selection);
 

@@ -19,13 +19,13 @@
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
 #include "commons/datatypes/TensorSelection.h"
-#include "commons/datatypes/TensorShardSpec.h"
+#include "commons/datatypes/TensorShardMetadata.h"
 //==============================================================================
 namespace setu::metastore::datatypes {
 //==============================================================================
-using setu::commons::ShardId;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardSpecPtr;
+using setu::commons::datatypes::TensorShardMetadataMap;
+using setu::commons::datatypes::TensorShardMetadataPtr;
 //==============================================================================
 /**
  * @brief Maps tensor selection subsets to their owning shards for distributed
@@ -46,14 +46,13 @@ struct TensorOwnershipMap {
    * non-empty intersections are included in the final mapping.
    *
    * @param selection_param Tensor selection to create ownership map for
-   * @param shards_param Map of available tensor shards to check against
+   * @param shards_param Map of available tensor shard metadata to check against
    *
    * @throws std::invalid_argument if selection or shards are null, or if shards
    * is empty
    */
-  TensorOwnershipMap(
-      TensorSelectionPtr selection_param,
-      const std::unordered_map<ShardId, TensorShardSpecPtr>& shards_param)
+  TensorOwnershipMap(TensorSelectionPtr selection_param,
+                     TensorShardMetadataMap shards_param)
       : shard_mapping(BuildOwnershipMapping(selection_param, shards_param)) {
     ASSERT_VALID_POINTER_ARGUMENT(selection_param);
     ASSERT_VALID_ARGUMENTS(shards_param.size() > 0, "Shards must be non-empty");
@@ -62,7 +61,8 @@ struct TensorOwnershipMap {
   /**
    * @brief Returns the number of shard ownership mappings
    *
-   * @return Number of (selection subset, shard) pairs in this ownership map
+   * @return Number of (selection subset, shard metadata) pairs in this
+   * ownership map
    */
   [[nodiscard]] std::size_t GetNumShards() const {
     return shard_mapping.size();
@@ -77,8 +77,8 @@ struct TensorOwnershipMap {
     return std::format("TensorOwnershipMap(mappings={})", shard_mapping);
   }
 
-  /// @brief Vector of (selection subset, owning shard spec) pairs
-  const std::vector<std::pair<TensorSelectionPtr, TensorShardSpecPtr>>
+  /// @brief Vector of (selection subset, owning shard metadata) pairs
+  const std::vector<std::pair<TensorSelectionPtr, TensorShardMetadataPtr>>
       shard_mapping;
 
  private:
@@ -90,13 +90,12 @@ struct TensorOwnershipMap {
    * for non-empty intersections to avoid unnecessary entries.
    *
    * @param selection Tensor selection to analyze
-   * @param shards Available tensor shard specs to check against
-   * @return Vector of (selection subset, owning shard spec) pairs
+   * @param shards Available tensor shard metadata to check against
+   * @return Vector of (selection subset, owning shard metadata) pairs
    */
-  static std::vector<std::pair<TensorSelectionPtr, TensorShardSpecPtr>>
-  BuildOwnershipMapping(
-      TensorSelectionPtr selection,
-      const std::unordered_map<ShardId, TensorShardSpecPtr>& shards);
+  static std::vector<std::pair<TensorSelectionPtr, TensorShardMetadataPtr>>
+  BuildOwnershipMapping(TensorSelectionPtr selection,
+                        TensorShardMetadataMap shards);
 };
 //==============================================================================
 /// @brief Shared pointer to a TensorOwnershipMap object

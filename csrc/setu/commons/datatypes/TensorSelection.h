@@ -266,5 +266,21 @@ inline TensorSelectionPtr CreateSelectionFromShard(TensorShardPtr shard) {
       std::make_shared<TensorShardSpec>(shard->metadata.spec));
 }
 //==============================================================================
+/**
+ * @brief Create a TensorSelection from a TensorShardMetadata
+ *
+ * This utility function creates a TensorSelection that represents the exact
+ * region of the tensor owned by the given shard.
+ *
+ * @param shard The TensorShardMetadata to create a selection from
+ * @return TensorSelectionPtr A selection covering the shard's region
+ */
+inline TensorSelectionPtr CreateSelectionFromShardMetadata(
+    TensorShardMetadataPtr shard_metadata) {
+  ASSERT_VALID_POINTER_ARGUMENT(shard_metadata);
+  return CreateSelectionFromShardSpec(
+      std::make_shared<TensorShardSpec>(shard_metadata->spec));
+}
+//==============================================================================
 }  // namespace setu::commons::datatypes
 //==============================================================================
