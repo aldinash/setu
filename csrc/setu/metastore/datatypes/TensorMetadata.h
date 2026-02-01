@@ -21,16 +21,18 @@
 #include "commons/TorchCommon.h"
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorSelection.h"
-#include "commons/datatypes/TensorShard.h"
-#include "coordinator/datatypes/TensorOwnershipMap.h"
+#include "commons/datatypes/TensorShardMetadata.h"
+#include "metastore/datatypes/TensorOwnershipMap.h"
 //==============================================================================
-namespace setu::coordinator::datatypes {
+namespace setu::metastore::datatypes {
 //==============================================================================
 // Type aliases for convenience
+using setu::commons::NodeId;
 using setu::commons::TensorName;
+using setu::commons::datatypes::CreateSelectionFromShardMetadata;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardsMap;
+using setu::commons::datatypes::TensorShardMetadataMap;
 //==============================================================================
 /**
  * @brief Complete metadata for a tensor including dimensions, data type, and
@@ -49,14 +51,13 @@ struct TensorMetadata {
    * @param dims_param Map of dimension names to TensorDim objects describing
    * the tensor shape
    * @param dtype_param Data type of the tensor elements
-   * @param shards_param Map of node IDs to tensor shards distributed across
-   * devices
+   * @param shards_param Map of shard IDs to tensor shard metadata
    *
    * @throws std::invalid_argument if dims or shards are null, empty, or if
    * shards don't fully cover the tensor
    */
   TensorMetadata(TensorName name_param, TensorDimMap dims_param,
-                 torch::Dtype dtype_param, TensorShardsMap shards_param)
+                 torch::Dtype dtype_param, TensorShardMetadataMap shards_param)
       : name(name_param),
         dims(dims_param),
         dtype(dtype_param),
@@ -119,11 +120,24 @@ struct TensorMetadata {
                        name, dims, dtype, shards);
   }
 
+  /**
+   * @brief Returns all unique NodeIds that own shards of this tensor
+   *
+   * @return Set of NodeIds that own at least one shard
+   */
+  [[nodiscard]] std::set<NodeId> GetOwnerNodeIds() const {
+    std::set<NodeId> node_ids;
+    for (const auto& [shard_id, shard] : shards) {
+      node_ids.insert(shard->owner);
+    }
+    return node_ids;
+  }
+
   const TensorName name;     ///< Name of the tensor
   const TensorDimMap dims;   ///< Map of dimension names to TensorDim objects
   const torch::Dtype dtype;  ///< Data type of tensor elements
-  const TensorShardsMap shards;  ///< Map of node IDs to tensor shards
-  const std::size_t size;        ///< Total number of elements in the tensor
+  const TensorShardMetadataMap shards;  ///< Map of shard IDs to shard metadata
+  const std::size_t size;  ///< Total number of elements in the tensor
 
  private:
   /**
@@ -139,7 +153,7 @@ struct TensorMetadata {
     std::size_t total_shard_size = 0;
 
     for (const auto& [_, shard] : shards) {
-      total_shard_size += shard->metadata.spec.GetNumElements();
+      total_shard_size += shard->spec.GetNumElements();
     }
 
     ASSERT_VALID_ARGUMENTS(total_shard_size == size,
@@ -151,11 +165,11 @@ struct TensorMetadata {
       for (const auto& [id2, shard2] : shards) {
         if (id1 >= id2) continue;  // Only check each pair once, skip self
 
-        // Create selections from each shard
+        // Create selections from each shard spec
         TensorSelectionPtr selection1 =
-            setu::commons::datatypes::CreateSelectionFromShard(shard1);
+            CreateSelectionFromShardMetadata(shard1);
         TensorSelectionPtr selection2 =
-            setu::commons::datatypes::CreateSelectionFromShard(shard2);
+            CreateSelectionFromShardMetadata(shard2);
 
         // Check if they intersect
         TensorSelectionPtr intersection =
@@ -170,5 +184,8 @@ struct TensorMetadata {
   }
 };
 //==============================================================================
-}  // namespace setu::coordinator::datatypes
+using TensorMetadataPtr = std::shared_ptr<TensorMetadata>;
+using TensorMetadataMap = std::unordered_map<TensorName, TensorMetadataPtr>;
+//==============================================================================
+}  // namespace setu::metastore::datatypes
 //==============================================================================

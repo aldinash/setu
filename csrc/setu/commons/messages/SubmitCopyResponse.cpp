@@ -8,13 +8,14 @@ using setu::commons::utils::BinaryWriter;
 
 void SubmitCopyResponse::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(request_id, error_code);
+  writer.WriteFields(request_id, copy_operation_id, error_code);
 }
 
 SubmitCopyResponse SubmitCopyResponse::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [request_id_val, error_code_val] =
-      reader.ReadFields<RequestId, ErrorCode>();
-  return SubmitCopyResponse(request_id_val, error_code_val);
+  auto [request_id_val, copy_operation_id_val, error_code_val] =
+      reader.ReadFields<RequestId, CopyOperationId, ErrorCode>();
+  return SubmitCopyResponse(request_id_val, copy_operation_id_val,
+                            error_code_val);
 }
 }  // namespace setu::commons::messages
