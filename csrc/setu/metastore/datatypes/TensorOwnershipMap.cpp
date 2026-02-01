@@ -40,7 +40,8 @@ TensorOwnershipMap::BuildOwnershipMapping(TensorSelectionPtr selection,
     ASSERT_VALID_POINTER_ARGUMENT(shard);
 
     // Create selection from shard metadata and compute intersection
-    TensorSelectionPtr shard_selection = CreateSelectionFromShardMetadata(shard);
+    TensorSelectionPtr shard_selection =
+        CreateSelectionFromShardMetadata(shard);
     TensorSelectionPtr intersection =
         selection->GetIntersection(shard_selection);
 
