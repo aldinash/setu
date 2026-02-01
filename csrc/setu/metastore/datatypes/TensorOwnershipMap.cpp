@@ -14,33 +14,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "metastore/datatypes/TensorOwnershipMap.h"
+#include "coordinator/datatypes/TensorOwnershipMap.h"
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/Types.h"
-#include "metastore/datatypes/TensorShardUtils.h"
 //==============================================================================
-namespace setu::metastore::datatypes {
+namespace setu::coordinator::datatypes {
 //==============================================================================
-using setu::commons::ShardId;
+using setu::commons::datatypes::CreateSelectionFromShard;
 using setu::commons::datatypes::TensorSelectionPtr;
-using setu::commons::datatypes::TensorShardSpecPtr;
+using setu::commons::datatypes::TensorShardPtr;
+using setu::commons::datatypes::TensorShardsMap;
 //==============================================================================
-std::vector<std::pair<TensorSelectionPtr, TensorShardSpecPtr>>
-TensorOwnershipMap::BuildOwnershipMapping(
-    TensorSelectionPtr selection,
-    const std::unordered_map<ShardId, TensorShardSpecPtr>& shards) {
+std::vector<std::pair<TensorSelectionPtr, TensorShardPtr>>
+TensorOwnershipMap::BuildOwnershipMapping(TensorSelectionPtr selection,
+                                          TensorShardsMap shards) {
   ASSERT_VALID_POINTER_ARGUMENT(selection);
 
-  std::vector<std::pair<TensorSelectionPtr, TensorShardSpecPtr>> ownership_map;
+  std::vector<std::pair<TensorSelectionPtr, TensorShardPtr>> ownership_map;
 
-  // For each shard spec, determine which subset of the selection it owns
-  for (const auto& [shard_id, shard_spec] : shards) {
-    ASSERT_VALID_POINTER_ARGUMENT(shard_spec);
+  // For each shard, determine which subset of the selection it owns
+  for (const auto& [shard_id, shard] : shards) {
+    ASSERT_VALID_POINTER_ARGUMENT(shard);
 
-    // Create selection from shard spec and compute intersection
-    TensorSelectionPtr shard_selection = CreateSelectionFromShard(shard_spec);
+    // Create selection from shard and compute intersection
+    TensorSelectionPtr shard_selection = CreateSelectionFromShard(shard);
     TensorSelectionPtr intersection =
         selection->GetIntersection(shard_selection);
 
@@ -48,11 +47,11 @@ TensorOwnershipMap::BuildOwnershipMapping(
       continue;
     }
 
-    ownership_map.push_back(std::make_pair(intersection, shard_spec));
+    ownership_map.push_back(std::make_pair(intersection, shard));
   }
 
   return ownership_map;
 }
 //==============================================================================
-}  // namespace setu::metastore::datatypes
+}  // namespace setu::coordinator::datatypes
 //==============================================================================
