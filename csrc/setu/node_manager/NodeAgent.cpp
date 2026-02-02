@@ -27,6 +27,9 @@ using setu::commons::RequestId;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::Device;
+using setu::commons::datatypes::TensorDim;
+using setu::commons::datatypes::TensorDimMap;
+using setu::commons::datatypes::TensorShardRef;
 using setu::commons::enums::DeviceKind;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
@@ -40,8 +43,9 @@ using setu::commons::messages::ExecuteResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::NodeAgentRequest;
+using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
+using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
-using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
@@ -236,8 +240,9 @@ void NodeAgent::Handler::HandleCoordinatorMessage(
           HandleCopyOperationFinishedRequest(msg);
         } else if constexpr (std::is_same_v<T, ExecuteRequest>) {
           HandleExecuteRequest(msg);
-        } else if constexpr (std::is_same_v<T, RegisterTensorShardResponse>) {
-          HandleRegisterTensorShardResponse(msg);
+        } else if constexpr (std::is_same_v<T,
+                                                   RegisterTensorShardCoordinatorResponse>) {
+          HandleRegisterTensorShardCoordinatorResponse(msg);
         } else if constexpr (std::is_same_v<T, SubmitCopyResponse>) {
           HandleSubmitCopyResponse(msg);
         } else if constexpr (std::is_same_v<T, WaitForCopyResponse>) {
@@ -338,20 +343,37 @@ void NodeAgent::Handler::HandleExecuteRequest(const ExecuteRequest& request) {
   executor_queue_.push(std::make_pair(request.copy_op_id, request.node_plan));
 }
 
-void NodeAgent::Handler::HandleRegisterTensorShardResponse(
-    const RegisterTensorShardResponse& response) {
+void NodeAgent::Handler::HandleRegisterTensorShardCoordinatorResponse(
+    const RegisterTensorShardCoordinatorResponse& response) {
   auto it = request_id_to_client_identity_.find(response.request_id);
   if (it == request_id_to_client_identity_.end()) {
     LOG_WARNING(
-        "Received RegisterTensorShardResponse for unknown request_id: "
-        "{}, ignoring",
+        "Received RegisterTensorShardCoordinatorResponse for unknown "
+        "request_id: {}, ignoring",
         response.request_id);
     return;
   }
   const auto& client_identity = it->second;
 
-  Comm::SendWithIdentity<RegisterTensorShardResponse>(
-      client_socket_, client_identity, response);
+  // Reconstruct TensorShardRef from TensorShardMetadata
+  std::optional<TensorShardRef> shard_ref;
+  if (response.shard_metadata.has_value()) {
+    const auto& metadata = response.shard_metadata.value();
+
+    // Build TensorDimMap from the spec's dims
+    TensorDimMap dims;
+    for (const auto& dim_spec : metadata.spec.dims) {
+      dims.emplace(dim_spec.name, TensorDim(dim_spec.name, dim_spec.size));
+    }
+
+    shard_ref.emplace(metadata.spec.name, metadata.id, std::move(dims));
+  }
+
+  // Send RegisterTensorShardNodeAgentResponse to client
+  RegisterTensorShardNodeAgentResponse client_response(
+      response.request_id, response.error_code, std::move(shard_ref));
+  Comm::SendWithIdentity<RegisterTensorShardNodeAgentResponse>(
+      client_socket_, client_identity, client_response);
 
   request_id_to_client_identity_.erase(it);
 }

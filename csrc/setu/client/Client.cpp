@@ -27,7 +27,7 @@ using setu::commons::messages::ClientRequest;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
-using setu::commons::messages::RegisterTensorShardResponse;
+using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
@@ -90,7 +90,7 @@ std::optional<TensorShardRef> Client::RegisterTensorShard(
   ClientRequest request = RegisterTensorShardRequest(shard_spec);
   Comm::Send(request_socket_, request);
 
-  auto response = Comm::Recv<RegisterTensorShardResponse>(request_socket_);
+  auto response = Comm::Recv<RegisterTensorShardNodeAgentResponse>(request_socket_);
 
   LOG_DEBUG("Client received response for tensor shard: {} with error code: {}",
             shard_spec.name, response.error_code);

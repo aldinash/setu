@@ -14,24 +14,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "commons/datatypes/TensorShardMetadata.h"
+#include "commons/messages/RegisterTensorShardCoordinatorResponse.h"
 //==============================================================================
-namespace setu::commons::datatypes {
+namespace setu::commons::messages {
 //==============================================================================
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 //==============================================================================
-void TensorShardMetadata::Serialize(BinaryBuffer& buffer) const {
+
+void RegisterTensorShardCoordinatorResponse::Serialize(
+    BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(id, owner, spec);
+  writer.WriteFields(request_id, error_code, shard_metadata);
 }
 
-TensorShardMetadata TensorShardMetadata::Deserialize(const BinaryRange& range) {
+RegisterTensorShardCoordinatorResponse
+RegisterTensorShardCoordinatorResponse::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [id_val, owner_val] = reader.ReadFields<ShardId, NodeId>();
-  auto spec_val = reader.Read<TensorShardSpec>();
-  return TensorShardMetadata(id_val, std::move(spec_val), owner_val);
+  auto [request_id_val, error_code_val, shard_metadata_val] =
+      reader.ReadFields<RequestId, ErrorCode,
+                        std::optional<TensorShardMetadata>>();
+  return RegisterTensorShardCoordinatorResponse(request_id_val, error_code_val,
+                                                shard_metadata_val);
 }
+
 //==============================================================================
-}  // namespace setu::commons::datatypes
+}  // namespace setu::commons::messages
 //==============================================================================

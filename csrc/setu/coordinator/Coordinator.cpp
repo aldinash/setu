@@ -29,12 +29,11 @@ using setu::commons::ShardId;
 using setu::commons::StringToUUID;
 using setu::commons::datatypes::TensorDim;
 using setu::commons::datatypes::TensorDimMap;
-using setu::commons::datatypes::TensorShardRef;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::NodeAgentRequest;
-using setu::commons::messages::RegisterTensorShardResponse;
+using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
@@ -78,7 +77,7 @@ void Coordinator::Stop() {
   executor_->Stop();
 }
 
-std::optional<TensorShardRef> Coordinator::RegisterTensorShard(
+std::optional<TensorShardMetadata> Coordinator::RegisterTensorShard(
     const TensorShardSpec& shard_spec) {
   LOG_DEBUG("Registering tensor shard: {}", shard_spec.name);
 
@@ -261,12 +260,12 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   NodeId owner_node_id = StringToUUID(node_agent_identity);
 
   // Register the tensor shard in the metastore with owner information
-  TensorShardRef shard_ref =
+  auto shard_metadata_ptr =
       metastore_.RegisterTensorShard(request.tensor_shard_spec, owner_node_id);
 
-  // Send response
-  RegisterTensorShardResponse response(request.request_id, ErrorCode::kSuccess,
-                                       shard_ref);
+  // Send response with TensorShardMetadata
+  RegisterTensorShardCoordinatorResponse response(
+      request.request_id, ErrorCode::kSuccess, *shard_metadata_ptr);
   outbox_queue_.push(OutboxMessage{node_agent_identity, response});
 
   // Check if all shards for this tensor are registered

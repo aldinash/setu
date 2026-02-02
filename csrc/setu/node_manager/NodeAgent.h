@@ -51,8 +51,8 @@ using setu::commons::messages::CopyOperationFinishedRequest;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
+using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
-using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
@@ -129,8 +129,8 @@ class NodeAgent {
     void HandleCopyOperationFinishedRequest(
         const CopyOperationFinishedRequest& request);
     void HandleExecuteRequest(const ExecuteRequest& request);
-    void HandleRegisterTensorShardResponse(
-        const RegisterTensorShardResponse& response);
+    void HandleRegisterTensorShardCoordinatorResponse(
+        const RegisterTensorShardCoordinatorResponse& response);
     void HandleSubmitCopyResponse(const SubmitCopyResponse& response);
     void HandleWaitForCopyResponse(const WaitForCopyResponse& response);
 
