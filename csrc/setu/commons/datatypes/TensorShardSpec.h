@@ -84,6 +84,18 @@ struct TensorShardSpec {
   [[nodiscard]] std::size_t GetNumDims() const { return dims.size(); }
 
   /**
+   * @brief Checks if this shard's owned region overlaps with another shard
+   *
+   * Two shards overlap if and only if ALL their dimensions overlap.
+   * Assumes both shards have the same number of dimensions (caller should
+   * validate).
+   *
+   * @param other The other shard specification to check against
+   * @return true if shards overlap, false otherwise
+   */
+  [[nodiscard]] bool Overlaps(const TensorShardSpec& other /*[in]*/) const;
+
+  /**
    * @brief Returns a string representation of the tensor shard spec
    *
    * @return String containing all spec properties
