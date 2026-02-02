@@ -24,33 +24,32 @@
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================
-using setu::commons::TensorName;
+using setu::commons::ShardId;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 //==============================================================================
 
 struct AllocateTensorRequest : public BaseRequest {
   /// @brief Constructs a request with auto-generated request ID.
-  explicit AllocateTensorRequest(TensorName tensor_name_param)
-      : BaseRequest(), tensor_name(std::move(tensor_name_param)) {}
+  explicit AllocateTensorRequest(std::vector<ShardId> shard_ids_param)
+      : BaseRequest(), shard_ids(std::move(shard_ids_param)) {}
 
   /// @brief Constructs a request with explicit request ID (for
   /// deserialization).
   AllocateTensorRequest(RequestId request_id_param,
-                        TensorName tensor_name_param)
-      : BaseRequest(request_id_param),
-        tensor_name(std::move(tensor_name_param)) {}
+                        std::vector<ShardId> shard_ids_param)
+      : BaseRequest(request_id_param), shard_ids(std::move(shard_ids_param)) {}
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("AllocateTensorRequest(request_id={}, tensor_name={})",
-                       request_id, tensor_name);
+    return std::format("AllocateTensorRequest(request_id={}, shard_ids={})",
+                       request_id, shard_ids);
   }
 
   void Serialize(BinaryBuffer& buffer) const;
 
   static AllocateTensorRequest Deserialize(const BinaryRange& range);
 
-  const TensorName tensor_name;
+  const std::vector<ShardId> shard_ids;
 };
 using AllocateTensorRequestPtr = std::shared_ptr<AllocateTensorRequest>;
 

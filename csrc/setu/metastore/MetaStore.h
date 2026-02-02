@@ -60,7 +60,8 @@ class MetaStore {
    *
    * @param shard_spec The specification describing the tensor shard to register
    * @param owner_node_id The NodeId of the NodeAgent that owns this shard
-   * @return TensorShardMetadataPtr containing the assigned shard ID and metadata
+   * @return TensorShardMetadataPtr containing the assigned shard ID and
+   * metadata
    */
   [[nodiscard]] TensorShardMetadataPtr RegisterTensorShard(
       const TensorShardSpec& shard_spec /*[in]*/,

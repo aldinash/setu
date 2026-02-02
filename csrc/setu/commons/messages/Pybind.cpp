@@ -52,8 +52,7 @@ void InitRegisterTensorShardCoordinatorResponsePybind(py::module_& m) {
   py::class_<RegisterTensorShardCoordinatorResponse>(
       m, "RegisterTensorShardCoordinatorResponse", py::module_local())
       .def(py::init<RequestId, ErrorCode, std::optional<TensorShardMetadata>>(),
-           py::arg("request_id"),
-           py::arg("error_code") = ErrorCode::kSuccess,
+           py::arg("request_id"), py::arg("error_code") = ErrorCode::kSuccess,
            py::arg("shard_metadata") = std::nullopt)
       .def_readonly("request_id",
                     &RegisterTensorShardCoordinatorResponse::request_id)
@@ -69,8 +68,7 @@ void InitRegisterTensorShardNodeAgentResponsePybind(py::module_& m) {
   py::class_<RegisterTensorShardNodeAgentResponse>(
       m, "RegisterTensorShardNodeAgentResponse", py::module_local())
       .def(py::init<RequestId, ErrorCode, std::optional<TensorShardRef>>(),
-           py::arg("request_id"),
-           py::arg("error_code") = ErrorCode::kSuccess,
+           py::arg("request_id"), py::arg("error_code") = ErrorCode::kSuccess,
            py::arg("shard_ref") = std::nullopt)
       .def_readonly("request_id",
                     &RegisterTensorShardNodeAgentResponse::request_id)

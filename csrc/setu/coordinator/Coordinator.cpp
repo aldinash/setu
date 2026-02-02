@@ -280,10 +280,16 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
         metastore_.GetTensorMetadata(request.tensor_shard_spec.name);
     ASSERT_VALID_POINTER_ARGUMENT(metadata);
 
-    // Send AllocateTensorRequest to all NodeAgents that own shards
-    AllocateTensorRequest allocate_request(request.tensor_shard_spec.name);
-    for (const NodeId& owner_id : metadata->GetOwnerNodeIds()) {
+    // Group shard IDs by owner node
+    std::unordered_map<NodeId, std::vector<ShardId>> owner_to_shard_ids;
+    for (const auto& [shard_id, shard_metadata] : metadata->shards) {
+      owner_to_shard_ids[shard_metadata->owner].push_back(shard_id);
+    }
+
+    // Send AllocateTensorRequest to each NodeAgent with its shard IDs
+    for (const auto& [owner_id, shard_ids] : owner_to_shard_ids) {
       Identity owner_identity = to_string(owner_id);
+      AllocateTensorRequest allocate_request(shard_ids);
       outbox_queue_.push(OutboxMessage{owner_identity, allocate_request});
     }
   }

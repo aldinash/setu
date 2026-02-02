@@ -22,8 +22,8 @@
 //==============================================================================
 #include "commons/datatypes/CopySpec.h"
 #include "commons/datatypes/TensorShard.h"
-#include "commons/datatypes/TensorShardSpec.h"
 #include "commons/datatypes/TensorShardMetadata.h"
+#include "commons/datatypes/TensorShardSpec.h"
 #include "commons/messages/Messages.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
@@ -40,6 +40,7 @@ using setu::commons::Queue;
 using setu::commons::RequestId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
+using setu::commons::datatypes::TensorShardMetadata;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
@@ -47,7 +48,6 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::CopyOperationPtr;
-using setu::commons::datatypes::TensorShardMetadata;
 using setu::metastore::MetaStore;
 //==============================================================================
 class Coordinator {

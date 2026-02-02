@@ -62,11 +62,10 @@ using Request = std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
                              AllocateTensorRequest,
                              CopyOperationFinishedRequest, ExecuteRequest>;
 
-using Response =
-    std::variant<RegisterTensorShardNodeAgentResponse, SubmitCopyResponse,
-                 WaitForCopyResponse, GetTensorHandleResponse,
-                 AllocateTensorResponse, CopyOperationFinishedResponse,
-                 ExecuteResponse>;
+using Response = std::variant<RegisterTensorShardNodeAgentResponse,
+                              SubmitCopyResponse, WaitForCopyResponse,
+                              GetTensorHandleResponse, AllocateTensorResponse,
+                              CopyOperationFinishedResponse, ExecuteResponse>;
 //==============================================================================
 }  // namespace setu::commons::messages
 //==============================================================================

@@ -25,8 +25,8 @@ using setu::commons::datatypes::TensorDim;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorShardMetadata;
 //==============================================================================
-TensorShardMetadataPtr MetaStore::RegisterTensorShard(const TensorShardSpec& shard_spec,
-                                              const NodeId& owner_node_id) {
+TensorShardMetadataPtr MetaStore::RegisterTensorShard(
+    const TensorShardSpec& shard_spec, const NodeId& owner_node_id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   auto& tensor_data = tensor_shards_data_[shard_spec.name];
