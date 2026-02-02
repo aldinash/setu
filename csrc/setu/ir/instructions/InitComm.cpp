@@ -14,29 +14,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-// Precompiled Headers for Native Module
-// Contains heavy headers commonly used across native C++ functionality
+#include "setu/ir/instructions/InitComm.h"
 //==============================================================================
-#pragma once
+namespace setu::ir {
+//==============================================================================
 
-// Standard library common headers
-#include "commons/StdCommon.h"
+std::string InitCommInstruction::ToString() const {
+  return std::format("InitCommInstruction(device_to_rank_size={})",
+                     device_to_rank.size());
+}
 
-// Heavy PyTorch headers (major compilation cost)
-#include "commons/TorchCommon.h"
+void InitCommInstruction::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(comm_id, device_to_rank);
+}
 
-// Boost headers (threading and UUID functionality)
-#include "commons/BoostCommon.h"
+InitCommInstruction InitCommInstruction::Deserialize(const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [comm_id, device_to_rank] =
+      reader.ReadFields<ncclUniqueId,
+                        std::unordered_map<DeviceRank, std::int32_t>>();
+  return InitCommInstruction(comm_id, std::move(device_to_rank));
+}
 
-// ZMQ headers (used in all ZMQ functionality)
-#include "commons/ZmqCommon.h"
-
-// CUDA headers (used in all CUDA functionality)
-#include <cuda_runtime_api.h>  // NOLINT
-
-// NCCL headers
-#include <nccl.h>
-
-// Common Setu headers (stable interfaces)
-#include "commons/Logging.h"
+//==============================================================================
+}  // namespace setu::ir
 //==============================================================================

@@ -14,29 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-// Precompiled Headers for Native Module
-// Contains heavy headers commonly used across native C++ functionality
+#include "setu/ir/instructions/UseComm.h"
 //==============================================================================
-#pragma once
+namespace setu::ir {
+//==============================================================================
 
-// Standard library common headers
-#include "commons/StdCommon.h"
+std::string UseCommInstruction::ToString() const {
+  return std::format("UseCommInstruction(comm_id_present={})", true);
+}
 
-// Heavy PyTorch headers (major compilation cost)
-#include "commons/TorchCommon.h"
+void UseCommInstruction::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(comm_id);
+}
 
-// Boost headers (threading and UUID functionality)
-#include "commons/BoostCommon.h"
+UseCommInstruction UseCommInstruction::Deserialize(const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [comm_id] = reader.ReadFields<ncclUniqueId>();
+  return UseCommInstruction(comm_id);
+}
 
-// ZMQ headers (used in all ZMQ functionality)
-#include "commons/ZmqCommon.h"
-
-// CUDA headers (used in all CUDA functionality)
-#include <cuda_runtime_api.h>  // NOLINT
-
-// NCCL headers
-#include <nccl.h>
-
-// Common Setu headers (stable interfaces)
-#include "commons/Logging.h"
+//==============================================================================
+}  // namespace setu::ir
 //==============================================================================
