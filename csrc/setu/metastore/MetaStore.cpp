@@ -95,29 +95,36 @@ bool MetaStore::ValidateShardRegistration(
   }
 
   // Check dimension names and sizes match
-  for (std::size_t i = 0; i < shard_spec.dims.size(); ++i) {
-    if (shard_spec.dims[i].name != ref_spec.dims[i].name) {
+  auto [shard_it, ref_it] = std::ranges::mismatch(
+      shard_spec.dims, ref_spec.dims, [](const auto& a, const auto& b) {
+        return a.name == b.name && a.size == b.size;
+      });
+
+  if (shard_it != shard_spec.dims.end()) {
+    auto idx = static_cast<std::size_t>(shard_it - shard_spec.dims.begin());
+
+    if (shard_it->name != ref_it->name) {
       LOG_WARNING(
           "Dimension name mismatch for tensor '{}' at index {}: '{}' vs '{}'",
-          shard_spec.name, i, shard_spec.dims[i].name, ref_spec.dims[i].name);
-      return false;
-    }
-
-    if (shard_spec.dims[i].size != ref_spec.dims[i].size) {
+          shard_spec.name, idx, shard_it->name, ref_it->name);
+    } else {
       LOG_WARNING("Dimension size mismatch for tensor '{}', dim '{}': {} vs {}",
-                  shard_spec.name, shard_spec.dims[i].name,
-                  shard_spec.dims[i].size, ref_spec.dims[i].size);
-      return false;
+                  shard_spec.name, shard_it->name, shard_it->size,
+                  ref_it->size);
     }
+    return false;
   }
 
   // Check for overlaps with all existing shards
-  for (const auto& [existing_id, existing_shard] : registered_data.shards) {
-    if (shard_spec.Overlaps(existing_shard->spec)) {
-      LOG_WARNING("Shard for tensor '{}' overlaps with existing shard {}",
-                  shard_spec.name, existing_id);
-      return false;
-    }
+  auto overlap_it = std::ranges::find_if(
+      registered_data.shards, [&shard_spec](const auto& pair) {
+        return shard_spec.Overlaps(pair.second->spec);
+      });
+
+  if (overlap_it != registered_data.shards.end()) {
+    LOG_WARNING("Shard for tensor '{}' overlaps with existing shard {}",
+                shard_spec.name, overlap_it->first);
+    return false;
   }
 
   return true;
