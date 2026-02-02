@@ -101,6 +101,12 @@ std::optional<TensorShardRef> Client::RegisterTensorShard(
     return std::nullopt;
   }
 
+  if (!response.shard_ref.has_value()) {
+    LOG_ERROR("Client receieved success response but shard_ref is missing {}",
+              shard_spec.name);
+    return std::nullopt;
+  }
+
   client_shards_.push_back(
       std::make_shared<TensorShardRef>(response.shard_ref.value()));
 
