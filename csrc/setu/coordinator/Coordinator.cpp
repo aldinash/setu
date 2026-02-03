@@ -266,9 +266,9 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   // Send response with TensorShardMetadata
   if (shard_metadata_ptr) {
     RegisterTensorShardCoordinatorResponse response(
-      request.request_id, ErrorCode::kSuccess, *shard_metadata_ptr);
-      outbox_queue_.push(OutboxMessage{node_agent_identity, response});
-    } else {
+        request.request_id, ErrorCode::kSuccess, *shard_metadata_ptr);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+  } else {
     LOG_ERROR("Failed to register tensor shard: {}", request.tensor_shard_spec);
     RegisterTensorShardCoordinatorResponse response(
         request.request_id, ErrorCode::kInvalidArguments);
