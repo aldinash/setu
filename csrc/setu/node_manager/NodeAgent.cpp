@@ -43,8 +43,6 @@ using setu::commons::messages::ExecuteProgramRequest;
 using setu::commons::messages::ExecuteProgramResponse;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::ExecuteResponse;
-using setu::commons::messages::GetTensorHandleRequest;
-using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
@@ -225,8 +223,14 @@ void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
           HandleSubmitCopyRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, WaitForCopyRequest>) {
           HandleWaitForCopyRequest(client_identity, msg);
-        } else if constexpr (std::is_same_v<T, GetTensorHandleRequest>) {
-          HandleGetTensorHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, GetReadHandleRequest>) {
+          HandleGetReadHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, ReleaseReadHandleRequest>) {
+          HandleReleaseReadHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, GetWriteHandleRequest>) {
+          HandleGetWriteHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, ReleaseWriteHandleRequest>) {
+          HandleReleaseWriteHandleRequest(client_identity, msg);
         }
       },
       request);
@@ -286,27 +290,144 @@ void NodeAgent::Handler::HandleWaitForCopyRequest(
   WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
 }
 
-void NodeAgent::Handler::HandleGetTensorHandleRequest(
-    const Identity& client_identity, const GetTensorHandleRequest& request) {
-  LOG_DEBUG("Handling GetTensorHandleRequest for shard: {}", request.shard_id);
+void NodeAgent::Handler::HandleGetReadHandleRequest(
+    const Identity& client_identity, const GetReadHandleRequest& request) {
+  LOG_DEBUG("Handling GetReadHandleRequest for shard: {} from client: {}",
+            request.shard_id, request.client_id);
 
-  auto it = shard_id_to_tensor_.find(request.shard_id);
-  if (it == shard_id_to_tensor_.end()) {
+  TensorShardPtr shard;
+  bool found = tensor_shards_.visit(
+      request.shard_id, [&shard](const auto& entry) { shard = entry.second; });
+
+  if (!found) {
     LOG_ERROR("Shard not found: {}", request.shard_id);
-    GetTensorHandleResponse response(request.request_id,
-                                     ErrorCode::kTensorNotFound);
-    Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
-                                                    client_identity, response);
+    GetReadHandleResponse response(request.request_id,
+                                   ErrorCode::kTensorNotFound);
+    Comm::SendWithIdentity<GetReadHandleResponse>(client_socket_,
+                                                  client_identity, response);
     return;
   }
 
-  auto tensor_ipc_spec = PrepareTensorIPCSpec(it->second);
-  GetTensorHandleResponse response(request.request_id, ErrorCode::kSuccess,
-                                   std::move(tensor_ipc_spec));
-  Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
-                                                  client_identity, response);
+  // Create read handle and store it (acquires shared lock)
+  auto read_handle = std::make_shared<TensorShardReadHandle>(shard);
+  active_read_locks_[request.client_id][request.shard_id] = read_handle;
 
-  LOG_DEBUG("Sent tensor handle response for shard: {}", request.shard_id);
+  auto tensor_ipc_spec = PrepareTensorIPCSpec(shard->GetTensor());
+  GetReadHandleResponse response(request.request_id, ErrorCode::kSuccess,
+                                 std::move(tensor_ipc_spec));
+  Comm::SendWithIdentity<GetReadHandleResponse>(client_socket_, client_identity,
+                                                response);
+
+  LOG_DEBUG("Sent read handle response for shard: {}", request.shard_id);
+}
+
+void NodeAgent::Handler::HandleReleaseReadHandleRequest(
+    const Identity& client_identity, const ReleaseReadHandleRequest& request) {
+  LOG_DEBUG("Handling ReleaseReadHandleRequest for shard: {} from client: {}",
+            request.shard_id, request.client_id);
+
+  auto client_it = active_read_locks_.find(request.client_id);
+  if (client_it == active_read_locks_.end()) {
+    LOG_ERROR("No read locks found for client: {}", request.client_id);
+    ReleaseReadHandleResponse response(request.request_id,
+                                       ErrorCode::kInternalError);
+    Comm::SendWithIdentity<ReleaseReadHandleResponse>(
+        client_socket_, client_identity, response);
+    return;
+  }
+
+  auto shard_it = client_it->second.find(request.shard_id);
+  if (shard_it == client_it->second.end()) {
+    LOG_ERROR("No read lock found for shard: {} from client: {}",
+              request.shard_id, request.client_id);
+    ReleaseReadHandleResponse response(request.request_id,
+                                       ErrorCode::kInternalError);
+    Comm::SendWithIdentity<ReleaseReadHandleResponse>(
+        client_socket_, client_identity, response);
+    return;
+  }
+
+  // Remove the handle (releases shared lock)
+  client_it->second.erase(shard_it);
+  if (client_it->second.empty()) {
+    active_read_locks_.erase(client_it);
+  }
+
+  ReleaseReadHandleResponse response(request.request_id, ErrorCode::kSuccess);
+  Comm::SendWithIdentity<ReleaseReadHandleResponse>(client_socket_,
+                                                    client_identity, response);
+
+  LOG_DEBUG("Released read handle for shard: {}", request.shard_id);
+}
+
+void NodeAgent::Handler::HandleGetWriteHandleRequest(
+    const Identity& client_identity, const GetWriteHandleRequest& request) {
+  LOG_DEBUG("Handling GetWriteHandleRequest for shard: {} from client: {}",
+            request.shard_id, request.client_id);
+
+  TensorShardPtr shard;
+  bool found = tensor_shards_.visit(
+      request.shard_id, [&shard](const auto& entry) { shard = entry.second; });
+
+  if (!found) {
+    LOG_ERROR("Shard not found: {}", request.shard_id);
+    GetWriteHandleResponse response(request.request_id,
+                                    ErrorCode::kTensorNotFound);
+    Comm::SendWithIdentity<GetWriteHandleResponse>(client_socket_,
+                                                   client_identity, response);
+    return;
+  }
+
+  // Create write handle and store it (acquires exclusive lock)
+  auto write_handle = std::make_shared<TensorShardWriteHandle>(shard);
+  active_write_locks_[request.client_id][request.shard_id] = write_handle;
+
+  auto tensor_ipc_spec = PrepareTensorIPCSpec(shard->GetTensor());
+  GetWriteHandleResponse response(request.request_id, ErrorCode::kSuccess,
+                                  std::move(tensor_ipc_spec));
+  Comm::SendWithIdentity<GetWriteHandleResponse>(client_socket_,
+                                                 client_identity, response);
+
+  LOG_DEBUG("Sent write handle response for shard: {}", request.shard_id);
+}
+
+void NodeAgent::Handler::HandleReleaseWriteHandleRequest(
+    const Identity& client_identity, const ReleaseWriteHandleRequest& request) {
+  LOG_DEBUG("Handling ReleaseWriteHandleRequest for shard: {} from client: {}",
+            request.shard_id, request.client_id);
+
+  auto client_it = active_write_locks_.find(request.client_id);
+  if (client_it == active_write_locks_.end()) {
+    LOG_ERROR("No write locks found for client: {}", request.client_id);
+    ReleaseWriteHandleResponse response(request.request_id,
+                                        ErrorCode::kInternalError);
+    Comm::SendWithIdentity<ReleaseWriteHandleResponse>(
+        client_socket_, client_identity, response);
+    return;
+  }
+
+  auto shard_it = client_it->second.find(request.shard_id);
+  if (shard_it == client_it->second.end()) {
+    LOG_ERROR("No write lock found for shard: {} from client: {}",
+              request.shard_id, request.client_id);
+    ReleaseWriteHandleResponse response(request.request_id,
+                                        ErrorCode::kInternalError);
+    Comm::SendWithIdentity<ReleaseWriteHandleResponse>(
+        client_socket_, client_identity, response);
+    return;
+  }
+
+  // Remove the handle (releases exclusive lock)
+  client_it->second.erase(shard_it);
+  if (client_it->second.empty()) {
+    active_write_locks_.erase(client_it);
+  }
+
+  ReleaseWriteHandleResponse response(request.request_id, ErrorCode::kSuccess);
+  Comm::SendWithIdentity<ReleaseWriteHandleResponse>(client_socket_,
+                                                     client_identity, response);
+
+  LOG_DEBUG("Released write handle for shard: {}", request.shard_id);
 }
 
 void NodeAgent::Handler::HandleAllocateTensorRequest(
@@ -439,8 +560,9 @@ void NodeAgent::Handler::AllocateTensor(
 
   torch::Tensor tensor = torch::empty(shape, options);
 
-  // Store the tensor by shard ID
-  shard_id_to_tensor_[shard_metadata.id] = std::move(tensor);
+  // Create TensorShard with metadata and tensor, then store it
+  auto shard = std::make_shared<TensorShard>(shard_metadata, std::move(tensor));
+  tensor_shards_.insert({shard_metadata.id, std::move(shard)});
 
   LOG_DEBUG("Successfully allocated shard {} with shape {} on device {}",
             shard_metadata.id, shape, spec.device.torch_device.str());

@@ -24,19 +24,25 @@
 //==============================================================================
 namespace setu::client {
 //==============================================================================
+using setu::commons::GenerateUUID;
 using setu::commons::datatypes::TensorShardRefPtr;
 using setu::commons::messages::ClientRequest;
-using setu::commons::messages::GetTensorHandleRequest;
-using setu::commons::messages::GetTensorHandleResponse;
+using setu::commons::messages::GetReadHandleRequest;
+using setu::commons::messages::GetReadHandleResponse;
+using setu::commons::messages::GetWriteHandleRequest;
+using setu::commons::messages::GetWriteHandleResponse;
 using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
+using setu::commons::messages::ReleaseReadHandleRequest;
+using setu::commons::messages::ReleaseReadHandleResponse;
+using setu::commons::messages::ReleaseWriteHandleRequest;
+using setu::commons::messages::ReleaseWriteHandleResponse;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
-using setu::commons::GenerateUUID;
 //==============================================================================
 Client::Client() : client_id_(GenerateUUID()) {
   zmq_context_ = std::make_shared<zmq::context_t>();
@@ -61,7 +67,7 @@ void Client::Connect(const std::string& endpoint) {
   LOG_DEBUG("Client connecting to {}", endpoint);
 
   request_socket_ = ZmqHelper::CreateAndConnectSocket(
-      zmq_context_, zmq::socket_type::req, endpoint);
+      zmq_context_, zmq::socket_type::req, endpoint, to_string(client_id_));
 
   endpoint_ = endpoint;
   is_connected_ = true;
@@ -150,28 +156,82 @@ void Client::WaitForCopy(CopyOperationId copy_op_id) {
       copy_op_id, response.error_code);
 }
 
-TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
-  LOG_DEBUG("Client requesting tensor handle for shard: {}",
-            shard_ref.shard_id);
+TensorIPCSpec Client::GetReadHandle(const TensorShardRef& shard_ref) {
+  LOG_DEBUG("Client requesting read handle for shard: {}", shard_ref.shard_id);
 
-  ClientRequest request = GetTensorHandleRequest(shard_ref.shard_id);
+  ClientRequest request = GetReadHandleRequest(client_id_, shard_ref.shard_id);
   Comm::Send(request_socket_, request);
 
-  auto response = Comm::Recv<GetTensorHandleResponse>(request_socket_);
+  auto response = Comm::Recv<GetReadHandleResponse>(request_socket_);
 
   LOG_DEBUG(
-      "Client received tensor handle response for shard: {} with error code: "
-      "{}",
+      "Client received read handle response for shard: {} with error code: {}",
       shard_ref.shard_id, response.error_code);
 
   ASSERT_VALID_RUNTIME(response.error_code == ErrorCode::kSuccess,
-                       "Failed to get tensor handle for shard {}: {}",
+                       "Failed to get read handle for shard {}: {}",
                        shard_ref.shard_id, response.error_code);
   ASSERT_VALID_RUNTIME(response.tensor_ipc_spec.has_value(),
                        "Tensor IPC spec is missing for shard {}",
                        shard_ref.shard_id);
 
   return response.tensor_ipc_spec.value();
+}
+
+void Client::ReleaseReadHandle(const TensorShardRef& shard_ref) {
+  LOG_DEBUG("Client releasing read handle for shard: {}", shard_ref.shard_id);
+
+  ClientRequest request =
+      ReleaseReadHandleRequest(client_id_, shard_ref.shard_id);
+  Comm::Send(request_socket_, request);
+
+  auto response = Comm::Recv<ReleaseReadHandleResponse>(request_socket_);
+
+  LOG_DEBUG("Client released read handle for shard: {} with error code: {}",
+            shard_ref.shard_id, response.error_code);
+
+  ASSERT_VALID_RUNTIME(response.error_code == ErrorCode::kSuccess,
+                       "Failed to release read handle for shard {}: {}",
+                       shard_ref.shard_id, response.error_code);
+}
+
+TensorIPCSpec Client::GetWriteHandle(const TensorShardRef& shard_ref) {
+  LOG_DEBUG("Client requesting write handle for shard: {}", shard_ref.shard_id);
+
+  ClientRequest request = GetWriteHandleRequest(client_id_, shard_ref.shard_id);
+  Comm::Send(request_socket_, request);
+
+  auto response = Comm::Recv<GetWriteHandleResponse>(request_socket_);
+
+  LOG_DEBUG(
+      "Client received write handle response for shard: {} with error code: {}",
+      shard_ref.shard_id, response.error_code);
+
+  ASSERT_VALID_RUNTIME(response.error_code == ErrorCode::kSuccess,
+                       "Failed to get write handle for shard {}: {}",
+                       shard_ref.shard_id, response.error_code);
+  ASSERT_VALID_RUNTIME(response.tensor_ipc_spec.has_value(),
+                       "Tensor IPC spec is missing for shard {}",
+                       shard_ref.shard_id);
+
+  return response.tensor_ipc_spec.value();
+}
+
+void Client::ReleaseWriteHandle(const TensorShardRef& shard_ref) {
+  LOG_DEBUG("Client releasing write handle for shard: {}", shard_ref.shard_id);
+
+  ClientRequest request =
+      ReleaseWriteHandleRequest(client_id_, shard_ref.shard_id);
+  Comm::Send(request_socket_, request);
+
+  auto response = Comm::Recv<ReleaseWriteHandleResponse>(request_socket_);
+
+  LOG_DEBUG("Client released write handle for shard: {} with error code: {}",
+            shard_ref.shard_id, response.error_code);
+
+  ASSERT_VALID_RUNTIME(response.error_code == ErrorCode::kSuccess,
+                       "Failed to release write handle for shard {}: {}",
+                       shard_ref.shard_id, response.error_code);
 }
 
 const std::vector<TensorShardRefPtr>& Client::GetShards() const {

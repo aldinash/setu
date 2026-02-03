@@ -59,7 +59,27 @@ class Client {
 
   void WaitForCopy(CopyOperationId copy_op_id);
 
-  TensorIPCSpec GetTensorHandle(const TensorShardRef& shard_ref);
+  /// @brief Acquire a read handle for a tensor shard.
+  /// The server will acquire a shared lock and return the IPC spec.
+  /// @param shard_ref Reference to the shard to acquire read access for
+  /// @return TensorIPCSpec for accessing the tensor data
+  TensorIPCSpec GetReadHandle(const TensorShardRef& shard_ref);
+
+  /// @brief Release a read handle for a tensor shard.
+  /// The server will release the shared lock.
+  /// @param shard_ref Reference to the shard to release read access for
+  void ReleaseReadHandle(const TensorShardRef& shard_ref);
+
+  /// @brief Acquire a write handle for a tensor shard.
+  /// The server will acquire an exclusive lock and return the IPC spec.
+  /// @param shard_ref Reference to the shard to acquire write access for
+  /// @return TensorIPCSpec for accessing the tensor data
+  TensorIPCSpec GetWriteHandle(const TensorShardRef& shard_ref);
+
+  /// @brief Release a write handle for a tensor shard.
+  /// The server will release the exclusive lock.
+  /// @param shard_ref Reference to the shard to release write access for
+  void ReleaseWriteHandle(const TensorShardRef& shard_ref);
 
   [[nodiscard]] const std::vector<TensorShardRefPtr>& GetShards() const;
 

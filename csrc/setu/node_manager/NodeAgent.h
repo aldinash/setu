@@ -22,6 +22,8 @@
 #include "commons/Types.h"
 //==============================================================================
 #include "commons/datatypes/CopySpec.h"
+#include "commons/datatypes/TensorShard.h"
+#include "commons/datatypes/TensorShardHandle.h"
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
@@ -33,6 +35,7 @@
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
+using setu::commons::ClientId;
 using setu::commons::CopyOperationId;
 using setu::commons::DeviceRank;
 using setu::commons::Identity;
@@ -43,20 +46,33 @@ using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
+using setu::commons::datatypes::TensorShard;
 using setu::commons::datatypes::TensorShardMetadata;
 using setu::commons::datatypes::TensorShardMetadataMap;
 using setu::commons::datatypes::TensorShardMetadataPtr;
+using setu::commons::datatypes::TensorShardPtr;
+using setu::commons::datatypes::TensorShardReadHandle;
+using setu::commons::datatypes::TensorShardReadHandlePtr;
 using setu::commons::datatypes::TensorShardRef;
+using setu::commons::datatypes::TensorShardsConcurrentMap;
 using setu::commons::datatypes::TensorShardSpec;
+using setu::commons::datatypes::TensorShardWriteHandle;
+using setu::commons::datatypes::TensorShardWriteHandlePtr;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::ClientRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
 using setu::commons::messages::ExecuteRequest;
-using setu::commons::messages::GetTensorHandleRequest;
-using setu::commons::messages::GetTensorHandleResponse;
+using setu::commons::messages::GetReadHandleRequest;
+using setu::commons::messages::GetReadHandleResponse;
+using setu::commons::messages::GetWriteHandleRequest;
+using setu::commons::messages::GetWriteHandleResponse;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
+using setu::commons::messages::ReleaseReadHandleRequest;
+using setu::commons::messages::ReleaseReadHandleResponse;
+using setu::commons::messages::ReleaseWriteHandleRequest;
+using setu::commons::messages::ReleaseWriteHandleResponse;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
@@ -125,8 +141,16 @@ class NodeAgent {
                                  const SubmitCopyRequest& request);
     void HandleWaitForCopyRequest(const Identity& client_identity,
                                   const WaitForCopyRequest& request);
-    void HandleGetTensorHandleRequest(const Identity& client_identity,
-                                      const GetTensorHandleRequest& request);
+    void HandleGetReadHandleRequest(const Identity& client_identity,
+                                    const GetReadHandleRequest& request);
+    void HandleReleaseReadHandleRequest(
+        const Identity& client_identity,
+        const ReleaseReadHandleRequest& request);
+    void HandleGetWriteHandleRequest(const Identity& client_identity,
+                                     const GetWriteHandleRequest& request);
+    void HandleReleaseWriteHandleRequest(
+        const Identity& client_identity,
+        const ReleaseWriteHandleRequest& request);
 
     // Coordinator message handlers
     void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
@@ -164,9 +188,23 @@ class NodeAgent {
         pending_waits_;
 
     TensorShardMetadataMap tensor_shard_metadata_map_;
-    /// TODO: Call torch::Tensor something like TensorStorage and probably move
-    /// to TensorShard (no raw device ptr in TensorShard?)
-    std::unordered_map<ShardId, torch::Tensor> shard_id_to_tensor_;
+
+    /// Concurrent map from shard_id to TensorShard (contains tensor and mutex)
+    TensorShardsConcurrentMap tensor_shards_;
+
+    /// Type aliases for lock tracking maps
+    using ClientReadLockMap =
+        std::unordered_map<ShardId, TensorShardReadHandlePtr>;
+    using ClientWriteLockMap =
+        std::unordered_map<ShardId, TensorShardWriteHandlePtr>;
+
+    /// Active read locks: shard_id -> (client_id -> read handle)
+    /// Handle existence keeps the shared_lock alive
+    std::unordered_map<ClientId, ClientReadLockMap> active_read_locks_;
+
+    /// Active write locks: shard_id -> (client_id -> write handle)
+    /// Handle existence keeps the unique_lock alive
+    std::unordered_map<ClientId, ClientWriteLockMap> active_write_locks_;
   };
 
   //============================================================================

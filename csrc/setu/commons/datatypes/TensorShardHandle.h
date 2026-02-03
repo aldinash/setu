@@ -17,6 +17,7 @@
 #pragma once
 //==============================================================================
 #include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 //==============================================================================
 #include "commons/ClassTraits.h"
 #include "commons/Logging.h"
@@ -58,7 +59,16 @@ class TensorShardReadHandle : public NonCopyableNonMovable {
    *
    * @return Const pointer to device memory
    */
-  [[nodiscard]] DevicePtr GetDevicePtr() const { return shard->device_ptr; }
+  [[nodiscard]] DevicePtr GetDevicePtr() const { return shard->GetDevicePtr(); }
+
+  /**
+   * @brief Get the underlying torch::Tensor
+   *
+   * @return Const reference to the tensor
+   */
+  [[nodiscard]] const torch::Tensor& GetTensor() const {
+    return shard->GetTensor();
+  }
 
   /**
    * @brief Get the shard being accessed
@@ -106,7 +116,16 @@ class TensorShardWriteHandle : public NonCopyableNonMovable {
    *
    * @return Pointer to device memory
    */
-  [[nodiscard]] DevicePtr GetDevicePtr() const { return shard->device_ptr; }
+  [[nodiscard]] DevicePtr GetDevicePtr() const { return shard->GetDevicePtr(); }
+
+  /**
+   * @brief Get the underlying torch::Tensor
+   *
+   * @return Const reference to the tensor
+   */
+  [[nodiscard]] const torch::Tensor& GetTensor() const {
+    return shard->GetTensor();
+  }
 
   /**
    * @brief Get the shard being accessed

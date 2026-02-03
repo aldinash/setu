@@ -57,12 +57,21 @@ void InitClientPybindClass(py::module_& m) {
            "Submit a copy operation and return an operation ID")
       .def("wait_for_copy", &Client::WaitForCopy, py::arg("copy_op_id"),
            "Wait for a copy operation to complete")
-      .def("get_tensor_handle", &Client::GetTensorHandle, py::arg("shard_ref"),
-           "Get the IPC handle for a tensor shard")
+      .def("get_read_handle", &Client::GetReadHandle, py::arg("shard_ref"),
+           "Acquire a read handle for a tensor shard (acquires shared lock)")
+      .def("release_read_handle", &Client::ReleaseReadHandle,
+           py::arg("shard_ref"),
+           "Release a read handle for a tensor shard (releases shared lock)")
+      .def(
+          "get_write_handle", &Client::GetWriteHandle, py::arg("shard_ref"),
+          "Acquire a write handle for a tensor shard (acquires exclusive lock)")
+      .def(
+          "release_write_handle", &Client::ReleaseWriteHandle,
+          py::arg("shard_ref"),
+          "Release a write handle for a tensor shard (releases exclusive lock)")
       .def("get_shards", &Client::GetShards,
            "Get all registered tensor shard references")
-      .def("get_client_id", &Client::GetClientId,
-           "Get the unique client ID");
+      .def("get_client_id", &Client::GetClientId, "Get the unique client ID");
 }
 //==============================================================================
 void InitEnumsPybindClass(py::module_& m) {

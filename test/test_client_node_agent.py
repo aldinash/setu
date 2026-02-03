@@ -105,8 +105,8 @@ def _register_tensor(
     return shard_ref
 
 
-def _register_and_get_handle(endpoint: str, tensor_name: str, dims_spec):
-    """Register a tensor and get its IPC handle."""
+def _register_and_get_read_handle(endpoint: str, tensor_name: str, dims_spec):
+    """Register a tensor and get its IPC handle via read lock."""
     from setu._client import Client
     from setu._commons.datatypes import Device, TensorShardSpec
 
@@ -127,7 +127,12 @@ def _register_and_get_handle(endpoint: str, tensor_name: str, dims_spec):
     if shard_ref is None:
         raise RuntimeError("Failed to register tensor")
 
-    tensor_ipc_spec = client.get_tensor_handle(shard_ref)
+    # Get read handle (acquires shared lock)
+    tensor_ipc_spec = client.get_read_handle(shard_ref)
+
+    # Release the read handle (releases shared lock)
+    client.release_read_handle(shard_ref)
+
     client.disconnect()
 
     return tensor_ipc_spec
@@ -206,8 +211,8 @@ def test_register_tensor_shard(infrastructure):
 
 
 @pytest.mark.gpu
-def test_get_tensor_handle(infrastructure):
-    """Test getting a tensor IPC handle after registration."""
+def test_get_read_handle(infrastructure):
+    """Test getting a tensor IPC handle via read lock after registration."""
     from setu._commons.datatypes import TensorDimSpec
 
     client_endpoint = infrastructure["client_endpoint"]
@@ -217,7 +222,7 @@ def test_get_tensor_handle(infrastructure):
         TensorDimSpec("dim_1", 8, 0, 8),
     ]
 
-    tensor_ipc_spec = _register_and_get_handle(
+    tensor_ipc_spec = _register_and_get_read_handle(
         client_endpoint, "handle_test_tensor", dims
     )
     spec_dict = tensor_ipc_spec.to_dict()
@@ -238,6 +243,97 @@ def test_get_tensor_handle(infrastructure):
     ]
     for field in required_fields:
         assert field in spec_dict, f"Missing field: {field}"
+
+
+@pytest.mark.gpu
+def test_get_write_handle(infrastructure):
+    """Test getting a tensor IPC handle via write lock after registration."""
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    client_endpoint = infrastructure["client_endpoint"]
+
+    client = Client()
+    client.connect(client_endpoint)
+
+    device = Device(torch_device=torch.device("cuda:0"))
+    dims = [
+        TensorDimSpec("dim_0", 4, 0, 4),
+        TensorDimSpec("dim_1", 8, 0, 8),
+    ]
+    shard_spec = TensorShardSpec(
+        name="write_handle_test_tensor",
+        dims=dims,
+        dtype=torch.float32,
+        device=device,
+    )
+
+    shard_ref = client.register_tensor_shard(shard_spec)
+    assert shard_ref is not None, "Failed to register tensor"
+
+    # Get write handle (acquires exclusive lock)
+    tensor_ipc_spec = client.get_write_handle(shard_ref)
+    spec_dict = tensor_ipc_spec.to_dict()
+
+    assert spec_dict.get("tensor_size") == [4, 8], (
+        f"Unexpected tensor size: {spec_dict.get('tensor_size')}"
+    )
+
+    # Release the write handle (releases exclusive lock)
+    client.release_write_handle(shard_ref)
+
+    client.disconnect()
+
+
+@pytest.mark.gpu
+def test_multiple_concurrent_read_handles(infrastructure):
+    """Test that multiple clients can acquire read handles simultaneously."""
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    client_endpoint = infrastructure["client_endpoint"]
+
+    # First client registers the tensor
+    client_1 = Client()
+    client_1.connect(client_endpoint)
+
+    device = Device(torch_device=torch.device("cuda:0"))
+    dims = [
+        TensorDimSpec("dim_0", 8, 0, 8),
+        TensorDimSpec("dim_1", 16, 0, 16),
+    ]
+    shard_spec = TensorShardSpec(
+        name="concurrent_read_tensor",
+        dims=dims,
+        dtype=torch.float32,
+        device=device,
+    )
+
+    shard_ref = client_1.register_tensor_shard(shard_spec)
+    assert shard_ref is not None, "Failed to register tensor"
+
+    # Client 1 acquires read handle
+    handle_1 = client_1.get_read_handle(shard_ref)
+    assert handle_1 is not None, "Client 1 failed to get read handle"
+
+    # Client 2 connects and acquires read handle on same shard
+    # (should succeed since read locks are shared)
+    client_2 = Client()
+    client_2.connect(client_endpoint)
+
+    handle_2 = client_2.get_read_handle(shard_ref)
+    assert handle_2 is not None, "Client 2 failed to get read handle"
+
+    # Both handles should have the same tensor size
+    assert handle_1.to_dict()["tensor_size"] == [8, 16]
+    assert handle_2.to_dict()["tensor_size"] == [8, 16]
+
+    # Release both handles
+    client_1.release_read_handle(shard_ref)
+    client_2.release_read_handle(shard_ref)
+
+    client_1.disconnect()
+    client_2.disconnect()
 
 
 @pytest.mark.gpu
@@ -352,10 +448,10 @@ def test_multiple_shards_same_client_get_handles(infrastructure):
     shards = client.get_shards()
     assert len(shards) == 3, f"Expected 3 shards, got {len(shards)}"
 
-    # Get handles for all registered shards
+    # Get read handles for all registered shards
     for shard_ref, (tensor_name, dim_sizes) in zip(registered_refs, tensor_configs):
-        handle = client.get_tensor_handle(shard_ref)
-        assert handle is not None, f"Failed to get handle for {tensor_name}"
+        handle = client.get_read_handle(shard_ref)
+        assert handle is not None, f"Failed to get read handle for {tensor_name}"
 
         spec_dict = handle.to_dict()
         expected_sizes = [size for _, size in dim_sizes]
@@ -363,6 +459,9 @@ def test_multiple_shards_same_client_get_handles(infrastructure):
             f"Size mismatch for {tensor_name}: "
             f"expected {expected_sizes}, got {spec_dict['tensor_size']}"
         )
+
+        # Release the read handle
+        client.release_read_handle(shard_ref)
 
     client.disconnect()
 
@@ -487,22 +586,22 @@ def test_distributed_tensor_allocation(multi_node_infrastructure):
     # Wait for AllocateTensorRequest to be processed
     time.sleep(0.5)
 
-    # Verify both NodeAgents allocated the tensor by getting handles
+    # Verify both NodeAgents allocated the tensor by getting read handles
     client_0 = Client()
     client_0.connect(infra["client_endpoint_0"])
-    handle_0 = client_0.get_tensor_handle(shard_ref_0)
+    handle_0 = client_0.get_read_handle(shard_ref_0)
+    assert handle_0 is not None, "NodeAgent 0 should have allocated tensor"
+    assert handle_0.to_dict()["tensor_size"] == [512, 768]
+    client_0.release_read_handle(shard_ref_0)
     client_0.disconnect()
 
     client_1 = Client()
     client_1.connect(infra["client_endpoint_1"])
-    handle_1 = client_1.get_tensor_handle(shard_ref_1)
-    client_1.disconnect()
-
-    assert handle_0 is not None, "NodeAgent 0 should have allocated tensor"
+    handle_1 = client_1.get_read_handle(shard_ref_1)
     assert handle_1 is not None, "NodeAgent 1 should have allocated tensor"
-
-    assert handle_0.to_dict()["tensor_size"] == [512, 768]
     assert handle_1.to_dict()["tensor_size"] == [512, 768]
+    client_1.release_read_handle(shard_ref_1)
+    client_1.disconnect()
 
 
 if __name__ == "__main__":
