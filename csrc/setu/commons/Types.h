@@ -69,6 +69,8 @@ using ShardId = boost::uuids::uuid;
 using CopyOperationId = boost::uuids::uuid;
 /// @brief Unique identifier for a request (UUID)
 using RequestId = boost::uuids::uuid;
+/// @brief Unique identifier for a client (UUID)
+using ClientId = boost::uuids::uuid;
 
 // Binary serialization related types
 /// @brief Buffer for storing binary serialized data

@@ -26,6 +26,7 @@
 #include "commons/utils/ZmqHelper.h"
 
 namespace setu::client {
+using setu::commons::ClientId;
 using setu::commons::CopyOperationId;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
@@ -62,7 +63,11 @@ class Client {
 
   [[nodiscard]] const std::vector<TensorShardRefPtr>& GetShards() const;
 
+  [[nodiscard]] const ClientId& GetClientId() const;
+
  private:
+  const ClientId client_id_;
+
   // Zmq context and sockets
   ZmqContextPtr zmq_context_;
   ZmqSocketPtr request_socket_;

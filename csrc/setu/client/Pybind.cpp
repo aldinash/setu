@@ -60,7 +60,9 @@ void InitClientPybindClass(py::module_& m) {
       .def("get_tensor_handle", &Client::GetTensorHandle, py::arg("shard_ref"),
            "Get the IPC handle for a tensor shard")
       .def("get_shards", &Client::GetShards,
-           "Get all registered tensor shard references");
+           "Get all registered tensor shard references")
+      .def("get_client_id", &Client::GetClientId,
+           "Get the unique client ID");
 }
 //==============================================================================
 void InitEnumsPybindClass(py::module_& m) {

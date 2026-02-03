@@ -16,6 +16,7 @@
 //==============================================================================
 #include "client/Client.h"
 //==============================================================================
+#include "commons/BoostCommon.h"
 #include "commons/Logging.h"
 #include "commons/messages/Messages.h"
 #include "commons/utils/Comm.h"
@@ -35,8 +36,12 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
+using setu::commons::GenerateUUID;
 //==============================================================================
-Client::Client() { zmq_context_ = std::make_shared<zmq::context_t>(); }
+Client::Client() : client_id_(GenerateUUID()) {
+  zmq_context_ = std::make_shared<zmq::context_t>();
+  LOG_DEBUG("Client created with ID: {}", client_id_);
+}
 
 Client::~Client() {
   if (is_connected_) {
@@ -172,6 +177,8 @@ TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
 const std::vector<TensorShardRefPtr>& Client::GetShards() const {
   return client_shards_;
 }
+
+const ClientId& Client::GetClientId() const { return client_id_; }
 //==============================================================================
 }  // namespace setu::client
 //==============================================================================
