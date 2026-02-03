@@ -764,5 +764,184 @@ TEST(MetaStoreTest, GetTensorMetadata_DimensionNamesCorrect) {
   EXPECT_EQ(tensor_metadata->size, 8 * 512 * 768);
 }
 //==============================================================================
+// FreeShard tests
+//==============================================================================
+TEST(MetaStoreTest, FreeShard_ExistingShard_ReturnsTrue) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId owner_node = GenerateUUID();
+
+  auto shard_metadata = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 100), owner_node);
+  ASSERT_NE(shard_metadata, nullptr);
+
+  bool result = store.FreeShard(shard_metadata->id);
+  EXPECT_TRUE(result);
+}
+
+TEST(MetaStoreTest, FreeShard_NonExistentShard_ReturnsFalse) {
+  MetaStore store;
+  const auto non_existent_shard_id = GenerateUUID();
+
+  bool result = store.FreeShard(non_existent_shard_id);
+  EXPECT_FALSE(result);
+}
+
+TEST(MetaStoreTest, FreeShard_UpdatesShardCount) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId node_0 = GenerateUUID();
+  const NodeId node_1 = GenerateUUID();
+
+  auto shard1 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 50), node_0);
+  auto shard2 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 50, 100), node_1);
+  ASSERT_NE(shard1, nullptr);
+  ASSERT_NE(shard2, nullptr);
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 2);
+
+  store.FreeShard(shard1->id);
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 1);
+
+  store.FreeShard(shard2->id);
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 0);
+}
+
+TEST(MetaStoreTest, FreeShard_LastShard_RemovesTensorEntry) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId owner_node = GenerateUUID();
+
+  auto shard_metadata = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 100), owner_node);
+  ASSERT_NE(shard_metadata, nullptr);
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 1);
+
+  store.FreeShard(shard_metadata->id);
+
+  // After freeing the last shard, tensor should be removed
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 0);
+  EXPECT_FALSE(store.AllShardsRegistered(tensor_name));
+  EXPECT_EQ(store.GetTensorMetadata(tensor_name), nullptr);
+}
+
+TEST(MetaStoreTest, FreeShard_InvalidatesCache) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId node_0 = GenerateUUID();
+  const NodeId node_1 = GenerateUUID();
+
+  auto shard1 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 50), node_0);
+  auto shard2 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 50, 100), node_1);
+  ASSERT_NE(shard1, nullptr);
+  ASSERT_NE(shard2, nullptr);
+
+  // Get tensor metadata to populate cache
+  auto tensor_metadata1 = store.GetTensorMetadata(tensor_name);
+  ASSERT_NE(tensor_metadata1, nullptr);
+  EXPECT_EQ(tensor_metadata1->shards.size(), 2);
+
+  // Free one shard - should invalidate cache
+  store.FreeShard(shard1->id);
+
+  // Tensor metadata should now return nullptr (not fully registered)
+  auto tensor_metadata2 = store.GetTensorMetadata(tensor_name);
+  EXPECT_EQ(tensor_metadata2, nullptr);
+}
+
+TEST(MetaStoreTest, FreeShard_PartialFree_AllShardsRegisteredBecomesFalse) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId node_0 = GenerateUUID();
+  const NodeId node_1 = GenerateUUID();
+
+  auto shard1 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 50), node_0);
+  auto shard2 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 50, 100), node_1);
+  ASSERT_NE(shard1, nullptr);
+  ASSERT_NE(shard2, nullptr);
+  EXPECT_TRUE(store.AllShardsRegistered(tensor_name));
+
+  // Free one shard
+  store.FreeShard(shard1->id);
+
+  // AllShardsRegistered should now be false
+  EXPECT_FALSE(store.AllShardsRegistered(tensor_name));
+}
+
+TEST(MetaStoreTest, FreeShard_ThenReregister_Succeeds) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId owner_node = GenerateUUID();
+
+  // Register and free a shard
+  auto shard1 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 50), owner_node);
+  ASSERT_NE(shard1, nullptr);
+  store.FreeShard(shard1->id);
+
+  // Should be able to re-register the same range
+  auto shard2 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 100, 0, 50), owner_node);
+  ASSERT_NE(shard2, nullptr);
+  EXPECT_NE(shard1->id, shard2->id);  // New shard ID
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 1);
+}
+
+TEST(MetaStoreTest, FreeShard_MultipleShards_FreesCorrectOne) {
+  MetaStore store;
+  const TensorName tensor_name = "test_tensor";
+  const NodeId node_0 = GenerateUUID();
+  const NodeId node_1 = GenerateUUID();
+  const NodeId node_2 = GenerateUUID();
+
+  auto shard1 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 90, 0, 30), node_0);
+  auto shard2 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 90, 30, 60), node_1);
+  auto shard3 = store.RegisterTensorShard(
+      Make1DShardSpec(tensor_name, 90, 60, 90), node_2);
+  ASSERT_NE(shard1, nullptr);
+  ASSERT_NE(shard2, nullptr);
+  ASSERT_NE(shard3, nullptr);
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 3);
+
+  // Free the middle shard
+  bool result = store.FreeShard(shard2->id);
+  EXPECT_TRUE(result);
+  EXPECT_EQ(store.GetNumShardsForTensor(tensor_name), 2);
+
+  // Trying to free it again should return false
+  result = store.FreeShard(shard2->id);
+  EXPECT_FALSE(result);
+}
+
+TEST(MetaStoreTest, FreeShard_MultipleTensors_OnlyAffectsTargetTensor) {
+  MetaStore store;
+  const NodeId owner_node = GenerateUUID();
+
+  auto shard_a = store.RegisterTensorShard(
+      Make1DShardSpec("tensor_a", 100, 0, 100), owner_node);
+  auto shard_b = store.RegisterTensorShard(
+      Make1DShardSpec("tensor_b", 200, 0, 200), owner_node);
+  ASSERT_NE(shard_a, nullptr);
+  ASSERT_NE(shard_b, nullptr);
+
+  // Free shard from tensor_a
+  store.FreeShard(shard_a->id);
+
+  // tensor_a should be gone
+  EXPECT_EQ(store.GetNumShardsForTensor("tensor_a"), 0);
+
+  // tensor_b should be unaffected
+  EXPECT_EQ(store.GetNumShardsForTensor("tensor_b"), 1);
+  EXPECT_TRUE(store.AllShardsRegistered("tensor_b"));
+  ASSERT_NE(store.GetTensorMetadata("tensor_b"), nullptr);
+}
+//==============================================================================
 }  // namespace setu::test::native
 //==============================================================================

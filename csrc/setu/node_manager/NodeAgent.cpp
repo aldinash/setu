@@ -43,6 +43,8 @@ using setu::commons::messages::ExecuteProgramRequest;
 using setu::commons::messages::ExecuteProgramResponse;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::ExecuteResponse;
+using setu::commons::messages::FreeShardsRequest;
+using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::NodeAgentRequest;
@@ -227,6 +229,8 @@ void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
           HandleWaitForCopyRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, GetTensorHandleRequest>) {
           HandleGetTensorHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, FreeShardsRequest>) {
+          HandleFreeShardsRequest(client_identity, msg);
         }
       },
       request);
@@ -250,6 +254,8 @@ void NodeAgent::Handler::HandleCoordinatorMessage(
           HandleSubmitCopyResponse(msg);
         } else if constexpr (std::is_same_v<T, WaitForCopyResponse>) {
           HandleWaitForCopyResponse(msg);
+        } else if constexpr (std::is_same_v<T, FreeShardsResponse>) {
+          HandleFreeShardsResponse(msg);
         }
       },
       message);
@@ -444,6 +450,58 @@ void NodeAgent::Handler::AllocateTensor(
 
   LOG_DEBUG("Successfully allocated shard {} with shape {} on device {}",
             shard_metadata.id, shape, spec.device.torch_device.str());
+}
+
+void NodeAgent::Handler::FreeTensor(const ShardId& shard_id) {
+  LOG_DEBUG("Freeing tensor shard: shard_id={}", shard_id);
+
+  // Remove from tensor storage
+  auto tensor_it = shard_id_to_tensor_.find(shard_id);
+  if (tensor_it != shard_id_to_tensor_.end()) {
+    shard_id_to_tensor_.erase(tensor_it);
+    LOG_DEBUG("Freed tensor storage for shard {}", shard_id);
+  }
+
+  // Remove from metadata map
+  auto metadata_it = tensor_shard_metadata_map_.find(shard_id);
+  if (metadata_it != tensor_shard_metadata_map_.end()) {
+    tensor_shard_metadata_map_.erase(metadata_it);
+    LOG_DEBUG("Freed metadata for shard {}", shard_id);
+  }
+}
+
+void NodeAgent::Handler::HandleFreeShardsRequest(
+    const Identity& client_identity, const FreeShardsRequest& request) {
+  LOG_DEBUG("Handling FreeShardsRequest for {} shards",
+            request.shard_ids.size());
+
+  // Free local tensor resources
+  for (const auto& shard_id : request.shard_ids) {
+    FreeTensor(shard_id);
+  }
+
+  request_id_to_client_identity_[request.request_id] = client_identity;
+
+  // Forward request to coordinator to update MetaStore
+  Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
+}
+
+void NodeAgent::Handler::HandleFreeShardsResponse(
+    const FreeShardsResponse& response) {
+  auto it = request_id_to_client_identity_.find(response.request_id);
+  if (it == request_id_to_client_identity_.end()) {
+    LOG_WARNING(
+        "Received FreeShardsResponse for unknown request_id: {}, ignoring",
+        response.request_id);
+    return;
+  }
+  const auto& client_identity = it->second;
+
+  // Send response back to client
+  Comm::SendWithIdentity<FreeShardsResponse>(client_socket_, client_identity,
+                                             response);
+
+  request_id_to_client_identity_.erase(it);
 }
 
 //==============================================================================

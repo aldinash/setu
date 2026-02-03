@@ -183,5 +183,42 @@ TensorMetadataPtr MetaStore::GetTensorMetadata(const TensorName& tensor_name) {
   return metadata;
 }
 //==============================================================================
+bool MetaStore::FreeShard(const ShardId& shard_id) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+  // Search for the shard across all tensors
+  for (auto& [tensor_name, registered_data] : registered_shards_data_) {
+    auto shard_it = registered_data.shards.find(shard_id);
+    if (shard_it != registered_data.shards.end()) {
+      // Calculate the size of elements being freed
+      std::size_t shard_num_elements = shard_it->second->spec.GetNumElements();
+
+      // Remove shard from the map
+      registered_data.shards.erase(shard_it);
+      registered_data.registered_size -= shard_num_elements;
+
+      LOG_DEBUG(
+          "Freed tensor shard: id={}, tensor_name={}, freed_elements={}, "
+          "remaining_registered={}/{}",
+          shard_id, tensor_name, shard_num_elements,
+          registered_data.registered_size, registered_data.expected_size);
+
+      // Invalidate cache for this tensor since shards have changed
+      tensor_metadata_cache_.erase(tensor_name);
+
+      // If no shards remain for this tensor, clean up the entry
+      if (registered_data.shards.empty()) {
+        registered_shards_data_.erase(tensor_name);
+        LOG_DEBUG("Removed empty tensor entry: {}", tensor_name);
+      }
+
+      return true;
+    }
+  }
+
+  LOG_WARNING("Attempted to free unknown shard: {}", shard_id);
+  return false;
+}
+//==============================================================================
 }  // namespace setu::metastore
 //==============================================================================

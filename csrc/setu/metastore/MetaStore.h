@@ -91,6 +91,18 @@ class MetaStore {
   [[nodiscard]] TensorMetadataPtr GetTensorMetadata(
       const TensorName& tensor_name /*[in]*/);
 
+  /**
+   * @brief Frees a tensor shard from the metadata store
+   *
+   * Removes the shard from the registered shards data and updates the
+   * registered size. If all shards for a tensor are freed, the tensor
+   * entry is removed from the store.
+   *
+   * @param shard_id The ID of the shard to free
+   * @return true if the shard was found and freed, false otherwise
+   */
+  bool FreeShard(const ShardId& shard_id /*[in]*/);
+
  private:
   /// Registered shard data: expected size, registered size, and shard metadata
   struct RegisteredShardsData {

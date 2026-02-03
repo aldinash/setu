@@ -25,6 +25,8 @@ namespace setu::client {
 //==============================================================================
 using setu::commons::datatypes::TensorShardRefPtr;
 using setu::commons::messages::ClientRequest;
+using setu::commons::messages::FreeShardsRequest;
+using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
@@ -69,6 +71,9 @@ void Client::Disconnect() {
 
   LOG_DEBUG("Client disconnecting from {}", endpoint_);
 
+  LOG_DEBUG("Free shards before disconnecting");
+  FreeShards();
+
   if (request_socket_) {
     request_socket_->close();
     request_socket_.reset();
@@ -107,8 +112,9 @@ std::optional<TensorShardRef> Client::RegisterTensorShard(
     return std::nullopt;
   }
 
-  client_shards_.push_back(
-      std::make_shared<TensorShardRef>(response.shard_ref.value()));
+  auto shard_ref_ptr =
+      std::make_shared<TensorShardRef>(response.shard_ref.value());
+  client_shards_[shard_ref_ptr->name].push_back(shard_ref_ptr);
 
   return response.shard_ref;
 }
@@ -169,8 +175,45 @@ TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
   return response.tensor_ipc_spec.value();
 }
 
-const std::vector<TensorShardRefPtr>& Client::GetShards() const {
+const std::unordered_map<TensorName, std::vector<TensorShardRefPtr>>&
+Client::GetAllShards() const {
   return client_shards_;
+}
+
+const std::vector<TensorShardRefPtr>& Client::GetShards(
+    const TensorName& name) const {
+  auto it = client_shards_.find(name);
+  ASSERT_VALID_ARGUMENTS(it != client_shards_.end(),
+                         "No shards found for tensor: {}", name);
+  return it->second;
+}
+
+void Client::FreeShards() {
+  if (client_shards_.empty()) {
+    LOG_DEBUG("Client has no shards to free");
+    return;
+  }
+
+  if (!is_connected_ || !request_socket_) {
+    client_shards_.clear();
+    return;
+  }
+
+  // Collect all shard IDs
+  std::vector<ShardId> shard_ids;
+  for (const auto& [_, shards] : client_shards_) {
+    for (const auto& shard_ref : shards) {
+      shard_ids.push_back(shard_ref->shard_id);
+    }
+  }
+
+  LOG_DEBUG("Client freeing {} shards", shard_ids.size());
+
+  // there is no need to wait for response
+  ClientRequest request = FreeShardsRequest(std::move(shard_ids));
+  Comm::Send(request_socket_, request);
+
+  client_shards_.clear();
 }
 //==============================================================================
 }  // namespace setu::client

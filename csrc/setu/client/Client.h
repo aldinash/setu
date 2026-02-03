@@ -60,14 +60,27 @@ class Client {
 
   TensorIPCSpec GetTensorHandle(const TensorShardRef& shard_ref);
 
-  [[nodiscard]] const std::vector<TensorShardRefPtr>& GetShards() const;
+  [[nodiscard]] const std::unordered_map<TensorName,
+                                         std::vector<TensorShardRefPtr>>&
+  GetAllShards() const;
+
+  [[nodiscard]] const std::vector<TensorShardRefPtr>& GetShards(
+      const TensorName& name) const;
 
  private:
+  /**
+   * @brief Frees all shards owned by this client
+   *
+   * Sends a request to the NodeAgent to free all shards that were registered
+   * by this client. This is automatically called in the destructor.
+   */
+  void FreeShards();
+
   // Zmq context and sockets
   ZmqContextPtr zmq_context_;
   ZmqSocketPtr request_socket_;
 
-  std::vector<TensorShardRefPtr> client_shards_;
+  std::unordered_map<TensorName, std::vector<TensorShardRefPtr>> client_shards_;
 
   std::string endpoint_;
   bool is_connected_{false};

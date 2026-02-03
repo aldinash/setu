@@ -26,6 +26,7 @@
 namespace setu::commons::messages {
 //==============================================================================
 using setu::commons::RequestId;
+using setu::commons::ShardId;
 using setu::commons::datatypes::TensorShardMetadata;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
@@ -105,6 +106,31 @@ void InitExecuteProgramResponsePybind(py::module_& m) {
       .def("__repr__", &ExecuteProgramResponse::ToString);
 }
 //==============================================================================
+void InitFreeShardsRequestPybind(py::module_& m) {
+  py::class_<FreeShardsRequest>(m, "FreeShardsRequest", py::module_local())
+      .def(py::init<std::vector<ShardId>>(), py::arg("shard_ids"),
+           "Create a FreeShardsRequest with a list of shard IDs to free")
+      .def_readonly("request_id", &FreeShardsRequest::request_id,
+                    "The request ID")
+      .def_readonly("shard_ids", &FreeShardsRequest::shard_ids,
+                    "The list of shard IDs to free")
+      .def("__str__", &FreeShardsRequest::ToString)
+      .def("__repr__", &FreeShardsRequest::ToString);
+}
+//==============================================================================
+void InitFreeShardsResponsePybind(py::module_& m) {
+  py::class_<FreeShardsResponse>(m, "FreeShardsResponse", py::module_local())
+      .def(py::init<RequestId, ErrorCode>(), py::arg("request_id"),
+           py::arg("error_code") = ErrorCode::kSuccess,
+           "Create a FreeShardsResponse with request ID and error code")
+      .def_readonly("request_id", &FreeShardsResponse::request_id,
+                    "The request ID this response corresponds to")
+      .def_readonly("error_code", &FreeShardsResponse::error_code,
+                    "The error code of the response")
+      .def("__str__", &FreeShardsResponse::ToString)
+      .def("__repr__", &FreeShardsResponse::ToString);
+}
+//==============================================================================
 void InitMessagesPybindSubmodule(py::module_& pm) {
   auto m = pm.def_submodule("messages", "Messages submodule");
 
@@ -113,6 +139,8 @@ void InitMessagesPybindSubmodule(py::module_& pm) {
   InitRegisterTensorShardNodeAgentResponsePybind(m);
   InitExecuteProgramRequestPybind(m);
   InitExecuteProgramResponsePybind(m);
+  InitFreeShardsRequestPybind(m);
+  InitFreeShardsResponsePybind(m);
 }
 //==============================================================================
 }  // namespace setu::commons::messages
