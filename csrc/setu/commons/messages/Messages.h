@@ -28,11 +28,17 @@
 #include "commons/messages/ExecuteProgramResponse.h"
 #include "commons/messages/ExecuteRequest.h"
 #include "commons/messages/ExecuteResponse.h"
-#include "commons/messages/GetTensorHandleRequest.h"
-#include "commons/messages/GetTensorHandleResponse.h"
+#include "commons/messages/GetReadHandleRequest.h"
+#include "commons/messages/GetReadHandleResponse.h"
+#include "commons/messages/GetWriteHandleRequest.h"
+#include "commons/messages/GetWriteHandleResponse.h"
 #include "commons/messages/RegisterTensorShardCoordinatorResponse.h"
 #include "commons/messages/RegisterTensorShardNodeAgentResponse.h"
 #include "commons/messages/RegisterTensorShardRequest.h"
+#include "commons/messages/ReleaseReadHandleRequest.h"
+#include "commons/messages/ReleaseReadHandleResponse.h"
+#include "commons/messages/ReleaseWriteHandleRequest.h"
+#include "commons/messages/ReleaseWriteHandleResponse.h"
 #include "commons/messages/SubmitCopyRequest.h"
 #include "commons/messages/SubmitCopyResponse.h"
 #include "commons/messages/WaitForCopyRequest.h"
@@ -43,7 +49,9 @@ namespace setu::commons::messages {
 /// @brief Requests from Client to NodeAgent.
 using ClientRequest =
     std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
-                 WaitForCopyRequest, GetTensorHandleRequest>;
+                 WaitForCopyRequest, GetReadHandleRequest,
+                 ReleaseReadHandleRequest, GetWriteHandleRequest,
+                 ReleaseWriteHandleRequest>;
 
 /// @brief Requests from NodeAgent to Coordinator.
 using NodeAgentRequest =
@@ -57,15 +65,19 @@ using CoordinatorMessage =
                  ExecuteRequest, RegisterTensorShardCoordinatorResponse,
                  SubmitCopyResponse, WaitForCopyResponse>;
 
-using Request = std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
-                             WaitForCopyRequest, GetTensorHandleRequest,
-                             AllocateTensorRequest,
-                             CopyOperationFinishedRequest, ExecuteRequest>;
+using Request = std::variant<
+    RegisterTensorShardRequest, SubmitCopyRequest, WaitForCopyRequest,
+    GetReadHandleRequest, ReleaseReadHandleRequest, GetWriteHandleRequest,
+    ReleaseWriteHandleRequest, AllocateTensorRequest,
+    CopyOperationFinishedRequest, ExecuteRequest>;
 
-using Response = std::variant<RegisterTensorShardNodeAgentResponse,
-                              SubmitCopyResponse, WaitForCopyResponse,
-                              GetTensorHandleResponse, AllocateTensorResponse,
-                              CopyOperationFinishedResponse, ExecuteResponse>;
+using Response =
+    std::variant<RegisterTensorShardNodeAgentResponse, SubmitCopyResponse,
+                 WaitForCopyResponse, GetReadHandleResponse,
+                 ReleaseReadHandleResponse, GetWriteHandleResponse,
+                 ReleaseWriteHandleResponse,
+                 AllocateTensorResponse, CopyOperationFinishedResponse,
+                 ExecuteResponse>;
 //==============================================================================
 }  // namespace setu::commons::messages
 //==============================================================================
