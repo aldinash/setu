@@ -32,6 +32,8 @@ using setu::commons::datatypes::TensorDimMap;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
+using setu::commons::messages::FreeShardsRequest;
+using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::SubmitCopyResponse;
@@ -239,6 +241,8 @@ void Coordinator::Handler::Loop() {
                                                msg);
             } else if constexpr (std::is_same_v<T, SubmitCopyRequest>) {
               HandleSubmitCopyRequest(inbox_msg.node_agent_identity, msg);
+            } else if constexpr (std::is_same_v<T, FreeShardsRequest>) {
+              HandleFreeShardsRequest(inbox_msg.node_agent_identity, msg);
             }
           },
           inbox_msg.request);
@@ -377,6 +381,25 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
     pending_copy_specs_.erase(copy_key);
     pending_node_agents_.erase(copy_key);
   }
+}
+
+void Coordinator::Handler::HandleFreeShardsRequest(
+    const Identity& node_agent_identity, const FreeShardsRequest& request) {
+  LOG_INFO("Coordinator received FreeShardsRequest with {} shards",
+           request.shard_ids.size());
+
+  bool all_freed = true;
+  for (const auto& shard_id : request.shard_ids) {
+    if (!metastore_.FreeShard(shard_id)) {
+      LOG_WARNING("Failed to free shard: {}", shard_id);
+      all_freed = false;
+    }
+  }
+
+  ErrorCode error_code =
+      all_freed ? ErrorCode::kSuccess : ErrorCode::kInvalidArguments;
+  FreeShardsResponse response(request.request_id, error_code);
+  outbox_queue_.push(OutboxMessage{node_agent_identity, response});
 }
 
 //==============================================================================

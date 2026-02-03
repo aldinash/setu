@@ -698,6 +698,144 @@ def test_distributed_tensor_allocation(multi_node_infrastructure):
     assert handle_1.to_dict()["tensor_size"] == [512, 768]
 
 
+@pytest.mark.gpu
+def test_client_frees_shards_on_destruction(infrastructure):
+    """Test that client shards are freed when client is destroyed."""
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    client_endpoint = infrastructure["client_endpoint"]
+
+    # Create client and register some shards
+    client = Client()
+    client.connect(client_endpoint)
+
+    device = Device(torch_device=torch.device("cuda:0"))
+    dims = [
+        TensorDimSpec("dim_0", 8, 0, 8),
+        TensorDimSpec("dim_1", 16, 0, 16),
+    ]
+    shard_spec = TensorShardSpec(
+        name="free_test_tensor_1",
+        dims=dims,
+        dtype=torch.float32,
+        device=device,
+    )
+    shard_ref = client.register_tensor_shard(shard_spec)
+    assert shard_ref is not None
+
+    # Verify client tracks the shard
+    shards = client.get_shards()
+    assert len(shards) == 1
+
+    # Delete client - this should trigger FreeShards in destructor
+    del client
+
+    # Brief wait for cleanup
+    time.sleep(0.2)
+
+    # Create new client to verify the tensor can be re-registered
+    # (implying the old shard was freed from metastore)
+    client2 = Client()
+    client2.connect(client_endpoint)
+
+    # Re-register the same tensor name - should succeed if old shard was freed
+    shard_ref2 = client2.register_tensor_shard(shard_spec)
+    assert (
+        shard_ref2 is not None
+    ), "Should be able to re-register tensor after old client freed it"
+
+    client2.disconnect()
+
+
+@pytest.mark.gpu
+def test_free_multiple_shards_on_client_destruction(infrastructure):
+    """Test that multiple shards are freed when client with multiple tensors is destroyed."""
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    client_endpoint = infrastructure["client_endpoint"]
+
+    # Create client and register multiple shards
+    client = Client()
+    client.connect(client_endpoint)
+
+    device = Device(torch_device=torch.device("cuda:0"))
+
+    tensor_names = ["multi_free_tensor_a", "multi_free_tensor_b", "multi_free_tensor_c"]
+
+    for tensor_name in tensor_names:
+        dims = [
+            TensorDimSpec("dim_0", 4, 0, 4),
+            TensorDimSpec("dim_1", 8, 0, 8),
+        ]
+        shard_spec = TensorShardSpec(
+            name=tensor_name,
+            dims=dims,
+            dtype=torch.float32,
+            device=device,
+        )
+        shard_ref = client.register_tensor_shard(shard_spec)
+        assert shard_ref is not None
+
+    # Verify client tracks all shards
+    shards = client.get_shards()
+    assert len(shards) == 3
+
+    # Delete client - should free all shards
+    del client
+
+    # Brief wait for cleanup
+    time.sleep(0.2)
+
+    # Verify all tensors can be re-registered
+    client2 = Client()
+    client2.connect(client_endpoint)
+
+    for tensor_name in tensor_names:
+        dims = [
+            TensorDimSpec("dim_0", 4, 0, 4),
+            TensorDimSpec("dim_1", 8, 0, 8),
+        ]
+        shard_spec = TensorShardSpec(
+            name=tensor_name,
+            dims=dims,
+            dtype=torch.float32,
+            device=device,
+        )
+        shard_ref = client2.register_tensor_shard(shard_spec)
+        assert shard_ref is not None, f"Should be able to re-register {tensor_name}"
+
+    client2.disconnect()
+
+
+@pytest.mark.gpu
+def test_empty_client_destruction(infrastructure):
+    """Test that destroying a client with no shards doesn't cause issues."""
+    from setu._client import Client
+
+    client_endpoint = infrastructure["client_endpoint"]
+
+    # Create client but don't register any shards
+    client = Client()
+    client.connect(client_endpoint)
+
+    # Verify no shards
+    assert len(client.get_shards()) == 0
+
+    # Delete client - should handle empty shard list gracefully
+    del client
+
+    # Brief wait
+    time.sleep(0.1)
+
+    # Verify system is still functional
+    client2 = Client()
+    client2.connect(client_endpoint)
+    assert client2.is_connected()
+    client2.disconnect()
+
+
 if __name__ == "__main__":
     mp.set_start_method("spawn")
     pytest.main([__file__, "-v", "--gpu"])

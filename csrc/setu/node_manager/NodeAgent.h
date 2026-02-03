@@ -53,6 +53,8 @@ using setu::commons::messages::ClientRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
 using setu::commons::messages::ExecuteRequest;
+using setu::commons::messages::FreeShardsRequest;
+using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
@@ -127,6 +129,8 @@ class NodeAgent {
                                   const WaitForCopyRequest& request);
     void HandleGetTensorHandleRequest(const Identity& client_identity,
                                       const GetTensorHandleRequest& request);
+    void HandleFreeShardsRequest(const Identity& client_identity,
+                                 const FreeShardsRequest& request);
 
     // Coordinator message handlers
     void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
@@ -137,8 +141,10 @@ class NodeAgent {
         const RegisterTensorShardCoordinatorResponse& response);
     void HandleSubmitCopyResponse(const SubmitCopyResponse& response);
     void HandleWaitForCopyResponse(const WaitForCopyResponse& response);
+    void HandleFreeShardsResponse(const FreeShardsResponse& response);
 
     void AllocateTensor(const TensorShardMetadata& shard_metadata);
+    void FreeTensor(const ShardId& shard_id);
 
     NodeId node_id_;
     std::shared_ptr<zmq::context_t> zmq_context_;

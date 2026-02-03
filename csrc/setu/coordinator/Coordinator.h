@@ -42,6 +42,7 @@ using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::TensorShardMetadata;
 using setu::commons::datatypes::TensorShardSpec;
+using setu::commons::messages::FreeShardsRequest;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::WaitForCopyRequest;
@@ -152,6 +153,8 @@ class Coordinator {
         const RegisterTensorShardRequest& request);
     void HandleSubmitCopyRequest(const Identity& node_agent_identity,
                                  const SubmitCopyRequest& request);
+    void HandleFreeShardsRequest(const Identity& node_agent_identity,
+                                 const FreeShardsRequest& request);
 
     /// Key for tracking copy operations by (src, dst) tensor pair
     struct CopyKey {
