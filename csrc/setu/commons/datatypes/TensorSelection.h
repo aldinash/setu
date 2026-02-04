@@ -309,7 +309,7 @@ inline TensorSelectionPtr CreateSelectionFromShardSpec(
  * This utility function creates a TensorSelection that represents the exact
  * region of the tensor owned by the given shard.
  *
- * @param shard The TensorShard to create a selection from
+ * @param shard The 'TensorShard to create a selection from
  * @return TensorSelectionPtr A selection covering the shard's region
  */
 inline TensorSelectionPtr CreateSelectionFromShard(TensorShardPtr shard) {
@@ -332,6 +332,64 @@ inline TensorSelectionPtr CreateSelectionFromShardMetadata(
   ASSERT_VALID_POINTER_ARGUMENT(shard_metadata);
   return CreateSelectionFromShardSpec(
       std::make_shared<TensorShardSpec>(shard_metadata->spec));
+}
+//==============================================================================
+/**
+ * @brief Create a TensorSelection from multiple TensorShardSpecs
+ *
+ * This utility function creates a TensorSelection that represents the union
+ * of all regions defined by the given shard specifications. All specs must
+ * have the same tensor name.
+ *
+ * @param specs Vector of TensorShardSpecPtr to create a selection from
+ * @return TensorSelectionPtr A selection covering the union of all specs
+ * @throws std::invalid_argument if specs is empty or names don't match
+ */
+inline TensorSelectionPtr CreateSelectionFromShardSpecs(
+    const std::vector<TensorShardSpecPtr>& specs) {
+  const TensorName& tensor_name = specs.front()->name;
+  TensorIndicesMap combined_indices;
+
+  for (const auto& spec : specs) {
+    ASSERT_VALID_POINTER_ARGUMENT(spec);
+
+    for (const auto& dim_spec : spec->dims) {
+      auto [it, _] = combined_indices.try_emplace(
+          dim_spec.name, TensorIndicesBitset(dim_spec.size));
+
+      for (TensorIndex i = dim_spec.start; i < dim_spec.end; ++i) {
+        it->second[static_cast<std::size_t>(i)] = true;
+      }
+    }
+  }
+
+  return std::make_shared<TensorSelection>(tensor_name, combined_indices);
+}
+//==============================================================================
+/**
+ * @brief Create a TensorSelection from multiple TensorShardMetadata
+ *
+ * This utility function creates a TensorSelection that represents the union
+ * of all regions defined by the given shard metadata. All metadata must
+ * have the same tensor name.
+ *
+ * @param metadatas Vector of TensorShardMetadataPtr to create a selection from
+ * @return TensorSelectionPtr A selection covering the union of all metadatas
+ * @throws std::invalid_argument if metadatas is empty or names don't match
+ */
+inline TensorSelectionPtr CreateSelectionFromShardMetadatas(
+    const std::vector<TensorShardMetadataPtr>& metadatas) {
+  ASSERT_VALID_ARGUMENTS(!metadatas.empty(),
+                         "Metadatas vector must be non-empty");
+
+  std::vector<TensorShardSpecPtr> specs;
+  specs.reserve(metadatas.size());
+  for (const auto& metadata : metadatas) {
+    ASSERT_VALID_POINTER_ARGUMENT(metadata);
+    specs.push_back(std::make_shared<TensorShardSpec>(metadata->spec));
+  }
+
+  return CreateSelectionFromShardSpecs(specs);
 }
 //==============================================================================
 }  // namespace setu::commons::datatypes

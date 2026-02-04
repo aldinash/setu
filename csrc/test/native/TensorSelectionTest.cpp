@@ -770,5 +770,208 @@ TEST(TensorSelectionLocalizeTest, LargeTensor_LocalizesCorrectly) {
   EXPECT_EQ(selected.back(), 199);
 }
 //==============================================================================
+// CreateSelectionFromShardSpecs tests
+//==============================================================================
+using setu::commons::datatypes::CreateSelectionFromShardMetadatas;
+using setu::commons::datatypes::CreateSelectionFromShardSpecs;
+using setu::commons::datatypes::TensorShardSpecPtr;
+
+// Helper to create a TensorShardSpecPtr
+TensorShardSpecPtr Make1DShardSpec(const TensorName& name,
+                                   std::size_t total_size, std::int32_t start,
+                                   std::int32_t end) {
+  std::vector<TensorDimSpec> dims;
+  dims.emplace_back("x", total_size, start, end);
+  return std::make_shared<TensorShardSpec>(name, dims, torch::kFloat32,
+                                           Device(torch::kCPU));
+}
+
+TensorShardSpecPtr Make2DShardSpec(const TensorName& name, std::size_t rows,
+                                   std::size_t cols, std::int32_t row_start,
+                                   std::int32_t row_end, std::int32_t col_start,
+                                   std::int32_t col_end) {
+  std::vector<TensorDimSpec> dims;
+  dims.emplace_back("row", rows, row_start, row_end);
+  dims.emplace_back("col", cols, col_start, col_end);
+  return std::make_shared<TensorShardSpec>(name, dims, torch::kFloat32,
+                                           Device(torch::kCPU));
+}
+
+TEST(CreateSelectionFromShardSpecsTest, SingleSpec_MatchesSingleSpecFunction) {
+  // Creating selection from a single spec should match
+  // CreateSelectionFromShardSpec
+  const TensorName name = "tensor";
+  auto spec = Make1DShardSpec(name, 100, 25, 50);
+
+  std::vector<TensorShardSpecPtr> specs = {spec};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+
+  auto selected = GetSelectedIndices(bitset);
+  EXPECT_EQ(selected.size(), 25);  // 50 - 25 = 25 elements
+  EXPECT_EQ(selected.front(), 25);
+  EXPECT_EQ(selected.back(), 49);
+}
+
+TEST(CreateSelectionFromShardSpecsTest, TwoNonOverlappingSpecs_UnionCorrectly) {
+  // Two non-overlapping shards: [0, 25) and [50, 75)
+  // Union should have indices [0, 25) and [50, 75)
+  const TensorName name = "tensor";
+  auto spec1 = Make1DShardSpec(name, 100, 0, 25);
+  auto spec2 = Make1DShardSpec(name, 100, 50, 75);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+
+  auto selected = GetSelectedIndices(bitset);
+  EXPECT_EQ(selected.size(), 50);  // 25 + 25 = 50 elements
+
+  // Check first range [0, 25)
+  for (std::size_t i = 0; i < 25; ++i) {
+    EXPECT_TRUE(bitset[i]) << "Index " << i << " should be set";
+  }
+  // Check gap [25, 50)
+  for (std::size_t i = 25; i < 50; ++i) {
+    EXPECT_FALSE(bitset[i]) << "Index " << i << " should not be set";
+  }
+  // Check second range [50, 75)
+  for (std::size_t i = 50; i < 75; ++i) {
+    EXPECT_TRUE(bitset[i]) << "Index " << i << " should be set";
+  }
+}
+
+TEST(CreateSelectionFromShardSpecsTest, TwoOverlappingSpecs_UnionCorrectly) {
+  // Two overlapping shards: [0, 50) and [25, 75)
+  // Union should have indices [0, 75)
+  const TensorName name = "tensor";
+  auto spec1 = Make1DShardSpec(name, 100, 0, 50);
+  auto spec2 = Make1DShardSpec(name, 100, 25, 75);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+
+  auto selected = GetSelectedIndices(bitset);
+  EXPECT_EQ(selected.size(), 75);  // Union of [0, 50) and [25, 75) = [0, 75)
+  EXPECT_EQ(selected.front(), 0);
+  EXPECT_EQ(selected.back(), 74);
+}
+
+TEST(CreateSelectionFromShardSpecsTest, ThreeSpecs_UnionCorrectly) {
+  // Three shards covering entire tensor: [0, 40), [30, 70), [60, 100)
+  const TensorName name = "tensor";
+  auto spec1 = Make1DShardSpec(name, 100, 0, 40);
+  auto spec2 = Make1DShardSpec(name, 100, 30, 70);
+  auto spec3 = Make1DShardSpec(name, 100, 60, 100);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2, spec3};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+  EXPECT_TRUE(bitset.all());  // Should cover entire tensor
+}
+
+TEST(CreateSelectionFromShardSpecsTest, TwoDim_TwoSpecs_UnionCorrectly) {
+  // 2D tensor: 10x10
+  // Shard1: rows [0, 5), cols [0, 5)
+  // Shard2: rows [5, 10), cols [5, 10)
+  // Union should have rows [0, 10), cols [0, 10) - but only the diagonal blocks
+  const TensorName name = "tensor";
+  auto spec1 = Make2DShardSpec(name, 10, 10, 0, 5, 0, 5);
+  auto spec2 = Make2DShardSpec(name, 10, 10, 5, 10, 5, 10);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& row_bitset = selection->GetDimIndices("row");
+  const auto& col_bitset = selection->GetDimIndices("col");
+
+  EXPECT_EQ(row_bitset.size(), 10);
+  EXPECT_EQ(col_bitset.size(), 10);
+
+  // Both dimensions should have all indices set (union of [0,5) and [5,10))
+  EXPECT_TRUE(row_bitset.all());
+  EXPECT_TRUE(col_bitset.all());
+}
+
+TEST(CreateSelectionFromShardSpecsTest,
+     TwoDim_NonOverlappingRows_UnionCorrectly) {
+  // 2D tensor: 10x10
+  // Shard1: rows [0, 3), cols [0, 10)
+  // Shard2: rows [7, 10), cols [0, 10)
+  const TensorName name = "tensor";
+  auto spec1 = Make2DShardSpec(name, 10, 10, 0, 3, 0, 10);
+  auto spec2 = Make2DShardSpec(name, 10, 10, 7, 10, 0, 10);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& row_bitset = selection->GetDimIndices("row");
+  const auto& col_bitset = selection->GetDimIndices("col");
+
+  // Rows should have [0, 3) and [7, 10) set
+  auto row_selected = GetSelectedIndices(row_bitset);
+  EXPECT_EQ(row_selected, std::vector<std::size_t>({0, 1, 2, 7, 8, 9}));
+
+  // Cols should have all indices set
+  EXPECT_TRUE(col_bitset.all());
+}
+
+TEST(CreateSelectionFromShardMetadatasTest,
+     TwoMetadatas_MatchesShardSpecsFunction) {
+  // CreateSelectionFromShardMetadatas should produce same result as
+  // CreateSelectionFromShardSpecs
+  const TensorName name = "tensor";
+  auto metadata1 = Make1DShardMetadata(name, 100, 0, 50);
+  auto metadata2 = Make1DShardMetadata(name, 100, 50, 100);
+
+  std::vector<TensorShardMetadataPtr> metadatas = {metadata1, metadata2};
+  auto selection = CreateSelectionFromShardMetadatas(metadatas);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+  EXPECT_TRUE(bitset.all());  // Should cover entire tensor
+}
+
+TEST(CreateSelectionFromShardSpecsTest, AdjacentSpecs_NoGap) {
+  // Two adjacent shards: [0, 50) and [50, 100)
+  // Union should cover entire tensor with no gap
+  const TensorName name = "tensor";
+  auto spec1 = Make1DShardSpec(name, 100, 0, 50);
+  auto spec2 = Make1DShardSpec(name, 100, 50, 100);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+  EXPECT_TRUE(bitset.all());
+}
+
+TEST(CreateSelectionFromShardSpecsTest, SingleElementSpecs_UnionCorrectly) {
+  // Multiple single-element shards
+  const TensorName name = "tensor";
+  auto spec1 = Make1DShardSpec(name, 100, 10, 11);
+  auto spec2 = Make1DShardSpec(name, 100, 50, 51);
+  auto spec3 = Make1DShardSpec(name, 100, 90, 91);
+
+  std::vector<TensorShardSpecPtr> specs = {spec1, spec2, spec3};
+  auto selection = CreateSelectionFromShardSpecs(specs);
+
+  const auto& bitset = selection->GetDimIndices("x");
+  EXPECT_EQ(bitset.size(), 100);
+
+  auto selected = GetSelectedIndices(bitset);
+  EXPECT_EQ(selected, std::vector<std::size_t>({10, 50, 90}));
+}
+//==============================================================================
 }  // namespace setu::test::native
 //==============================================================================
