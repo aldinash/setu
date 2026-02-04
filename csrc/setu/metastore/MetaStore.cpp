@@ -101,17 +101,12 @@ bool MetaStore::ValidateShardRegistration(
       });
 
   if (shard_it != shard_spec.dims.end()) {
-    auto idx = static_cast<std::size_t>(shard_it - shard_spec.dims.begin());
-
-    if (shard_it->name != ref_it->name) {
-      LOG_WARNING(
-          "Dimension name mismatch for tensor '{}' at index {}: '{}' vs '{}'",
-          shard_spec.name, idx, shard_it->name, ref_it->name);
-    } else {
-      LOG_WARNING("Dimension size mismatch for tensor '{}', dim '{}': {} vs {}",
-                  shard_spec.name, shard_it->name, shard_it->size,
-                  ref_it->size);
-    }
+    auto idx = std::distance(shard_spec.dims.begin(), shard_it);
+    LOG_WARNING(
+        "Dimension mismatch for tensor '{}' at index {}: "
+        "provided (name={}, size={}) vs expected (name={}, size={})",
+        shard_spec.name, idx, shard_it->name, shard_it->size, ref_it->name,
+        ref_it->size);
     return false;
   }
 
