@@ -264,7 +264,7 @@ def test_get_shards_tracking(infrastructure):
     client.connect(client_endpoint)
 
     # Initially no shards
-    assert len(client.get_shards()) == 0, "New client should have no shards"
+    assert len(client.get_all_shards()) == 0, "New client should have no shards"
 
     # Register first shard
     device = Device(torch_device=torch.device("cuda:0"))
@@ -282,7 +282,7 @@ def test_get_shards_tracking(infrastructure):
     assert shard_ref_1 is not None
 
     # Should have 1 shard now
-    shards = client.get_shards()
+    shards = client.get_shards("tracked_tensor_1")
     assert len(shards) == 1, f"Expected 1 shard, got {len(shards)}"
     assert shards[0].name == "tracked_tensor_1"
     assert shards[0].shard_id == shard_ref_1.shard_id
@@ -301,13 +301,12 @@ def test_get_shards_tracking(infrastructure):
     shard_ref_2 = client.register_tensor_shard(shard_spec_2)
     assert shard_ref_2 is not None
 
-    # Should have 2 shards now
-    shards = client.get_shards()
-    assert len(shards) == 2, f"Expected 2 shards, got {len(shards)}"
+    # Should have 2 tensor names tracked now
+    all_shards = client.get_all_shards()
+    assert len(all_shards) == 2, f"Expected 2 tensor names, got {len(all_shards)}"
 
     # Verify both shards are tracked
-    shard_names = {s.name for s in shards}
-    assert shard_names == {"tracked_tensor_1", "tracked_tensor_2"}
+    assert set(all_shards.keys()) == {"tracked_tensor_1", "tracked_tensor_2"}
 
     client.disconnect()
 
@@ -349,8 +348,8 @@ def test_multiple_shards_same_client_get_handles(infrastructure):
         registered_refs.append(shard_ref)
 
     # Verify all shards are tracked
-    shards = client.get_shards()
-    assert len(shards) == 3, f"Expected 3 shards, got {len(shards)}"
+    all_shards = client.get_all_shards()
+    assert len(all_shards) == 3, f"Expected 3 tensor names, got {len(all_shards)}"
 
     # Get handles for all registered shards
     for shard_ref, (tensor_name, dim_sizes) in zip(registered_refs, tensor_configs):
@@ -725,7 +724,7 @@ def test_client_frees_shards_on_destruction(infrastructure):
     assert shard_ref is not None
 
     # Verify client tracks the shard
-    shards = client.get_shards()
+    shards = client.get_shards("free_test_tensor_1")
     assert len(shards) == 1
 
     # Delete client - this should trigger FreeShards in destructor
@@ -779,8 +778,8 @@ def test_free_multiple_shards_on_client_destruction(infrastructure):
         assert shard_ref is not None
 
     # Verify client tracks all shards
-    shards = client.get_shards()
-    assert len(shards) == 3
+    all_shards = client.get_all_shards()
+    assert len(all_shards) == 3
 
     # Delete client - should free all shards
     del client
@@ -821,7 +820,7 @@ def test_empty_client_destruction(infrastructure):
     client.connect(client_endpoint)
 
     # Verify no shards
-    assert len(client.get_shards()) == 0
+    assert len(client.get_all_shards()) == 0
 
     # Delete client - should handle empty shard list gracefully
     del client
