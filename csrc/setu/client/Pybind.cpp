@@ -59,16 +59,12 @@ void InitClientPybindClass(py::module_& m) {
            "Wait for a copy operation to complete")
       .def("get_tensor_handle", &Client::GetTensorHandle, py::arg("shard_ref"),
            "Get the IPC handle for a tensor shard")
-      .def(
-          "get_shards",
-          [](const Client& client) {
-            std::vector<TensorShardRefPtr> all_shards;
-            for (const auto& [_, shards] : client.GetAllShards()) {
-              all_shards.insert(all_shards.end(), shards.begin(), shards.end());
-            }
-            return all_shards;
-          },
-          "Get all registered tensor shard references");
+      .def("get_shards", &Client::GetShards, py::arg("name"),
+           py::return_value_policy::reference_internal,
+           "Get tensor shard references for a specific tensor name")
+      .def("get_all_shards", &Client::GetAllShards,
+           py::return_value_policy::reference_internal,
+           "Get all registered tensor shard references grouped by tensor name");
 }
 //==============================================================================
 void InitEnumsPybindClass(py::module_& m) {
