@@ -23,6 +23,7 @@
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
 #include "commons/enums/Enums.h"
+#include "commons/utils/Pybind.h"
 #include "commons/utils/TorchTensorIPC.h"
 //==============================================================================
 namespace setu::client {

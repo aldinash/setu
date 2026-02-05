@@ -125,9 +125,9 @@ define_setu_static(_planner_static "${PLANNER_SRC}" "setu_common_objects" "_meta
 
 file(GLOB_RECURSE COORDINATOR_SRC "csrc/setu/coordinator/*.cpp")
 define_setu_extension(_coordinator "${COORDINATOR_SRC}" "setu_common_objects"
-                      "${NCCL_LIBRARY};_metastore_static")
+                      "${NCCL_LIBRARY};_metastore_static;_planner_static")
 define_setu_static(_coordinator_static "${COORDINATOR_SRC}" "setu_common_objects"
-                   "${NCCL_LIBRARY};_metastore_static")
+                   "${NCCL_LIBRARY};_metastore_static;_planner_static")
 target_include_directories(_coordinator PRIVATE ${NCCL_INCLUDE_DIR})
 target_include_directories(_coordinator_static PRIVATE ${NCCL_INCLUDE_DIR})
 
