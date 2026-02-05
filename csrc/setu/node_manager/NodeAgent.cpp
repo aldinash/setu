@@ -495,12 +495,12 @@ void NodeAgent::Executor::InitSockets() {
 
   Identity identity = to_string(node_id_);
   coordinator_socket_ = ZmqHelper::CreateAndConnectSocket(
-      zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_, identity);
+      zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_, identity+"_executor");
 
   // TODO: Initialize worker sockets based on devices
   LOG_DEBUG("Executor: devices={}", devices_);
 
-  LOG_DEBUG("Executor: Initialized ZMQ sockets with identity={}", identity);
+  LOG_DEBUG("Executor: Initialized ZMQ sockets with identity={}", identity+"_executor");
 }
 
 void NodeAgent::Executor::CloseSockets() {
@@ -580,8 +580,12 @@ void NodeAgent::Executor::Loop() {
                 copy_op_id);
 
       // Notify coordinator that execution is complete
-      ExecuteResponse response(RequestId{}, ErrorCode::kSuccess);
-      Comm::Send(coordinator_socket_, response);
+      ExecuteResponse response(RequestId{}, copy_op_id, ErrorCode::kSuccess);
+      LOG_INFO("NodeAgent Executor: Sending ExecuteResponse to Coordinator for "
+               "copy_op_id={}",
+               copy_op_id);
+      Comm::Send<NodeAgentRequest>(coordinator_socket_, response);
+      LOG_DEBUG("NodeAgent Executor: ExecuteResponse sent successfully");
     } catch (const boost::concurrent::sync_queue_is_closed&) {
       LOG_DEBUG("Executor: executor_queue_ closed, exiting");
       return;

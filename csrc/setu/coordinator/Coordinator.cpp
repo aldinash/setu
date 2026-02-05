@@ -32,7 +32,9 @@ using setu::commons::datatypes::TensorDimMap;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
+using setu::commons::messages::CopyOperationFinishedRequest;
 using setu::commons::messages::ExecuteRequest;
+using setu::commons::messages::ExecuteResponse;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::SubmitCopyResponse;
@@ -172,6 +174,8 @@ void Coordinator::Gateway::Loop() {
       if (socket == node_agent_socket_) {
         auto [node_agent_identity, request] =
             Comm::RecvWithIdentity<NodeAgentRequest, false>(socket);
+        LOG_DEBUG("Gateway: Received message from {} (variant index={})",
+                  node_agent_identity, request.index());
         auto status =
             inbox_queue_.try_push(InboxMessage{node_agent_identity, request});
         if (status == boost::queue_op_status::closed) {
@@ -234,16 +238,27 @@ void Coordinator::Handler::Loop() {
   while (running_) {
     try {
       InboxMessage inbox_msg = inbox_queue_.pull();
+      LOG_DEBUG("Handler: Processing message from {} (variant index={})",
+                inbox_msg.node_agent_identity, inbox_msg.request.index());
       std::visit(
           [&](const auto& msg) {
             using T = std::decay_t<decltype(msg)>;
             if constexpr (std::is_same_v<T, RegisterTensorShardRequest>) {
+              LOG_DEBUG("Handler: Dispatching RegisterTensorShardRequest");
               HandleRegisterTensorShardRequest(inbox_msg.node_agent_identity,
                                                msg);
             } else if constexpr (std::is_same_v<T, SubmitCopyRequest>) {
+              LOG_DEBUG("Handler: Dispatching SubmitCopyRequest");
               HandleSubmitCopyRequest(inbox_msg.node_agent_identity, msg);
             } else if constexpr (std::is_same_v<T, SubmitPullRequest>) {
+              LOG_DEBUG("Handler: Dispatching SubmitPullRequest");
               HandleSubmitPullRequest(inbox_msg.node_agent_identity, msg);
+            } else if constexpr (std::is_same_v<T, ExecuteResponse>) {
+              LOG_DEBUG("Handler: Dispatching ExecuteResponse");
+              HandleExecuteResponse(inbox_msg.node_agent_identity, msg);
+            } else {
+              LOG_WARNING("Handler: Unknown message type (index={})",
+                          inbox_msg.request.index());
             }
           },
           inbox_msg.request);
@@ -371,11 +386,21 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
         "copy_op_id={}, adding to planner queue",
         request.copy_spec.src_name, request.copy_spec.dst_name, copy_op_id);
 
-    // Store the mapping
-    copy_operations_.emplace(copy_op_id, request.copy_spec);
+    // Collect submitter identities before cleaning up pending_node_agents_
+    std::vector<Identity> submitters;
+    for (const auto& client : pending_node_agents_[copy_key]) {
+      submitters.push_back(client.identity);
+    }
 
-    // Add to planner queue with copy_op_id
-    planner_queue_.push(PlannerTask{copy_op_id, request.copy_spec});
+    // Create shared state with submitter identities
+    auto state = std::make_shared<CopyOperationState>(request.copy_spec,
+                                                      std::move(submitters));
+
+    // Store the shared state (will be accessed by HandleExecuteResponse)
+    copy_operations_.emplace(copy_op_id, state);
+
+    // Add to planner queue with copy_op_id and shared state
+    planner_queue_.push(PlannerTask{copy_op_id, request.copy_spec, state});
 
     // Send responses to all waiting clients with copy_op_id
     for (const auto& client : pending_node_agents_[copy_key]) {
@@ -453,11 +478,21 @@ void Coordinator::Handler::HandleSubmitPullRequest(
         "copy_op_id={}, adding to planner queue",
         request.copy_spec.src_name, request.copy_spec.dst_name, copy_op_id);
 
-    // Store the mapping
-    copy_operations_.emplace(copy_op_id, request.copy_spec);
+    // Collect submitter identities before cleaning up pending_node_agents_
+    std::vector<Identity> submitters;
+    for (const auto& client : pending_node_agents_[copy_key]) {
+      submitters.push_back(client.identity);
+    }
 
-    // Add to planner queue with copy_op_id
-    planner_queue_.push(PlannerTask{copy_op_id, request.copy_spec});
+    // Create shared state with submitter identities
+    auto state = std::make_shared<CopyOperationState>(request.copy_spec,
+                                                      std::move(submitters));
+
+    // Store the shared state (will be accessed by HandleExecuteResponse)
+    copy_operations_.emplace(copy_op_id, state);
+
+    // Add to planner queue with copy_op_id and shared state
+    planner_queue_.push(PlannerTask{copy_op_id, request.copy_spec, state});
 
     // Send responses to all waiting clients with copy_op_id
     for (const auto& client : pending_node_agents_[copy_key]) {
@@ -470,6 +505,44 @@ void Coordinator::Handler::HandleSubmitPullRequest(
     shards_received_.erase(copy_key);
     pending_copy_specs_.erase(copy_key);
     pending_node_agents_.erase(copy_key);
+  }
+}
+
+void Coordinator::Handler::HandleExecuteResponse(
+    const Identity& node_identity, const ExecuteResponse& response) {
+  LOG_DEBUG("Handling ExecuteResponse from {} for copy_op_id: {}",
+            node_identity, response.copy_op_id);
+
+  auto it = copy_operations_.find(response.copy_op_id);
+  if (it == copy_operations_.end()) {
+    LOG_WARNING("ExecuteResponse for unknown copy_op_id: {}, ignoring",
+                response.copy_op_id);
+    return;
+  }
+
+  auto& state = it->second;
+  state->completed_responses++;
+
+  // Atomic load with acquire ordering to synchronize with Executor's write
+  const auto expected =
+      state->expected_responses.load(std::memory_order_acquire);
+
+  LOG_DEBUG("ExecuteResponse for copy_op_id {}: {}/{} responses received",
+            response.copy_op_id, state->completed_responses, expected);
+
+  // Check if all participants completed
+  if (state->completed_responses == expected) {
+    LOG_INFO("All {} participants completed for copy_op_id {}, notifying {} "
+             "submitters",
+             expected, response.copy_op_id, state->submitters.size());
+
+    // Send CopyOperationFinishedRequest to all SUBMITTERS
+    for (const auto& submitter_identity : state->submitters) {
+      CopyOperationFinishedRequest finish_req(response.copy_op_id);
+      outbox_queue_.push(OutboxMessage{submitter_identity, finish_req});
+    }
+
+    copy_operations_.erase(it);
   }
 }
 
@@ -534,6 +607,13 @@ void Coordinator::Executor::Loop() {
 
         outbox_queue_.push(OutboxMessage{node_identity, execute_request});
       }
+
+      // Set expected responses (atomic write with release ordering for
+      // visibility to Handler thread)
+      task.state->expected_responses.store(fragments.size(),
+                                           std::memory_order_release);
+      LOG_DEBUG("Executor: Set expected_responses={} for copy_op_id={}",
+                fragments.size(), task.copy_op_id);
 
     } catch (const boost::concurrent::sync_queue_is_closed&) {
       LOG_DEBUG("Executor: planner_queue_ closed, exiting");

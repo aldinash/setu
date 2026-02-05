@@ -55,10 +55,37 @@ using setu::metastore::MetaStore;
 using setu::planner::backends::nccl::NCCLPlanner;
 using setu::planner::Plan;
 
-/// @brief Task for the planner containing CopyOperationId and CopySpec
+/// @brief Shared state for tracking a copy operation across Handler and
+/// Executor threads.
+///
+/// Thread Safety: expected_responses is std::atomic because Executor writes it
+/// (after dispatching ExecuteRequests) and Handler reads it (when processing
+/// ExecuteResponses). These accesses occur without explicit queue
+/// synchronization for this field, so we use release/acquire ordering to ensure
+/// visibility.
+struct CopyOperationState {
+  CopySpec spec;
+  std::vector<Identity> submitters;  // NodeAgents to notify when done
+
+  // Atomic because Executor writes and Handler reads without explicit
+  // synchronization. Using release/acquire ordering ensures Executor's write
+  // is visible to Handler.
+  std::atomic<std::size_t> expected_responses{0};
+
+  std::size_t completed_responses{0};  // Only Handler reads/writes
+
+  explicit CopyOperationState(CopySpec spec_param,
+                              std::vector<Identity> submitters_param)
+      : spec(std::move(spec_param)), submitters(std::move(submitters_param)) {}
+};
+using CopyOperationStatePtr = std::shared_ptr<CopyOperationState>;
+
+/// @brief Task for the planner containing CopyOperationId, CopySpec, and shared
+/// state
 struct PlannerTask {
   CopyOperationId copy_op_id;
   CopySpec copy_spec;
+  CopyOperationStatePtr state;  // Shared with Handler's copy_operations_ map
 };
 
 //==============================================================================
@@ -166,6 +193,9 @@ class Coordinator {
                                  const SubmitCopyRequest& request);
     void HandleSubmitPullRequest(const Identity& node_agent_identity,
                                  const SubmitPullRequest& request);
+    void HandleExecuteResponse(const Identity& node_identity,
+                               const setu::commons::messages::ExecuteResponse&
+                                   response);
 
     /// Key for tracking copy operations by (src, dst) tensor pair
     struct CopyKey {
@@ -201,9 +231,9 @@ class Coordinator {
     /// Tracks NodeAgents waiting for SubmitCopy response
     std::map<CopyKey, std::vector<PendingNodeAgent>> pending_node_agents_;
 
-    /// Maps CopyOperationId to CopySpec
-    /// TODO: cleanup after copy finished
-    std::map<CopyOperationId, CopySpec> copy_operations_;
+    /// Maps CopyOperationId to shared CopyOperationState (includes submitters
+    /// and completion tracking)
+    std::map<CopyOperationId, CopyOperationStatePtr> copy_operations_;
 
     std::thread thread_;
     std::atomic<bool> running_{false};

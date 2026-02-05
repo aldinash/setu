@@ -30,12 +30,17 @@ using setu::commons::utils::BinaryRange;
 //==============================================================================
 
 struct ExecuteResponse : public BaseResponse {
+  CopyOperationId copy_op_id;
+
   explicit ExecuteResponse(RequestId request_id_param,
+                           CopyOperationId copy_op_id_param,
                            ErrorCode error_code_param = ErrorCode::kSuccess)
-      : BaseResponse(request_id_param, error_code_param) {}
+      : BaseResponse(request_id_param, error_code_param),
+        copy_op_id(copy_op_id_param) {}
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("ExecuteResponse(error_code={})", error_code);
+    return std::format("ExecuteResponse(copy_op_id={}, error_code={})",
+                       copy_op_id, error_code);
   }
 
   void Serialize(BinaryBuffer& buffer) const;
