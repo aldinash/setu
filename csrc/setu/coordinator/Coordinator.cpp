@@ -310,17 +310,26 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
 
 void Coordinator::Handler::HandleSubmitCopyRequest(
     const Identity& node_agent_identity, const SubmitCopyRequest& request) {
-  LOG_INFO("Coordinator received SubmitCopyRequest from {} to {}",
-           request.copy_spec.src_name, request.copy_spec.dst_name);
+  LOG_INFO("Coordinator received SubmitCopyRequest from {} to {} for shard {}",
+           request.copy_spec.src_name, request.copy_spec.dst_name,
+           request.shard_id);
 
   CopyKey copy_key{request.copy_spec.src_name, request.copy_spec.dst_name};
+
+  // Track which shards have submitted
+  auto& shards = shards_received_[copy_key];
+
+  // Check for duplicate shard submission
+  ASSERT_VALID_RUNTIME(
+      !shards.contains(request.shard_id),
+      "SubmitCopy {} -> {}: duplicate submission from shard {}",
+      request.copy_spec.src_name, request.copy_spec.dst_name, request.shard_id);
 
   // Check if this is the first request for this (src, dst) pair
   auto pending_it = pending_copy_specs_.find(copy_key);
   if (pending_it == pending_copy_specs_.end()) {
     // First request - store the CopySpec for validation
     pending_copy_specs_.emplace(copy_key, request.copy_spec);
-    copies_received_[copy_key] = 1;
   } else {
     // Subsequent request - verify TensorSelections match
     const CopySpec& first_spec = pending_it->second;
@@ -335,29 +344,30 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
         *request.copy_spec.dst_selection == *first_spec.dst_selection,
         "SubmitCopy {} -> {}: destination selection mismatch",
         request.copy_spec.src_name, request.copy_spec.dst_name);
-
-    copies_received_[copy_key]++;
   }
+
+  shards.insert(request.shard_id);
 
   // Track this node agent for later response
   pending_node_agents_[copy_key].push_back(
       PendingNodeAgent{node_agent_identity, request.request_id});
 
-  // Get the expected number of clients (number of shards for source tensor)
-  std::size_t expected_clients =
-      metastore_.GetNumShardsForTensor(request.copy_spec.src_name);
+  // Expected = all src shards + all dst shards
+  std::size_t expected_shards =
+      metastore_.GetNumShardsForTensor(request.copy_spec.src_name) +
+      metastore_.GetNumShardsForTensor(request.copy_spec.dst_name);
 
-  LOG_DEBUG("SubmitCopy {} -> {}: received {}/{} requests",
+  LOG_DEBUG("SubmitCopy {} -> {}: received {}/{} shards",
             request.copy_spec.src_name, request.copy_spec.dst_name,
-            copies_received_[copy_key], expected_clients);
+            shards.size(), expected_shards);
 
-  // Check if all clients have sent the request
-  if (copies_received_[copy_key] == expected_clients) {
+  // Check if all shards have submitted
+  if (shards.size() == expected_shards) {
     // Generate CopyOperationId
     CopyOperationId copy_op_id = GenerateUUID();
 
     LOG_INFO(
-        "All clients submitted copy request {} -> {}, "
+        "All shards submitted copy request {} -> {}, "
         "copy_op_id={}, adding to planner queue",
         request.copy_spec.src_name, request.copy_spec.dst_name, copy_op_id);
 
@@ -375,7 +385,7 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
     }
 
     // Clean up maps
-    copies_received_.erase(copy_key);
+    shards_received_.erase(copy_key);
     pending_copy_specs_.erase(copy_key);
     pending_node_agents_.erase(copy_key);
   }
@@ -383,17 +393,26 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
 
 void Coordinator::Handler::HandleSubmitPullRequest(
     const Identity& node_agent_identity, const SubmitPullRequest& request) {
-  LOG_INFO("Coordinator received SubmitPullRequest from {} to {}",
-           request.copy_spec.src_name, request.copy_spec.dst_name);
+  LOG_INFO("Coordinator received SubmitPullRequest from {} to {} for shard {}",
+           request.copy_spec.src_name, request.copy_spec.dst_name,
+           request.shard_id);
 
   CopyKey copy_key{request.copy_spec.src_name, request.copy_spec.dst_name};
+
+  // Track which shards have submitted
+  auto& shards = shards_received_[copy_key];
+
+  // Check for duplicate shard submission
+  ASSERT_VALID_RUNTIME(
+      !shards.contains(request.shard_id),
+      "SubmitPull {} -> {}: duplicate submission from shard {}",
+      request.copy_spec.src_name, request.copy_spec.dst_name, request.shard_id);
 
   // Check if this is the first request for this (src, dst) pair
   auto pending_it = pending_copy_specs_.find(copy_key);
   if (pending_it == pending_copy_specs_.end()) {
     // First request - store the CopySpec for validation
     pending_copy_specs_.emplace(copy_key, request.copy_spec);
-    copies_received_[copy_key] = 1;
   } else {
     // Subsequent request - verify TensorSelections match
     const CopySpec& first_spec = pending_it->second;
@@ -408,29 +427,29 @@ void Coordinator::Handler::HandleSubmitPullRequest(
         *request.copy_spec.dst_selection == *first_spec.dst_selection,
         "SubmitPull {} -> {}: destination selection mismatch",
         request.copy_spec.src_name, request.copy_spec.dst_name);
-
-    copies_received_[copy_key]++;
   }
+
+  shards.insert(request.shard_id);
 
   // Track this node agent for later response
   pending_node_agents_[copy_key].push_back(
       PendingNodeAgent{node_agent_identity, request.request_id});
 
-  // For Pull: expected clients = number of DESTINATION shards
-  std::size_t expected_clients =
+  // For Pull: expected shards = number of DESTINATION shards only (one-sided)
+  std::size_t expected_shards =
       metastore_.GetNumShardsForTensor(request.copy_spec.dst_name);
 
-  LOG_DEBUG("SubmitPull {} -> {}: received {}/{} requests",
+  LOG_DEBUG("SubmitPull {} -> {}: received {}/{} shards",
             request.copy_spec.src_name, request.copy_spec.dst_name,
-            copies_received_[copy_key], expected_clients);
+            shards.size(), expected_shards);
 
-  // Check if all clients have sent the request
-  if (copies_received_[copy_key] == expected_clients) {
+  // Check if all shards have submitted
+  if (shards.size() == expected_shards) {
     // Generate CopyOperationId
     CopyOperationId copy_op_id = GenerateUUID();
 
     LOG_INFO(
-        "All clients submitted pull request {} -> {}, "
+        "All shards submitted pull request {} -> {}, "
         "copy_op_id={}, adding to planner queue",
         request.copy_spec.src_name, request.copy_spec.dst_name, copy_op_id);
 
@@ -448,7 +467,7 @@ void Coordinator::Handler::HandleSubmitPullRequest(
     }
 
     // Clean up maps
-    copies_received_.erase(copy_key);
+    shards_received_.erase(copy_key);
     pending_copy_specs_.erase(copy_key);
     pending_node_agents_.erase(copy_key);
   }

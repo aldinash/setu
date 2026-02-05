@@ -39,6 +39,7 @@ using setu::commons::Identity;
 using setu::commons::NodeId;
 using setu::commons::Queue;
 using setu::commons::RequestId;
+using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::TensorShardMetadata;
@@ -188,8 +189,8 @@ class Coordinator {
     MetaStore& metastore_;
     Queue<PlannerTask>& planner_queue_;
 
-    /// Tracks number of SubmitCopyRequests received per (src, dst) pair
-    std::map<CopyKey, std::size_t> copies_received_;
+    /// Tracks which shards have submitted per (src, dst) pair
+    std::map<CopyKey, std::set<ShardId>> shards_received_;
 
     /// Stores the first CopySpec received for each (src, dst) pair for
     /// validation
