@@ -118,38 +118,79 @@ std::optional<CopyOperationId> Client::SubmitCopy(const CopySpec& copy_spec) {
   LOG_DEBUG("Client submitting copy operation from {} to {}",
             copy_spec.src_name, copy_spec.dst_name);
 
-  ClientRequest request = SubmitCopyRequest(copy_spec);
-  Comm::Send(request_socket_, request);
-
-  auto response = Comm::Recv<SubmitCopyResponse>(request_socket_);
-
-  LOG_DEBUG("Client received copy operation ID: {}",
-            response.copy_operation_id);
-
-  if (response.error_code != ErrorCode::kSuccess) {
-    return std::nullopt;
+  // Find all shards owned by this client that are involved in the copy
+  // (either as source or destination)
+  std::vector<ShardId> involved_shards;
+  for (const auto& shard_ref : client_shards_) {
+    if (shard_ref->name == copy_spec.src_name ||
+        shard_ref->name == copy_spec.dst_name) {
+      involved_shards.push_back(shard_ref->shard_id);
+    }
   }
 
-  return response.copy_operation_id;
+  ASSERT_VALID_RUNTIME(!involved_shards.empty(),
+                       "Client has no shards for src {} or dst {}",
+                       copy_spec.src_name, copy_spec.dst_name);
+
+  // Submit a request for each involved shard
+  std::optional<CopyOperationId> copy_op_id;
+  for (const auto& shard_id : involved_shards) {
+    LOG_DEBUG("Client submitting SubmitCopyRequest for shard {}", shard_id);
+
+    ClientRequest request = SubmitCopyRequest(shard_id, copy_spec);
+    Comm::Send(request_socket_, request);
+
+    auto response = Comm::Recv<SubmitCopyResponse>(request_socket_);
+
+    LOG_DEBUG("Client received copy operation ID: {} for shard {}",
+              response.copy_operation_id, shard_id);
+
+    if (response.error_code != ErrorCode::kSuccess) {
+      return std::nullopt;
+    }
+
+    copy_op_id = response.copy_operation_id;
+  }
+
+  return copy_op_id;
 }
 
 std::optional<CopyOperationId> Client::SubmitPull(const CopySpec& copy_spec) {
   LOG_DEBUG("Client submitting pull operation from {} to {}",
             copy_spec.src_name, copy_spec.dst_name);
 
-  ClientRequest request = SubmitPullRequest(copy_spec);
-  Comm::Send(request_socket_, request);
-
-  auto response = Comm::Recv<SubmitCopyResponse>(request_socket_);
-
-  LOG_DEBUG("Client received pull operation ID: {}",
-            response.copy_operation_id);
-
-  if (response.error_code != ErrorCode::kSuccess) {
-    return std::nullopt;
+  // For Pull: only destination shards submit (one-sided operation)
+  std::vector<ShardId> dst_shards;
+  for (const auto& shard_ref : client_shards_) {
+    if (shard_ref->name == copy_spec.dst_name) {
+      dst_shards.push_back(shard_ref->shard_id);
+    }
   }
 
-  return response.copy_operation_id;
+  ASSERT_VALID_RUNTIME(!dst_shards.empty(),
+                       "Client has no shards for dst {}", copy_spec.dst_name);
+
+  // Submit a request for each destination shard
+  std::optional<CopyOperationId> copy_op_id;
+  for (const auto& shard_id : dst_shards) {
+    LOG_DEBUG("Client submitting SubmitPullRequest for shard {}", shard_id);
+
+    ClientRequest request = SubmitPullRequest(shard_id, copy_spec);
+    Comm::Send(request_socket_, request);
+
+    auto response = Comm::Recv<SubmitCopyResponse>(request_socket_);
+
+    LOG_DEBUG("Client received pull operation ID: {} for shard {}",
+              response.copy_operation_id, shard_id);
+
+    if (response.error_code != ErrorCode::kSuccess) {
+      return std::nullopt;
+    }
+
+    copy_op_id = response.copy_operation_id;
+  }
+
+  return copy_op_id;
 }
 
 void Client::WaitForCopy(CopyOperationId copy_op_id) {
