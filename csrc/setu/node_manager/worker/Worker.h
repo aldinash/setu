@@ -25,6 +25,7 @@
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
+using setu::commons::NodeId;
 using setu::commons::datatypes::Device;
 using setu::commons::enums::ErrorCode;
 using setu::commons::utils::ZmqContextPtr;
@@ -33,7 +34,7 @@ using setu::ir::Program;
 //==============================================================================
 class Worker {
  public:
-  Worker(Device device, std::size_t port);
+  Worker(NodeId node_id, Device device, std::size_t port);
   ~Worker();
 
   void Start();
@@ -51,6 +52,7 @@ class Worker {
 
   void WorkerLoop();
 
+  NodeId node_id_;
   Device device_;
 
   std::size_t port_;

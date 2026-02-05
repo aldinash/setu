@@ -49,9 +49,9 @@ void InitWorkerPybindClass(py::module_& m) {
                              "Get the device this worker is bound to");
 
   py::class_<NCCLWorker, Worker, std::shared_ptr<NCCLWorker>>(m, "NCCLWorker")
-      .def(py::init<Device, std::size_t>(), py::arg("device"),
-           py::arg("reply_port"),
-           "Create an NCCL worker for the given device and reply port")
+      .def(py::init<NodeId, Device, std::size_t>(), py::arg("node_id"),
+           py::arg("device"), py::arg("reply_port"),
+           "Create an NCCL worker for the given node ID, device and reply port")
       .def("setup", &NCCLWorker::Setup,
            py::call_guard<py::gil_scoped_release>(),
            "Initialize CUDA device and stream (call before execute)")

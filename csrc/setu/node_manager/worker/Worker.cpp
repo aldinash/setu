@@ -33,8 +33,8 @@ using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 using setu::ir::Instruction;
 //==============================================================================
-Worker::Worker(Device device, std::size_t port)
-    : device_(device), port_(port), worker_running_{false} {
+Worker::Worker(NodeId node_id, Device device, std::size_t port)
+    : node_id_(node_id), device_(device), port_(port), worker_running_{false} {
   InitZmqSockets();
 }
 

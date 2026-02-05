@@ -16,24 +16,27 @@
 //==============================================================================
 #include "setu/ir/instructions/InitComm.h"
 //==============================================================================
+#include "setu/planner/Planner.h"
+//==============================================================================
 namespace setu::ir {
 //==============================================================================
 
 std::string InitComm::ToString() const {
-  return std::format("InitComm(device_to_rank_size={})", device_to_rank.size());
+  return std::format("InitComm(participant_to_rank_size={})",
+                     participant_to_rank.size());
 }
 
 void InitComm::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(comm_id, device_to_rank);
+  writer.WriteFields(comm_id, participant_to_rank);
 }
 
 InitComm InitComm::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [comm_id, device_to_rank] =
+  auto [comm_id, participant_to_rank] =
       reader.ReadFields<ncclUniqueId,
-                        std::unordered_map<DeviceRank, std::int32_t>>();
-  return InitComm(comm_id, std::move(device_to_rank));
+                        std::unordered_map<Participant, DeviceRank>>();
+  return InitComm(comm_id, participant_to_rank);
 }
 
 //==============================================================================
