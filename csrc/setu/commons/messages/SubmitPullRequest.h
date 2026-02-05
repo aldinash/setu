@@ -18,12 +18,14 @@
 //==============================================================================
 #include "commons/StdCommon.h"
 //==============================================================================
+#include "commons/Types.h"
 #include "commons/datatypes/CopySpec.h"
 #include "commons/messages/BaseRequest.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================
+using setu::commons::ShardId;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
@@ -31,23 +33,30 @@ using setu::commons::utils::BinaryRange;
 
 struct SubmitPullRequest : public BaseRequest {
   /// @brief Constructs a request with auto-generated request ID.
-  explicit SubmitPullRequest(CopySpec copy_spec_param)
-      : BaseRequest(), copy_spec(std::move(copy_spec_param)) {}
+  SubmitPullRequest(ShardId shard_id_param, CopySpec copy_spec_param)
+      : BaseRequest(),
+        shard_id(shard_id_param),
+        copy_spec(std::move(copy_spec_param)) {}
 
   /// @brief Constructs a request with explicit request ID (for
   /// deserialization).
-  SubmitPullRequest(RequestId request_id_param, CopySpec copy_spec_param)
-      : BaseRequest(request_id_param), copy_spec(std::move(copy_spec_param)) {}
+  SubmitPullRequest(RequestId request_id_param, ShardId shard_id_param,
+                    CopySpec copy_spec_param)
+      : BaseRequest(request_id_param),
+        shard_id(shard_id_param),
+        copy_spec(std::move(copy_spec_param)) {}
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("SubmitPullRequest(request_id={}, copy_spec={})",
-                       request_id, copy_spec);
+    return std::format(
+        "SubmitPullRequest(request_id={}, shard_id={}, copy_spec={})",
+        request_id, shard_id, copy_spec);
   }
 
   void Serialize(BinaryBuffer& buffer) const;
 
   static SubmitPullRequest Deserialize(const BinaryRange& range);
 
+  const ShardId shard_id;
   const CopySpec copy_spec;
 };
 using SubmitPullRequestPtr = std::shared_ptr<SubmitPullRequest>;

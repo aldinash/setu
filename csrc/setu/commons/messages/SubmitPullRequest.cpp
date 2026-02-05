@@ -18,6 +18,7 @@
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================
+using setu::commons::ShardId;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
@@ -26,14 +27,14 @@ using setu::commons::utils::BinaryWriter;
 
 void SubmitPullRequest::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(request_id, copy_spec);
+  writer.WriteFields(request_id, shard_id, copy_spec);
 }
 
 SubmitPullRequest SubmitPullRequest::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [request_id_val, copy_spec_val] =
-      reader.ReadFields<RequestId, CopySpec>();
-  return SubmitPullRequest(request_id_val, copy_spec_val);
+  auto [request_id_val, shard_id_val, copy_spec_val] =
+      reader.ReadFields<RequestId, ShardId, CopySpec>();
+  return SubmitPullRequest(request_id_val, shard_id_val, copy_spec_val);
 }
 
 //==============================================================================
