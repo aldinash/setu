@@ -62,14 +62,15 @@ class Client {
 
   TensorIPCSpec GetTensorHandle(const TensorShardRef& shard_ref);
 
-  [[nodiscard]] const std::vector<TensorShardRefPtr>& GetShards() const;
+  [[nodiscard]] std::vector<TensorShardRefPtr> GetShards() const;
 
  private:
   // Zmq context and sockets
   ZmqContextPtr zmq_context_;
   ZmqSocketPtr request_socket_;
 
-  std::vector<TensorShardRefPtr> client_shards_;
+  // Map from tensor name to list of shard refs owned by this client
+  std::map<TensorName, std::vector<TensorShardRefPtr>> tensor_shards_;
 
   std::string endpoint_;
   bool is_connected_{false};

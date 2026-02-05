@@ -23,7 +23,6 @@
 //==============================================================================
 namespace setu::client {
 //==============================================================================
-using setu::commons::datatypes::TensorShardRefPtr;
 using setu::commons::messages::ClientRequest;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
@@ -108,8 +107,9 @@ std::optional<TensorShardRef> Client::RegisterTensorShard(
     return std::nullopt;
   }
 
-  client_shards_.push_back(
-      std::make_shared<TensorShardRef>(response.shard_ref.value()));
+  const auto& shard_ref = response.shard_ref.value();
+  tensor_shards_[shard_ref.name].push_back(
+      std::make_shared<TensorShardRef>(shard_ref));
 
   return response.shard_ref;
 }
@@ -121,9 +121,15 @@ std::optional<CopyOperationId> Client::SubmitCopy(const CopySpec& copy_spec) {
   // Find all shards owned by this client that are involved in the copy
   // (either as source or destination)
   std::vector<ShardId> involved_shards;
-  for (const auto& shard_ref : client_shards_) {
-    if (shard_ref->name == copy_spec.src_name ||
-        shard_ref->name == copy_spec.dst_name) {
+  if (auto it = tensor_shards_.find(copy_spec.src_name);
+      it != tensor_shards_.end()) {
+    for (const auto& shard_ref : it->second) {
+      involved_shards.push_back(shard_ref->shard_id);
+    }
+  }
+  if (auto it = tensor_shards_.find(copy_spec.dst_name);
+      it != tensor_shards_.end()) {
+    for (const auto& shard_ref : it->second) {
       involved_shards.push_back(shard_ref->shard_id);
     }
   }
@@ -160,19 +166,14 @@ std::optional<CopyOperationId> Client::SubmitPull(const CopySpec& copy_spec) {
             copy_spec.src_name, copy_spec.dst_name);
 
   // For Pull: only destination shards submit (one-sided operation)
-  std::vector<ShardId> dst_shards;
-  for (const auto& shard_ref : client_shards_) {
-    if (shard_ref->name == copy_spec.dst_name) {
-      dst_shards.push_back(shard_ref->shard_id);
-    }
-  }
-
-  ASSERT_VALID_RUNTIME(!dst_shards.empty(),
+  auto it = tensor_shards_.find(copy_spec.dst_name);
+  ASSERT_VALID_RUNTIME(it != tensor_shards_.end(),
                        "Client has no shards for dst {}", copy_spec.dst_name);
 
   // Submit a request for each destination shard
   std::optional<CopyOperationId> copy_op_id;
-  for (const auto& shard_id : dst_shards) {
+  for (const auto& shard_ref : it->second) {
+    const auto shard_id = shard_ref->shard_id;
     LOG_DEBUG("Client submitting SubmitPullRequest for shard {}", shard_id);
 
     ClientRequest request = SubmitPullRequest(shard_id, copy_spec);
@@ -230,8 +231,12 @@ TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
   return response.tensor_ipc_spec.value();
 }
 
-const std::vector<TensorShardRefPtr>& Client::GetShards() const {
-  return client_shards_;
+std::vector<TensorShardRefPtr> Client::GetShards() const {
+  std::vector<TensorShardRefPtr> result;
+  for (const auto& [name, shards] : tensor_shards_) {
+    result.insert(result.end(), shards.begin(), shards.end());
+  }
+  return result;
 }
 //==============================================================================
 }  // namespace setu::client
