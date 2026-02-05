@@ -29,6 +29,7 @@
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/CopyOperation.h"
 #include "metastore/MetaStore.h"
+#include "planner/backends/nccl.h"
 //==============================================================================
 namespace setu::coordinator {
 //==============================================================================
@@ -49,6 +50,15 @@ using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::CopyOperationPtr;
 using setu::metastore::MetaStore;
+using setu::planner::backends::nccl::NCCLPlanner;
+using setu::planner::Plan;
+
+/// @brief Task for the planner containing CopyOperationId and CopySpec
+struct PlannerTask {
+  CopyOperationId copy_op_id;
+  CopySpec copy_spec;
+};
+
 //==============================================================================
 class Coordinator {
  public:
@@ -139,7 +149,7 @@ class Coordinator {
   struct Handler {
     Handler(Queue<InboxMessage>& inbox_queue,
             Queue<OutboxMessage>& outbox_queue, MetaStore& metastore,
-            Queue<CopySpec>& planner_queue);
+            Queue<PlannerTask>& planner_queue);
 
     void Start();
     void Stop();
@@ -173,7 +183,7 @@ class Coordinator {
     Queue<InboxMessage>& inbox_queue_;
     Queue<OutboxMessage>& outbox_queue_;
     MetaStore& metastore_;
-    Queue<CopySpec>& planner_queue_;
+    Queue<PlannerTask>& planner_queue_;
 
     /// Tracks number of SubmitCopyRequests received per (src, dst) pair
     std::map<CopyKey, std::size_t> copies_received_;
@@ -196,10 +206,11 @@ class Coordinator {
   };
 
   //============================================================================
-  // Executor: Dispatches execution plans to NodeAgents (pure business logic)
+  // Executor: Compiles CopySpecs and dispatches execution plans to NodeAgents
   //============================================================================
   struct Executor {
-    Executor(Queue<OutboxMessage>& outbox_queue);
+    Executor(Queue<PlannerTask>& planner_queue, Queue<OutboxMessage>& outbox_queue,
+             MetaStore& metastore);
 
     void Start();
     void Stop();
@@ -207,7 +218,10 @@ class Coordinator {
    private:
     void Loop();
 
+    Queue<PlannerTask>& planner_queue_;
     Queue<OutboxMessage>& outbox_queue_;
+    MetaStore& metastore_;
+    NCCLPlanner planner_;
 
     std::thread thread_;
     std::atomic<bool> running_{false};
@@ -221,8 +235,8 @@ class Coordinator {
   Queue<InboxMessage> inbox_queue_;
   Queue<OutboxMessage> outbox_queue_;
 
-  /// Queue of CopySpecs for the Planner to process
-  Queue<CopySpec> planner_queue_;
+  /// Queue of PlannerTasks (CopyOperationId + CopySpec) for the Executor to compile and dispatch
+  Queue<PlannerTask> planner_queue_;
 
   std::unique_ptr<Gateway> gateway_;
   std::unique_ptr<Handler> handler_;

@@ -32,14 +32,15 @@ using setu::commons::datatypes::TensorDimMap;
 using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
+using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
+using setu::planner::Plan;
 //==============================================================================
 constexpr std::int32_t kPollTimeoutMs = 100;
-constexpr std::chrono::milliseconds kExecutorLoopSleepMs(10);
 //==============================================================================
 // Coordinator Implementation
 //==============================================================================
@@ -49,7 +50,7 @@ Coordinator::Coordinator(std::size_t port)
                                        outbox_queue_);
   handler_ = std::make_unique<Handler>(inbox_queue_, outbox_queue_, metastore_,
                                        planner_queue_);
-  executor_ = std::make_unique<Executor>(outbox_queue_);
+  executor_ = std::make_unique<Executor>(planner_queue_, outbox_queue_, metastore_);
 }
 
 Coordinator::~Coordinator() {
@@ -70,6 +71,7 @@ void Coordinator::Stop() {
   LOG_DEBUG("Stopping Coordinator");
 
   inbox_queue_.close();
+  planner_queue_.close();
   outbox_queue_.close();
 
   gateway_->Stop();
@@ -199,7 +201,7 @@ void Coordinator::Gateway::Loop() {
 Coordinator::Handler::Handler(Queue<InboxMessage>& inbox_queue,
                               Queue<OutboxMessage>& outbox_queue,
                               MetaStore& metastore,
-                              Queue<CopySpec>& planner_queue)
+                              Queue<PlannerTask>& planner_queue)
     : inbox_queue_(inbox_queue),
       outbox_queue_(outbox_queue),
       metastore_(metastore),
@@ -359,8 +361,8 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
     // Store the mapping
     copy_operations_.emplace(copy_op_id, request.copy_spec);
 
-    // Add to planner queue
-    planner_queue_.push(request.copy_spec);
+    // Add to planner queue with copy_op_id
+    planner_queue_.push(PlannerTask{copy_op_id, request.copy_spec});
 
     // Send responses to all waiting clients with copy_op_id
     for (const auto& client : pending_node_agents_[copy_key]) {
@@ -379,8 +381,12 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
 //==============================================================================
 // Executor Implementation
 //==============================================================================
-Coordinator::Executor::Executor(Queue<OutboxMessage>& outbox_queue)
-    : outbox_queue_(outbox_queue) {}
+Coordinator::Executor::Executor(Queue<PlannerTask>& planner_queue,
+                                Queue<OutboxMessage>& outbox_queue,
+                                MetaStore& metastore)
+    : planner_queue_(planner_queue),
+      outbox_queue_(outbox_queue),
+      metastore_(metastore) {}
 
 void Coordinator::Executor::Start() {
   if (running_.load()) {
@@ -406,12 +412,36 @@ void Coordinator::Executor::Loop() {
 
   running_ = true;
   while (running_) {
-    // TODO: Implement executor loop to dispatch plans to NodeAgents
-    // Will pull from an executor_queue_ and push to outbox_queue_
-    // For now, just sleep and check running_ flag
-    std::this_thread::sleep_for(kExecutorLoopSleepMs);
-    if (outbox_queue_.closed()) {
-      LOG_DEBUG("Executor: outbox_queue_ closed, exiting");
+    try {
+      // Pull the next planner task from the queue
+      PlannerTask task = planner_queue_.pull();
+
+      LOG_DEBUG("Executor received task for copy_op_id: {}", task.copy_op_id);
+
+      // Compile the CopySpec into a Plan using NCCLPlanner
+      Plan plan = planner_.Compile(task.copy_spec, metastore_);
+
+      LOG_DEBUG("Compiled plan with {} participants", plan.participants.size());
+
+      // Fragment the plan by NodeId
+      auto fragments = plan.Fragments();
+
+      LOG_DEBUG("Fragmented plan into {} node-specific plans", fragments.size());
+
+      // Send ExecuteRequest to each node agent
+      for (auto& [node_id, node_plan] : fragments) {
+        Identity node_identity = boost::uuids::to_string(node_id);
+
+        ExecuteRequest execute_request(task.copy_op_id, std::move(node_plan));
+
+        LOG_DEBUG("Sending ExecuteRequest to node {} for copy_op_id: {}",
+                  node_identity, task.copy_op_id);
+
+        outbox_queue_.push(OutboxMessage{node_identity, execute_request});
+      }
+
+    } catch (const boost::concurrent::sync_queue_is_closed&) {
+      LOG_DEBUG("Executor: planner_queue_ closed, exiting");
       return;
     }
   }
