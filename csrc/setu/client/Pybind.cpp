@@ -19,6 +19,7 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 #include "commons/datatypes/CopySpec.h"
+#include "commons/datatypes/Pybind.h"
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
@@ -78,30 +79,13 @@ void InitEnumsPybindClass(py::module_& m) {
       .value("INTERNAL_ERROR", ErrorCode::kInternalError)
       .value("TENSOR_NOT_FOUND", ErrorCode::kTensorNotFound);
 }
-//==============================================================================
-void InitTensorShardRefPybindClass(py::module_& m) {
-  py::class_<TensorShardRef, TensorShardRefPtr>(m, "TensorShardRef",
-                                                py::module_local())
-      .def(py::init<TensorName, ShardId, TensorDimMap>(), py::arg("name"),
-           py::arg("shard_id"), py::arg("dims"))
-      .def_readonly("name", &TensorShardRef::name,
-                    "Name of the tensor being sharded")
-      .def_readonly("shard_id", &TensorShardRef::shard_id,
-                    "UUID identifier for this shard")
-      .def_readonly("dims", &TensorShardRef::dims,
-                    "Map of dimension names to TensorDim objects")
-      .def("get_num_dims", &TensorShardRef::GetNumDims,
-           "Get number of dimensions in this shard")
-      .def("__str__", &TensorShardRef::ToString)
-      .def("__repr__", &TensorShardRef::ToString);
-}
 }  // namespace setu::client
 //==============================================================================
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   setu::commons::Logger::InitializeLogLevel();
 
+  setu::commons::datatypes::InitDatatypesPybindSubmodule(m);
   setu::client::InitEnumsPybindClass(m);
-  setu::client::InitTensorShardRefPybindClass(m);
   setu::client::InitClientPybindClass(m);
 }
 //==============================================================================

@@ -10,5 +10,6 @@ TimeMS: TypeAlias = float
 TimeS: TypeAlias = float
 Rank: TypeAlias = int
 TensorName: TypeAlias = str
+CopyOperationId: TypeAlias = int
 TensorSize: TypeAlias = int
 SerialNumber: TypeAlias = int
