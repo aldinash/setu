@@ -57,6 +57,8 @@ using setu::commons::messages::FreeShardsRequest;
 using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
+using setu::commons::messages::GetTensorSelectionRequest;
+using setu::commons::messages::GetTensorSelectionResponse;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
@@ -129,6 +131,9 @@ class NodeAgent {
                                   const WaitForCopyRequest& request);
     void HandleGetTensorHandleRequest(const Identity& client_identity,
                                       const GetTensorHandleRequest& request);
+    void HandleGetTensorSelectionRequest(
+        const Identity& client_identity,
+        const GetTensorSelectionRequest& request);
     void HandleFreeShardsRequest(const Identity& client_identity,
                                  const FreeShardsRequest& request);
 

@@ -29,6 +29,8 @@ using setu::commons::messages::FreeShardsRequest;
 using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
+using setu::commons::messages::GetTensorSelectionRequest;
+using setu::commons::messages::GetTensorSelectionResponse;
 using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
@@ -186,6 +188,40 @@ const std::vector<TensorShardRefPtr>& Client::GetShards(
   ASSERT_VALID_ARGUMENTS(it != client_shards_.end(),
                          "No shards found for tensor: {}", name);
   return it->second;
+}
+
+TensorSelectionPtr Client::Select(const TensorName& name) {
+  const auto& shards = GetShards(name);
+  ASSERT_VALID_RUNTIME(!shards.empty(), "No shards found for tensor: {}", name);
+
+  std::vector<ShardId> shard_ids;
+  shard_ids.reserve(shards.size());
+
+  std::ranges::transform(
+      shards, std::back_inserter(shard_ids),
+      [](const auto& shard_ref) { return shard_ref->shard_id; });
+
+  LOG_DEBUG("Client requesting tensor selection for tensor: {} with {} shards",
+            name, shard_ids.size());
+
+  // Send request to NodeAgent
+  ClientRequest request = GetTensorSelectionRequest(name, std::move(shard_ids));
+  Comm::Send(request_socket_, request);
+
+  auto response = Comm::Recv<GetTensorSelectionResponse>(request_socket_);
+
+  LOG_DEBUG(
+      "Client received tensor selection response for tensor: {} with "
+      "error code: {}",
+      name, response.error_code);
+
+  ASSERT_VALID_RUNTIME(response.error_code == ErrorCode::kSuccess,
+                       "Failed to get tensor selection for tensor {}: {}", name,
+                       response.error_code);
+  ASSERT_VALID_RUNTIME(response.selection.has_value(),
+                       "Tensor selection is missing for tensor {}", name);
+
+  return std::make_shared<TensorSelection>(response.selection.value());
 }
 
 void Client::FreeShards() {
