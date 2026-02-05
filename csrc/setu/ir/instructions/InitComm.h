@@ -16,37 +16,44 @@
 //==============================================================================
 #pragma once
 //==============================================================================
+#include <nccl.h>
+//==============================================================================
 #include "setu/commons/StdCommon.h"
+#include "setu/commons/Types.h"
 #include "setu/commons/utils/Serialization.h"
 //==============================================================================
-namespace setu::coordinator::datatypes {
+namespace setu::ir {
 //==============================================================================
+using setu::commons::DeviceRank;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-struct Instruction {
-  Instruction() = default;
-  ~Instruction() = default;
+struct InitCommInstruction {
+  InitCommInstruction(
+      ncclUniqueId comm_id,
+      std::unordered_map<DeviceRank, std::int32_t> device_to_rank)
+      : comm_id(std::move(comm_id)),
+        device_to_rank(std::move(device_to_rank)) {}
 
-  [[nodiscard]] std::string ToString() const {
-    return std::format("Instruction()");
-  }
+  ~InitCommInstruction() = default;
+  InitCommInstruction(const InitCommInstruction&) = default;
+  InitCommInstruction& operator=(const InitCommInstruction&) = default;
+  InitCommInstruction(InitCommInstruction&&) = default;
+  InitCommInstruction& operator=(InitCommInstruction&&) = default;
 
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    // Empty for now - add fields as needed
-  }
+  [[nodiscard]] std::string ToString() const;
 
-  static Instruction Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    // Empty for now - add fields as needed
-    return Instruction();
-  }
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static InitCommInstruction Deserialize(const BinaryRange& range);
+
+  ncclUniqueId comm_id;
+  std::unordered_map<DeviceRank, std::int32_t> device_to_rank;
 };
 
 //==============================================================================
-}  // namespace setu::coordinator::datatypes
+}  // namespace setu::ir
 //==============================================================================

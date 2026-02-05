@@ -14,21 +14,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "coordinator/datatypes/Pybind.h"
+#include "setu/coordinator/datatypes/Pybind.h"
 
-#include "commons/Logging.h"
-#include "commons/StdCommon.h"
-#include "commons/TorchCommon.h"
-#include "coordinator/Coordinator.h"
+#include "setu/commons/Logging.h"
+#include "setu/commons/StdCommon.h"
+#include "setu/commons/TorchCommon.h"
+#include "setu/coordinator/Coordinator.h"
 //==============================================================================
 namespace setu::coordinator {
 //==============================================================================
 void InitCoordinatorPybindClass(py::module_& m) {
   py::class_<Coordinator, std::shared_ptr<Coordinator>>(m, "Coordinator")
-      .def(py::init<std::size_t, std::size_t>(),
-           py::arg("router_executor_port"), py::arg("router_handler_port"),
-           "Create a Coordinator with specified ports for NodeAgent "
-           "communication")
+      .def(py::init<std::size_t>(), py::arg("port"),
+           "Create a Coordinator with specified port")
       .def("start", &Coordinator::Start, "Start the Coordinator loops")
       .def("stop", &Coordinator::Stop, "Stop the Coordinator loops");
 }

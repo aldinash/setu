@@ -1,37 +1,53 @@
+"""
+This example demonstrates tensor shard registration flow.
+
+1. Client sends RegisterTensorShardRequest to NodeAgent
+2. NodeAgent forwards request to Coordinator
+3. Coordinator generates a ShardId and returns TensorShardRef
+4. Client receives TensorShardRef confirming registration
+
+Expected Output:
+    - Client sends RegisterTensorShard requests for multiple tensors
+    - Each request returns a TensorShardRef with a generated UUID
+    - All processes shut down cleanly
+
+We also run with DEBUG=1 for visibility.
+"""
 from __future__ import annotations
 
+import torch
 import multiprocessing
 import os
 import time
 import traceback
 
-# Set debug logging to see the flow
 os.environ["SETU_LOG_LEVEL"] = "DEBUG"
 
 from setu._client import Client
-from setu._commons.datatypes import Device, TensorDim, TensorShardSpec
-from setu._commons.enums import DeviceKind, DType
+from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+from setu._commons.enums import DeviceKind
 from setu._coordinator import Coordinator
 from setu._node_manager import NodeAgent
 
 
 def create_sample_tensor_shard_spec(name: str) -> TensorShardSpec:
     device = Device(
-        kind=DeviceKind.CUDA,
         node_rank=0,
         device_rank=0,
-        local_device_rank=0,
+        torch_device=torch.device('cuda:0')
     )
 
+    # TensorDimSpec: name, size, start, end
+    # When shard owns entire dimension: start=0, end=size
     dims = [
-        TensorDim("first", 32),
-        TensorDim("second", 768),
+        TensorDimSpec("first", 32, 0, 32),
+        TensorDimSpec("second", 768, 0, 768),
     ]
 
     return TensorShardSpec(
         name=name,
         dims=dims,
-        dtype=DType.FLOAT32,
+        dtype=torch.float32,
         device=device,
     )
 
@@ -86,11 +102,20 @@ def run_node_agent_process(
             f"dealer_handler_port={dealer_handler_port}"
         )
 
+        devices = [
+            Device(
+                node_rank=0,
+                device_rank=0,
+                torch_device=torch.device('cuda:0')
+            )
+        ]
+
         node_agent = NodeAgent(
             node_rank=node_rank,
             router_port=router_port,
             dealer_executor_port=dealer_executor_port,
             dealer_handler_port=dealer_handler_port,
+            devices=devices
         )
         node_agent.start()
 

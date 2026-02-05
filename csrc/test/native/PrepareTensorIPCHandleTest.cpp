@@ -25,16 +25,14 @@ namespace setu::test::native {
 namespace {
 //==============================================================================
 TEST(TensorIPC, PrepareIPCHandleTest) {
-    // Create a tensor on the GPU
-    auto options = torch::TensorOptions()
-        .dtype(torch::kFloat16)
-        .device(torch::kCUDA, 0)
-    ;
-    auto a = torch::randn({3,3}, options);
+  // Create a tensor on the GPU
+  auto options =
+      torch::TensorOptions().dtype(torch::kFloat16).device(torch::kCUDA, 0);
+  auto a = torch::randn({3, 3}, options);
 
-    // Prepare IPC spec
-    auto spec = setu::commons::utils::PrepareTensorIPCSpec(a);
-    std::cout << "STORAGE HANDLE" << spec.storage_handle << std::endl;
+  // Prepare IPC spec
+  auto spec = setu::commons::utils::PrepareTensorIPCSpec(a);
+  std::cout << "STORAGE HANDLE" << spec.storage_handle << std::endl;
 }
 //==============================================================================
 }  // namespace

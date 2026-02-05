@@ -11,7 +11,7 @@ fi
 
 # cannot use the user's $GITHUB_TOKEN env var because script is run as root
 # so take it as an argument instead
-GITHUB_TOKEN="${1}" 
+GITHUB_TOKEN="${1}"
 
 if [ -z "$GITHUB_TOKEN" ]; then
     echo "No GitHub token provided as argument. https://docs.github.com/en/rest/actions/self-hosted-runners?apiVersion=2022-11-28#create-a-registration-token-for-a-repository"

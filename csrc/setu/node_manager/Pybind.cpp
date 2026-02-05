@@ -22,41 +22,48 @@
 #include "commons/datatypes/CopySpec.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
-#include "coordinator/datatypes/Program.h"
+#include "commons/utils/Pybind.h"
 #include "node_manager/NodeAgent.h"
-#include "node_manager/worker/Worker.h"
+#include "node_manager/worker/NCCLWorker.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
 using setu::commons::CopyOperationId;
-using setu::commons::NodeRank;
+using setu::commons::NodeId;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
-using setu::coordinator::datatypes::Program;
+using setu::node_manager::worker::NCCLWorker;
 using setu::node_manager::worker::Worker;
 //==============================================================================
+// NCCLWorker is exposed for testing instruction execution (setup + execute
+// without starting the socket loop).
+
 void InitWorkerPybindClass(py::module_& m) {
-  py::class_<Worker, std::shared_ptr<Worker>>(m, "Worker")
+  py::class_<Worker, std::shared_ptr<Worker>>(m, "Worker");
+
+  py::class_<NCCLWorker, Worker, std::shared_ptr<NCCLWorker>>(m, "NCCLWorker")
       .def(py::init<Device, std::size_t>(), py::arg("device"),
            py::arg("reply_port"),
-           "Create a worker bound to a device and reply port")
-      .def("start", &Worker::Start, "Start the worker executor loop")
-      .def("stop", &Worker::Stop, "Stop the worker executor loop")
-      .def("execute", &Worker::Execute, py::arg("program"),
-           "Execute a program on the worker")
-      .def("is_running", &Worker::IsRunning, "Check if worker is running")
-      .def_property_readonly("device", &Worker::GetDevice,
-                             "Get the device this worker is bound to");
+           "Create an NCCL worker for the given device and reply port")
+      .def("setup", &NCCLWorker::Setup,
+           py::call_guard<py::gil_scoped_release>(),
+           "Initialize CUDA device and stream (call before execute)")
+      .def("execute", &NCCLWorker::Execute, py::arg("program"),
+           py::call_guard<py::gil_scoped_release>(),
+           "Execute a program (instructions must be embellished with device "
+           "pointers)");
 }
 //==============================================================================
 void InitNodeAgentPybindClass(py::module_& m) {
   py::class_<NodeAgent, std::shared_ptr<NodeAgent>>(m, "NodeAgent")
-      .def(py::init<NodeRank, std::size_t, std::size_t, std::size_t>(),
-           py::arg("node_rank") = NodeRank{0}, py::arg("router_port"),
-           py::arg("dealer_executor_port"), py::arg("dealer_handler_port"),
-           "Create a NodeAgent with specified ports for communication")
+      .def(py::init<NodeId, std::size_t, std::string,
+                    const std::vector<Device>&>(),
+           py::arg("node_id"), py::arg("port"), py::arg("coordinator_endpoint"),
+           py::arg("devices"),
+           "Create a NodeAgent with specified port, coordinator endpoint, and "
+           "devices")
       .def("start", &NodeAgent::Start, "Start the NodeAgent handler loop")
       .def("stop", &NodeAgent::Stop, "Stop the NodeAgent handler loop")
       .def("register_tensor_shard", &NodeAgent::RegisterTensorShard,
@@ -66,9 +73,6 @@ void InitNodeAgentPybindClass(py::module_& m) {
            "Submit a copy operation and return an operation ID")
       .def("wait_for_copy", &NodeAgent::WaitForCopy, py::arg("copy_op_id"),
            "Wait for a copy operation to complete")
-      .def("allocate_tensor", &NodeAgent::AllocateTensor, py::arg("tensor_id"),
-           py::arg("shard_id"), py::arg("device"),
-           "Allocate a tensor shard on a device")
       .def("copy_operation_finished", &NodeAgent::CopyOperationFinished,
            py::arg("copy_op_id"), "Notify that a copy operation has completed")
       .def("execute", &NodeAgent::Execute, py::arg("plan"),

@@ -16,42 +16,43 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include "commons/BoostCommon.h"
 #include "commons/StdCommon.h"
 //==============================================================================
 #include "commons/Types.h"
+#include "commons/datatypes/TensorShardIdentifier.h"
+#include "commons/messages/BaseRequest.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================
-using setu::commons::DeviceRank;
-using setu::commons::ShardId;
-using setu::commons::TensorName;
+using setu::commons::datatypes::TensorShardIdentifier;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 //==============================================================================
 
-struct AllocateTensorRequest {
-  TensorName tensor_id;
-  ShardId shard_id;
-  DeviceRank device;
+struct AllocateTensorRequest : public BaseRequest {
+  /// @brief Constructs a request with auto-generated request ID.
+  explicit AllocateTensorRequest(TensorShardIdentifier tensor_shard_id_param)
+      : BaseRequest(), tensor_shard_id(std::move(tensor_shard_id_param)) {}
 
-  AllocateTensorRequest() = default;
-  AllocateTensorRequest(TensorName tensor_id_param, ShardId shard_id_param,
-                        DeviceRank device_param)
-      : tensor_id(std::move(tensor_id_param)),
-        shard_id(shard_id_param),
-        device(device_param) {}
+  /// @brief Constructs a request with explicit request ID (for
+  /// deserialization).
+  AllocateTensorRequest(RequestId request_id_param,
+                        TensorShardIdentifier tensor_shard_id_param)
+      : BaseRequest(request_id_param),
+        tensor_shard_id(std::move(tensor_shard_id_param)) {}
 
   [[nodiscard]] std::string ToString() const {
     return std::format(
-        "AllocateTensorRequest(tensor_id={}, shard_id={}, device={})",
-        tensor_id, boost::uuids::to_string(shard_id), device);
+        "AllocateTensorRequest(request_id={}, tensor_shard_id={})", request_id,
+        tensor_shard_id);
   }
 
   void Serialize(BinaryBuffer& buffer) const;
 
   static AllocateTensorRequest Deserialize(const BinaryRange& range);
+
+  const TensorShardIdentifier tensor_shard_id;
 };
 using AllocateTensorRequestPtr = std::shared_ptr<AllocateTensorRequest>;
 

@@ -18,24 +18,24 @@
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/messages/Messages.h"
-#include "commons/utils/SetuCommHelper.h"
+#include "commons/utils/Comm.h"
 #include "commons/utils/ZmqHelper.h"
 //==============================================================================
 namespace setu::client {
 //==============================================================================
 using setu::commons::messages::ClientRequest;
+using setu::commons::messages::GetTensorHandleRequest;
+using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
-using setu::commons::utils::SetuCommHelper;
+using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 //==============================================================================
-Client::Client(ClientRank client_rank) : client_rank_(client_rank) {
-  zmq_context_ = std::make_shared<zmq::context_t>();
-}
+Client::Client() { zmq_context_ = std::make_shared<zmq::context_t>(); }
 
 Client::~Client() {
   if (is_connected_) {
@@ -88,10 +88,9 @@ std::optional<TensorShardRef> Client::RegisterTensorShard(
   LOG_DEBUG("Client registering tensor shard: {}", shard_spec.name);
 
   ClientRequest request = RegisterTensorShardRequest(shard_spec);
-  SetuCommHelper::Send(request_socket_, request);
+  Comm::Send(request_socket_, request);
 
-  auto response =
-      SetuCommHelper::Recv<RegisterTensorShardResponse>(request_socket_);
+  auto response = Comm::Recv<RegisterTensorShardResponse>(request_socket_);
 
   LOG_DEBUG("Client received response for tensor shard: {} with error code: {}",
             shard_spec.name, response.error_code);
@@ -108,9 +107,9 @@ std::optional<CopyOperationId> Client::SubmitCopy(const CopySpec& copy_spec) {
             copy_spec.src_name, copy_spec.dst_name);
 
   ClientRequest request = SubmitCopyRequest(copy_spec);
-  SetuCommHelper::Send(request_socket_, request);
+  Comm::Send(request_socket_, request);
 
-  auto response = SetuCommHelper::Recv<SubmitCopyResponse>(request_socket_);
+  auto response = Comm::Recv<SubmitCopyResponse>(request_socket_);
 
   LOG_DEBUG("Client received copy operation ID: {}",
             response.copy_operation_id);
@@ -126,13 +125,34 @@ void Client::WaitForCopy(CopyOperationId copy_op_id) {
   LOG_DEBUG("Client waiting for copy operation ID: {}", copy_op_id);
 
   ClientRequest request = WaitForCopyRequest(copy_op_id);
-  SetuCommHelper::Send(request_socket_, request);
+  Comm::Send(request_socket_, request);
 
-  auto response = SetuCommHelper::Recv<WaitForCopyResponse>(request_socket_);
+  auto response = Comm::Recv<WaitForCopyResponse>(request_socket_);
 
   LOG_DEBUG(
       "Client finished waiting for copy operation ID: {} with error code: {}",
       copy_op_id, response.error_code);
+}
+
+TensorIPCSpec Client::GetTensorHandle(TensorName tensor_name) {
+  LOG_DEBUG("Client requesting tensor handle for: {}", tensor_name);
+
+  ClientRequest request = GetTensorHandleRequest(tensor_name);
+  Comm::Send(request_socket_, request);
+
+  auto response = Comm::Recv<GetTensorHandleResponse>(request_socket_);
+
+  LOG_DEBUG(
+      "Client received tensor handle response for: {} with error code: {}",
+      tensor_name, response.error_code);
+
+  ASSERT_VALID_RUNTIME(response.error_code == ErrorCode::kSuccess,
+                       "Failed to get tensor handle for {}: {}", tensor_name,
+                       response.error_code);
+  ASSERT_VALID_RUNTIME(response.tensor_ipc_spec.has_value(),
+                       "Tensor IPC spec is missing for {}", tensor_name);
+
+  return response.tensor_ipc_spec.value();
 }
 //==============================================================================
 }  // namespace setu::client

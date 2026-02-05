@@ -18,6 +18,7 @@
 //==============================================================================
 #include "commons/BoostCommon.h"
 #include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 #include "commons/Types.h"
 //==============================================================================
 #include "commons/datatypes/CopySpec.h"
@@ -27,37 +28,50 @@
 #include "commons/messages/Messages.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
-#include "coordinator/datatypes/Plan.h"
+#include "ir/Instruction.h"
 #include "node_manager/worker/Worker.h"
+#include "planner/Planner.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
+using setu::commons::ConcurrentMap;
 using setu::commons::CopyOperationId;
+using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::Identity;
-using setu::commons::NodeRank;
+using setu::commons::NodeId;
 using setu::commons::Queue;
+using setu::commons::RequestId;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
+using setu::commons::datatypes::TensorShardIdentifier;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::messages::AllocateTensorRequest;
+using setu::commons::messages::ClientRequest;
+using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
 using setu::commons::messages::ExecuteRequest;
+using setu::commons::messages::GetTensorHandleRequest;
+using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
+using setu::commons::messages::RegisterTensorShardResponse;
 using setu::commons::messages::SubmitCopyRequest;
+using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::WaitForCopyRequest;
+using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
-using setu::coordinator::datatypes::Plan;
+using setu::ir::Program;
 using setu::node_manager::worker::Worker;
+using setu::planner::Plan;
 //==============================================================================
 class NodeAgent {
  public:
-  NodeAgent(NodeRank node_rank, std::size_t router_port,
-            std::size_t dealer_executor_port, std::size_t dealer_handler_port);
+  NodeAgent(NodeId node_id, std::size_t port, std::string coordinator_endpoint,
+            const std::vector<Device>& devices);
   ~NodeAgent();
 
   std::optional<TensorShardRef> RegisterTensorShard(
@@ -67,9 +81,6 @@ class NodeAgent {
 
   void WaitForCopy(CopyOperationId copy_op_id);
 
-  void AllocateTensor(const TensorName& tensor_id, ShardId shard_id,
-                      DeviceRank device);
-
   void CopyOperationFinished(CopyOperationId copy_op_id);
 
   void Execute(Plan plan);
@@ -78,59 +89,143 @@ class NodeAgent {
   void Stop();
 
  private:
-  void StartHandlerLoop();
-  void StopHandlerLoop();
+  //============================================================================
+  // Handler and Executor are private structs that each own a component running
+  // in a separate thread. Since ZMQ sockets are not thread-safe, each struct is
+  // responsible for creating its own sockets from a shared ZMQ context (which
+  // is thread-safe). This design prevents accidental sharing of sockets across
+  // threads and keeps socket lifecycle management clean and localized.
+  //============================================================================
 
-  void StartExecutorLoop();
-  void StopExecutorLoop();
+  //============================================================================
+  // Handler: Handles incoming messages from clients and coordinator
+  //============================================================================
+  struct Handler {
+    Handler(
+        std::shared_ptr<zmq::context_t> zmq_context, std::size_t port,
+        const std::string& coordinator_endpoint,
+        Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
+        ConcurrentMap<TensorShardIdentifier, DevicePtr>& device_ptrs_lookup);
+    ~Handler();
 
-  void HandlerLoop();
-  void ExecutorLoop();
+    void Start();
+    void Stop();
 
-  void HandleClientRequest(const Identity& client_identity,
-                           const RegisterTensorShardRequest& request);
-  void HandleClientRequest(const Identity& client_identity,
-                           const SubmitCopyRequest& request);
-  void HandleClientRequest(const Identity& client_identity,
-                           const WaitForCopyRequest& request);
-  void HandleCoordinatorRequest(const AllocateTensorRequest& request);
-  void HandleCoordinatorRequest(const CopyOperationFinishedRequest& request);
-  void HandleCoordinatorRequest(const ExecuteRequest& request);
+   private:
+    void InitSockets();
+    void CloseSockets();
+    void Loop();
 
-  void InitZmqSockets();
-  void CloseZmqSockets();
+    // Unified message dispatch methods
+    void HandleClientMessage(const Identity& client_identity,
+                             const ClientRequest& request);
+    void HandleCoordinatorMessage(const CoordinatorMessage& message);
 
-  void EnsureWorkerIsReady(DeviceRank device_rank);
+    // Client message handlers
+    void HandleRegisterTensorShardRequest(
+        const Identity& client_identity,
+        const RegisterTensorShardRequest& request);
+    void HandleSubmitCopyRequest(const Identity& client_identity,
+                                 const SubmitCopyRequest& request);
+    void HandleWaitForCopyRequest(const Identity& client_identity,
+                                  const WaitForCopyRequest& request);
+    void HandleGetTensorHandleRequest(const Identity& client_identity,
+                                      const GetTensorHandleRequest& request);
 
-  Device CreateDeviceForRank(DeviceRank device_rank) const;
+    // Coordinator message handlers
+    void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
+    void HandleCopyOperationFinishedRequest(
+        const CopyOperationFinishedRequest& request);
+    void HandleExecuteRequest(const ExecuteRequest& request);
+    void HandleRegisterTensorShardResponse(
+        const RegisterTensorShardResponse& response);
+    void HandleSubmitCopyResponse(const SubmitCopyResponse& response);
+    void HandleWaitForCopyResponse(const WaitForCopyResponse& response);
 
-  NodeRank node_rank_;
+    void AllocateTensor(const TensorShardIdentifier& tensor_shard_id,
+                        const TensorShardSpec& tensor_shard_spec);
+
+    std::shared_ptr<zmq::context_t> zmq_context_;
+    std::size_t port_;
+    std::string coordinator_endpoint_;
+    Queue<std::pair<CopyOperationId, Plan>>& executor_queue_;
+    ConcurrentMap<TensorShardIdentifier, DevicePtr>& device_ptrs_lookup_;
+
+    ZmqSocketPtr client_socket_;
+    ZmqSocketPtr coordinator_socket_;
+
+    std::thread thread_;
+    std::atomic<bool> running_{false};
+
+    // stores mapping from request id to the client identity who sent this
+    // request. Used to route coordinator responses back to the client that
+    // initiated the request
+    std::unordered_map<RequestId, Identity> request_id_to_client_identity_;
+
+    // Pending client waits: maps copy_op_id to list of client identities
+    // waiting
+    std::unordered_map<CopyOperationId, std::vector<Identity>,
+                       boost::hash<CopyOperationId>>
+        pending_waits_;
+
+    std::unordered_map<TensorName, TensorShardSpec> tensor_name_to_spec_;
+    std::unordered_map<TensorName, torch::Tensor> tensor_name_to_tensor_;
+  };
+
+  //============================================================================
+  // Executor: Executes plans by dispatching to workers
+  //============================================================================
+  struct Executor {
+    Executor(
+        std::shared_ptr<zmq::context_t> zmq_context,
+        const std::string& coordinator_endpoint,
+        const std::vector<Device>& devices,
+        Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
+        ConcurrentMap<TensorShardIdentifier, DevicePtr>& device_ptrs_lookup);
+    ~Executor();
+
+    void Start();
+    void Stop();
+
+   private:
+    void InitSockets();
+    void CloseSockets();
+    void Loop();
+    void EmbellishProgram(Program& program);
+
+    std::shared_ptr<zmq::context_t> zmq_context_;
+    std::string coordinator_endpoint_;
+    std::vector<Device> devices_;
+    Queue<std::pair<CopyOperationId, Plan>>& executor_queue_;
+    ConcurrentMap<TensorShardIdentifier, DevicePtr>& device_ptrs_lookup_;
+
+    ZmqSocketPtr coordinator_socket_;
+    std::unordered_map<DeviceRank, ZmqSocketPtr> worker_sockets_;
+
+    std::thread thread_;
+    std::atomic<bool> running_{false};
+  };
+
+  NodeId node_id_;
+
+  std::size_t port_;
+  std::string coordinator_endpoint_;
+  std::vector<Device> devices_;
 
   std::shared_ptr<zmq::context_t> zmq_context_;
-  ZmqSocketPtr client_router_socket_;
-  ZmqSocketPtr coordinator_dealer_executor_socket_;
-  ZmqSocketPtr coordinator_dealer_handler_socket_;
-  std::unordered_map<DeviceRank, ZmqSocketPtr> workers_req_sockets_;
-
-  std::thread handler_thread_;
-  std::thread executor_thread_;
-
-  std::size_t router_port_;
-  std::size_t dealer_executor_port_;
-  std::size_t dealer_handler_port_;
-
-  std::atomic<bool> handler_running_{false};
-  std::atomic<bool> executor_running_{false};
 
   std::unordered_map<DeviceRank, std::unique_ptr<Worker>> workers_;
 
-  // Pending client waits: maps copy_op_id to list of client identities waiting
-  std::unordered_map<CopyOperationId, std::vector<Identity>,
-                     boost::hash<CopyOperationId>>
-      pending_waits_;
+  /// @brief Shared lookup: (TensorName, ShardId) -> DevicePtr
+  /// Handler populates this when allocating tensors, Executor reads it
+  /// Thread-safe concurrent map for access from both Handler and Executor
+  ConcurrentMap<TensorShardIdentifier, DevicePtr> device_ptrs_lookup_;
 
   // Executor queue: (copy_op_id, node_plan) pairs for execution
   Queue<std::pair<CopyOperationId, Plan>> executor_queue_;
+
+  std::unique_ptr<Handler> handler_;
+  std::unique_ptr<Executor> executor_;
 };
 //==============================================================================
 }  // namespace setu::node_manager

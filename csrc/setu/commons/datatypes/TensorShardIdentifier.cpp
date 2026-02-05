@@ -14,48 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "commons/datatypes/TensorShardIdentifier.h"
 //==============================================================================
-#include "setu/commons/StdCommon.h"
-#include "setu/commons/Types.h"
-#include "setu/commons/utils/Serialization.h"
-#include "setu/coordinator/datatypes/Instruction.h"
+namespace setu::commons::datatypes {
 //==============================================================================
-namespace setu::coordinator::datatypes {
-//==============================================================================
-using setu::commons::DeviceRank;
-using setu::commons::utils::BinaryBuffer;
-using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-struct Program {
-  Program() = default;
-  ~Program() = default;
+std::string TensorShardIdentifier::ToString() const {
+  return std::format("TensorShardIdentifier(name={}, shard_id={})", tensor_name,
+                     boost::uuids::to_string(shard_id));
+}
 
-  [[nodiscard]] std::string ToString() const {
-    return std::format("Program(participating_workers={}, instrs={})",
-                       participating_workers.size(), instrs.size());
-  }
+void TensorShardIdentifier::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(tensor_name, shard_id);
+}
 
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    writer.WriteFields(participating_workers, instrs);
-  }
-
-  static Program Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    Program program;
-    std::tie(program.participating_workers, program.instrs) =
-        reader.ReadFields<std::vector<DeviceRank>, std::vector<Instruction>>();
-    return program;
-  }
-
-  std::vector<DeviceRank> participating_workers;
-  std::vector<Instruction> instrs;
-};
+TensorShardIdentifier TensorShardIdentifier::Deserialize(
+    const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [name, id] = reader.ReadFields<TensorName, ShardId>();
+  return TensorShardIdentifier(std::move(name), std::move(id));
+}
 
 //==============================================================================
-}  // namespace setu::coordinator::datatypes
+}  // namespace setu::commons::datatypes
 //==============================================================================

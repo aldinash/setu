@@ -18,14 +18,13 @@
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 #include "commons/Types.h"
 #include "commons/datatypes/Device.h"
-#include "commons/datatypes/TensorDim.h"
-#include "commons/enums/Enums.h"
+#include "commons/datatypes/TensorDimSpec.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::datatypes {
-using setu::commons::enums::DType;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
@@ -36,7 +35,7 @@ using setu::commons::utils::BinaryWriter;
  *
  * TensorShardSpec contains the user-provided specification for a tensor shard:
  * - name: identifier for the tensor
- * - dims: list of dimensions with names and sizes
+ * - dims: list of dimension specs with names, sizes, and owned ranges
  * - dtype: data type of tensor elements
  * - device: device where the tensor resides
  *
@@ -48,14 +47,14 @@ struct TensorShardSpec {
    * @brief Constructs a tensor shard specification
    *
    * @param name_param Name/identifier for the tensor
-   * @param dims_param Vector of TensorDim specifying each dimension
+   * @param dims_param Vector of TensorDimSpec specifying each dimension
    * @param dtype_param Data type of the tensor elements
    * @param device_param Device where this tensor resides
    *
    * @throws std::invalid_argument if dims is empty
    */
-  TensorShardSpec(TensorName name_param, std::vector<TensorDim> dims_param,
-                  DType dtype_param, Device device_param)
+  TensorShardSpec(TensorName name_param, std::vector<TensorDimSpec> dims_param,
+                  torch::Dtype dtype_param, Device device_param)
       : name(std::move(name_param)),
         dims(std::move(dims_param)),
         dtype(dtype_param),
@@ -64,14 +63,15 @@ struct TensorShardSpec {
   }
 
   /**
-   * @brief Calculates the total number of elements in the tensor
+   * @brief Calculates the total number of owned elements in this shard
    *
-   * @return Total number of elements (product of all dimension sizes)
+   * @return Total number of owned elements (product of all owned dimension
+   * sizes)
    */
   [[nodiscard]] std::size_t GetNumElements() const {
     std::size_t num_elements = 1;
     for (const auto& dim : dims) {
-      num_elements *= dim.size;
+      num_elements *= dim.GetOwnedSize();
     }
     return num_elements;
   }
@@ -103,10 +103,10 @@ struct TensorShardSpec {
 
   static TensorShardSpec Deserialize(const BinaryRange& range);
 
-  const TensorName name;              ///< Name/identifier for the tensor
-  const std::vector<TensorDim> dims;  ///< Dimensions of the tensor
-  const DType dtype;                  ///< Data type of tensor elements
-  const Device device;                ///< Device where tensor resides
+  const TensorName name;                  ///< Name/identifier for the tensor
+  const std::vector<TensorDimSpec> dims;  ///< Dimension specs of the tensor
+  const torch::Dtype dtype;               ///< Data type of tensor elements
+  const Device device;                    ///< Device where tensor resides
 };
 //==============================================================================
 /// @brief Shared pointer to a TensorShardSpec object

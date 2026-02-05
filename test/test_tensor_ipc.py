@@ -17,8 +17,8 @@ def _child_process_modify_tensor(spec_dict, result_queue):
         # Rebuild tensor from spec
         args = {
             **spec_dict,
-            'tensor_cls': torch.Tensor,
-            'storage_cls': torch.storage.UntypedStorage
+            "tensor_cls": torch.Tensor,
+            "storage_cls": torch.storage.UntypedStorage,
         }
         rebuilt_tensor = rebuild_cuda_tensor(**args)
 
@@ -32,18 +32,19 @@ def _child_process_modify_tensor(spec_dict, result_queue):
         modified_value = rebuilt_tensor[0][0][0].item()
 
         # Send results back to parent
-        result_queue.put({
-            'success': True,
-            'original_value': original_value,
-            'modified_value': modified_value
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "original_value": original_value,
+                "modified_value": modified_value,
+            }
+        )
     except Exception as e:
         import traceback
-        result_queue.put({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
+
+        result_queue.put(
+            {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+        )
 
 
 @pytest.mark.gpu
@@ -56,7 +57,7 @@ def test_tensor_ipc_basic():
     from setu._commons.utils import prepare_tensor_ipc_spec
 
     # Create a shared tensor
-    original_tensor = torch.randn((1, 2, 3), device='cuda')
+    original_tensor = torch.randn((1, 2, 3), device="cuda:0")
     original_value = original_tensor[0][0][0].item()
 
     # Prepare IPC spec
@@ -64,26 +65,27 @@ def test_tensor_ipc_basic():
     spec_dict = spec.to_dict()
 
     # Verify spec contains expected fields
-    assert 'tensor_size' in spec_dict
-    assert 'tensor_stride' in spec_dict
-    assert 'tensor_offset' in spec_dict
-    assert 'dtype' in spec_dict
-    assert 'requires_grad' in spec_dict
-    assert 'storage_device' in spec_dict
-    assert 'storage_handle' in spec_dict
-    assert 'storage_size_bytes' in spec_dict
-    assert 'storage_offset_bytes' in spec_dict
-    assert 'ref_counter_handle' in spec_dict
-    assert 'ref_counter_offset' in spec_dict
-    assert 'event_handle' in spec_dict
-    assert 'event_sync_required' in spec_dict
+    assert "tensor_size" in spec_dict
+    assert "tensor_stride" in spec_dict
+    assert "tensor_offset" in spec_dict
+    assert "dtype" in spec_dict
+    assert "requires_grad" in spec_dict
+    assert "storage_device" in spec_dict
+    assert "storage_handle" in spec_dict
+    assert "storage_size_bytes" in spec_dict
+    assert "storage_offset_bytes" in spec_dict
+    assert "ref_counter_handle" in spec_dict
+    assert "ref_counter_offset" in spec_dict
+    assert "event_handle" in spec_dict
+    assert "event_sync_required" in spec_dict
 
     # Verify tensor properties
-    assert tuple(spec_dict['tensor_size']) == (1, 2, 3)
-    assert spec_dict['storage_device'] == 0  # Should be device index (int)
-    assert isinstance(spec_dict['storage_handle'], bytes)
-    assert isinstance(spec_dict['ref_counter_handle'], bytes)
-    assert isinstance(spec_dict['event_handle'], bytes)
+    assert tuple(spec_dict["tensor_size"]) == (1, 2, 3)
+    assert spec_dict["storage_device"] == 0  # Should be device index (int)
+    assert isinstance(spec_dict["storage_handle"], bytes)
+    assert isinstance(spec_dict["ref_counter_handle"], bytes)
+    assert isinstance(spec_dict["event_handle"], bytes)
+
 
 @pytest.mark.gpu
 def test_tensor_ipc_cross_process_modification():
@@ -95,7 +97,7 @@ def test_tensor_ipc_cross_process_modification():
     from setu._commons.utils import prepare_tensor_ipc_spec
 
     # Create a tensor in parent process
-    parent_tensor = torch.zeros((1, 2, 3), device='cuda')
+    parent_tensor = torch.zeros((1, 2, 3), device="cuda")
     initial_value = parent_tensor[0][0][0].item()
 
     # Prepare IPC spec
@@ -103,13 +105,12 @@ def test_tensor_ipc_cross_process_modification():
     spec_dict = spec.to_dict()
 
     # Create queue for results
-    ctx = mp.get_context('spawn')
+    ctx = mp.get_context("spawn")
     result_queue = ctx.Queue()
 
     # Spawn child process
     process = ctx.Process(
-        target=_child_process_modify_tensor,
-        args=(spec_dict, result_queue)
+        target=_child_process_modify_tensor, args=(spec_dict, result_queue)
     )
     process.start()
     process.join(timeout=10)
@@ -127,24 +128,28 @@ def test_tensor_ipc_cross_process_modification():
 
     assert result is not None, "No result received from child process"
 
-    if not result['success']:
-        error_msg = result.get('error', 'Unknown')
-        traceback_msg = result.get('traceback', '')
+    if not result["success"]:
+        error_msg = result.get("error", "Unknown")
+        traceback_msg = result.get("traceback", "")
         pytest.fail(f"Child process error: {error_msg}\n{traceback_msg}")
 
     # Verify child process saw the original value
-    assert abs(result['original_value'] - initial_value) < 1e-6, \
-        f"Child saw {result['original_value']}, expected {initial_value}"
+    assert (
+        abs(result["original_value"] - initial_value) < 1e-6
+    ), f"Child saw {result['original_value']}, expected {initial_value}"
 
     # Verify child process modified the value
-    assert abs(result['modified_value'] - 42.0) < 1e-6, \
-        f"Child modified to {result['modified_value']}, expected 42.0"
+    assert (
+        abs(result["modified_value"] - 42.0) < 1e-6
+    ), f"Child modified to {result['modified_value']}, expected 42.0"
 
     # CRITICAL: Verify parent process can see the modification
     parent_current_value = parent_tensor[0][0][0].item()
-    assert abs(parent_current_value - 42.0) < 1e-6, \
-        f"Parent cannot see modification: expected 42.0, got {parent_current_value}"
+    assert (
+        abs(parent_current_value - 42.0) < 1e-6
+    ), f"Parent cannot see modification: expected 42.0, got {parent_current_value}"
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Run tests with pytest
-    pytest.main([__file__, '-v', '--gpu'])
+    pytest.main([__file__, "-v", "--gpu"])

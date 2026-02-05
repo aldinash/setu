@@ -2,7 +2,7 @@
 // Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
 // Corporation
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License")
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "Pybind.h"
+#include "setu/coordinator/datatypes/Pybind.h"
 //==============================================================================
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
@@ -22,57 +22,23 @@
 #include "commons/datatypes/TensorDim.h"
 #include "commons/datatypes/TensorSelection.h"
 #include "commons/datatypes/TensorShard.h"
-#include "commons/enums/Enums.h"
-#include "coordinator/datatypes/Instruction.h"
-#include "coordinator/datatypes/Plan.h"
-#include "coordinator/datatypes/Program.h"
 #include "coordinator/datatypes/TensorMetadata.h"
 #include "coordinator/datatypes/TensorOwnershipMap.h"
 //==============================================================================
 namespace setu::coordinator::datatypes {
 //==============================================================================
+using setu::commons::DeviceRank;
 using setu::commons::TensorName;
 using setu::commons::datatypes::TensorDimMap;
 using setu::commons::datatypes::TensorSelectionPtr;
 using setu::commons::datatypes::TensorShardsMap;
-using setu::commons::enums::DType;
-using setu::coordinator::datatypes::Instruction;
-using setu::coordinator::datatypes::Plan;
-using setu::coordinator::datatypes::Program;
 using setu::coordinator::datatypes::TensorMetadata;
 using setu::coordinator::datatypes::TensorOwnershipMap;
 using setu::coordinator::datatypes::TensorOwnershipMapPtr;
 //==============================================================================
-void InitInstructionPybind(py::module_& m) {
-  py::class_<Instruction>(m, "Instruction")
-      .def(py::init<>(), "Create an empty instruction")
-      .def("__str__", &Instruction::ToString)
-      .def("__repr__", &Instruction::ToString);
-}
-//==============================================================================
-void InitProgramPybind(py::module_& m) {
-  py::class_<Program>(m, "Program")
-      .def(py::init<>(), "Create an empty program")
-      .def_readwrite("participating_workers", &Program::participating_workers,
-                     "Participating worker device ranks")
-      .def_readwrite("instrs", &Program::instrs,
-                     "Instructions to execute in order")
-      .def("__str__", &Program::ToString)
-      .def("__repr__", &Program::ToString);
-}
-//==============================================================================
-void InitPlanPybind(py::module_& m) {
-  py::class_<Plan>(m, "Plan")
-      .def(py::init<>(), "Create an empty plan")
-      .def_readwrite("worker_programs", &Plan::worker_programs,
-                     "Mapping of device ranks to worker programs")
-      .def("__str__", &Plan::ToString)
-      .def("__repr__", &Plan::ToString);
-}
-//==============================================================================
 void InitTensorMetadataPybind(py::module_& m) {
   py::class_<TensorMetadata>(m, "TensorMetadata", py::module_local())
-      .def(py::init<TensorName, TensorDimMap, DType, TensorShardsMap>(),
+      .def(py::init<TensorName, TensorDimMap, torch::Dtype, TensorShardsMap>(),
            py::arg("name"), py::arg("dims"), py::arg("dtype"),
            py::arg("shards"))
       .def_readonly("name", &TensorMetadata::name, "Name of the tensor")
@@ -108,9 +74,6 @@ void InitTensorOwnershipMapPybind(py::module_& m) {
 void InitDatatypesPybindSubmodule(py::module_& pm) {
   auto m = pm.def_submodule("datatypes", "Coordinator datatypes submodule");
 
-  InitInstructionPybind(m);
-  InitProgramPybind(m);
-  InitPlanPybind(m);
   InitTensorMetadataPybind(m);
   InitTensorOwnershipMapPybind(m);
 }
