@@ -39,7 +39,7 @@ struct Plan {
 
   [[nodiscard]] std::string ToString() const {
     return std::format("Plan(participants={}, programs={})",
-                       participants.size(), program.size());
+                       participants, program);
   }
 
   Participants participants;

@@ -106,7 +106,7 @@ def _run_source_client(
     from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     try:
-        print(f"[Source {client_id}] Starting for {tensor_name}...", flush=True)
+        print(f"[Source {client_id}] Starting for {tensor_name} with dims_data {dims_data}...", flush=True)
         client = Client()
         client.connect(client_endpoint)
         print(f"[Source {client_id}] Connected to {client_endpoint}", flush=True)
@@ -129,7 +129,7 @@ def _run_source_client(
         shard_ref = client.register_tensor_shard(shard_spec)
         if shard_ref is None:
             raise RuntimeError(f"Failed to register source shard {tensor_name}")
-        print(f"[Source {client_id}] Shard registered: {shard_ref.shard_id}", flush=True)
+        print(f"[Source {client_id}] Shard registered: {shard_ref.shard_id} for tensor '{tensor_name}'", flush=True)
 
         # Get tensor handle and initialize data
         print(f"[Source {client_id}] Getting tensor handle...", flush=True)
@@ -198,7 +198,7 @@ def _run_dest_client(
     )
 
     try:
-        print(f"[Dest {client_id}] Starting for {dst_tensor_name}...", flush=True)
+        print(f"[Dest {client_id}] Starting for {dst_tensor_name}... with dims_data {dims_data}", flush=True)
         # Wait for all sources to be ready
         print(f"[Dest {client_id}] Waiting for sources...", flush=True)
         if not all_sources_ready_event.wait(timeout=30):
@@ -240,6 +240,8 @@ def _run_dest_client(
         copy_spec = CopySpec(
             src_tensor_name, dst_tensor_name, src_selection, dst_selection
         )
+
+        time.sleep(2)
 
         # Submit pull operation
         print(f"[Dest {client_id}] Submitting pull from {src_tensor_name}...", flush=True)
@@ -306,12 +308,19 @@ def test_multi_client_pull():
     client_endpoint = f"tcp://localhost:{node_agent_port}"
     init_value = 10.0
 
-    # Tensor dimensions as raw data (name, global_size, start, end) - picklable
-    dims_data = [
-        ("dim_0", 4, 0, 4),
-        ("dim_1", 4, 0, 4),
-    ]
+    dim_names = ["a", "b"]
+    dim_sizes = [4,4]
 
+    def make_dims_data(dim_names, dim_sizes, num_shards, i, shard_dim=0):
+        dim_owned_range = []
+        for idx, sz in enumerate(dim_sizes):
+            if idx == shard_dim:
+                shard_sz = sz // num_shards
+                dim_owned_range.append((i * shard_sz, (i + 1) * shard_sz))
+            else:
+                dim_owned_range.append((0, sz))
+        return [(n, sz, s, e) for (n, sz, (s, e)) in zip(dim_names, dim_sizes, dim_owned_range)]
+        
     ctx = mp.get_context("spawn")
 
     # Events
@@ -359,8 +368,8 @@ def test_multi_client_pull():
                 target=_run_source_client,
                 args=(
                     client_endpoint,
-                    f"source_tensor_{i}",
-                    dims_data,
+                    f"source_tensor",
+                    make_dims_data(dim_names, dim_sizes, 2, i),
                     init_value,
                     source_init_events[i],
                     source_results,
@@ -383,14 +392,13 @@ def test_multi_client_pull():
         # Start 4 destination clients (2 per source)
         print("[Main] Starting 4 destination clients...", flush=True)
         for i in range(4):
-            src_idx = i // 2  # 0,1 -> source 0; 2,3 -> source 1
             proc = ctx.Process(
                 target=_run_dest_client,
                 args=(
                     client_endpoint,
-                    f"source_tensor_{src_idx}",
-                    f"dest_tensor_{i}",
-                    dims_data,
+                    f"source_tensor",
+                    f"dest_tensor",
+                    make_dims_data(dim_names, dim_sizes, 4, i),
                     all_sources_ready,
                     init_value,
                     dest_results,
