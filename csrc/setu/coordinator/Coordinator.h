@@ -45,6 +45,7 @@ using setu::commons::datatypes::TensorShardMetadata;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
+using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
@@ -162,6 +163,8 @@ class Coordinator {
         const RegisterTensorShardRequest& request);
     void HandleSubmitCopyRequest(const Identity& node_agent_identity,
                                  const SubmitCopyRequest& request);
+    void HandleSubmitPullRequest(const Identity& node_agent_identity,
+                                 const SubmitPullRequest& request);
 
     /// Key for tracking copy operations by (src, dst) tensor pair
     struct CopyKey {
