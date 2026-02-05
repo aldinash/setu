@@ -64,7 +64,10 @@ void InitClientPybindClass(py::module_& m) {
            "Get tensor shard references for a specific tensor name")
       .def("get_all_shards", &Client::GetAllShards,
            py::return_value_policy::reference_internal,
-           "Get all registered tensor shard references grouped by tensor name");
+           "Get all registered tensor shard references grouped by tensor name")
+      .def("select", &Client::Select, py::arg("name"),
+           "Get a TensorSelection covering only indices owned by this client's "
+           "shards for the given tensor name");
 }
 //==============================================================================
 void InitEnumsPybindClass(py::module_& m) {

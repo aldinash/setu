@@ -26,9 +26,11 @@ using setu::commons::DeviceRank;
 using setu::commons::RequestId;
 using setu::commons::ShardId;
 using setu::commons::TensorName;
+using setu::commons::datatypes::CreateSelectionFromShardMetadatas;
 using setu::commons::datatypes::Device;
 using setu::commons::datatypes::TensorDim;
 using setu::commons::datatypes::TensorDimMap;
+using setu::commons::datatypes::TensorSelection;
 using setu::commons::datatypes::TensorShardMetadata;
 using setu::commons::datatypes::TensorShardMetadataMap;
 using setu::commons::datatypes::TensorShardMetadataPtr;
@@ -47,6 +49,8 @@ using setu::commons::messages::FreeShardsRequest;
 using setu::commons::messages::FreeShardsResponse;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
+using setu::commons::messages::GetTensorSelectionRequest;
+using setu::commons::messages::GetTensorSelectionResponse;
 using setu::commons::messages::NodeAgentRequest;
 using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
@@ -229,6 +233,8 @@ void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
           HandleWaitForCopyRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, GetTensorHandleRequest>) {
           HandleGetTensorHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, GetTensorSelectionRequest>) {
+          HandleGetTensorSelectionRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, FreeShardsRequest>) {
           HandleFreeShardsRequest(client_identity, msg);
         }
@@ -313,6 +319,35 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
                                                   client_identity, response);
 
   LOG_DEBUG("Sent tensor handle response for shard: {}", request.shard_id);
+}
+
+void NodeAgent::Handler::HandleGetTensorSelectionRequest(
+    const Identity& client_identity, const GetTensorSelectionRequest& request) {
+  LOG_DEBUG("Handling GetTensorSelectionRequest for tensor: {} with {} shards",
+            request.tensor_name, request.shard_ids.size());
+
+  std::vector<TensorShardMetadataPtr> metadatas;
+  for (auto shard_id : request.shard_ids) {
+    if (auto it = tensor_shard_metadata_map_.find(shard_id);
+        it != tensor_shard_metadata_map_.end()) {
+      metadatas.push_back(it->second);
+    } else {
+      LOG_WARNING("Shard metadata not found: {}", shard_id);
+      GetTensorSelectionResponse response(request.request_id,
+                                          ErrorCode::kTensorNotFound);
+      Comm::SendWithIdentity<GetTensorSelectionResponse>(
+          client_socket_, client_identity, response);
+      return;
+    }
+  }
+
+  auto selection = CreateSelectionFromShardMetadatas(metadatas);
+  Comm::SendWithIdentity<GetTensorSelectionResponse>(
+      client_socket_, client_identity,
+      {request.request_id, ErrorCode::kSuccess, *selection});
+
+  LOG_DEBUG("Sent tensor selection response for tensor: {}",
+            request.tensor_name);
 }
 
 void NodeAgent::Handler::HandleAllocateTensorRequest(

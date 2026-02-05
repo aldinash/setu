@@ -32,6 +32,8 @@
 #include "commons/messages/FreeShardsResponse.h"
 #include "commons/messages/GetTensorHandleRequest.h"
 #include "commons/messages/GetTensorHandleResponse.h"
+#include "commons/messages/GetTensorSelectionRequest.h"
+#include "commons/messages/GetTensorSelectionResponse.h"
 #include "commons/messages/RegisterTensorShardCoordinatorResponse.h"
 #include "commons/messages/RegisterTensorShardNodeAgentResponse.h"
 #include "commons/messages/RegisterTensorShardRequest.h"
@@ -45,7 +47,8 @@ namespace setu::commons::messages {
 /// @brief Requests from Client to NodeAgent.
 using ClientRequest =
     std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
-                 WaitForCopyRequest, GetTensorHandleRequest, FreeShardsRequest>;
+                 WaitForCopyRequest, GetTensorHandleRequest, FreeShardsRequest,
+                 GetTensorSelectionRequest>;
 
 /// @brief Requests from NodeAgent to Coordinator.
 using NodeAgentRequest = std::variant<RegisterTensorShardRequest,
@@ -63,13 +66,13 @@ using Request =
     std::variant<RegisterTensorShardRequest, SubmitCopyRequest,
                  WaitForCopyRequest, GetTensorHandleRequest,
                  AllocateTensorRequest, CopyOperationFinishedRequest,
-                 ExecuteRequest, FreeShardsRequest>;
+                 ExecuteRequest, FreeShardsRequest, GetTensorSelectionRequest>;
 
-using Response =
-    std::variant<RegisterTensorShardNodeAgentResponse, SubmitCopyResponse,
-                 WaitForCopyResponse, GetTensorHandleResponse,
-                 AllocateTensorResponse, CopyOperationFinishedResponse,
-                 ExecuteResponse, FreeShardsResponse>;
+using Response = std::variant<RegisterTensorShardNodeAgentResponse,
+                              SubmitCopyResponse, WaitForCopyResponse,
+                              GetTensorHandleResponse, AllocateTensorResponse,
+                              CopyOperationFinishedResponse, ExecuteResponse,
+                              FreeShardsResponse, GetTensorSelectionResponse>;
 //==============================================================================
 }  // namespace setu::commons::messages
 //==============================================================================
