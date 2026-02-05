@@ -51,6 +51,7 @@ using setu::commons::messages::RegisterTensorShardNodeAgentResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
+using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::Comm;
@@ -229,6 +230,8 @@ void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
           HandleRegisterTensorShardRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, SubmitCopyRequest>) {
           HandleSubmitCopyRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, SubmitPullRequest>) {
+          HandleSubmitPullRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, WaitForCopyRequest>) {
           HandleWaitForCopyRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, GetTensorHandleRequest>) {
@@ -275,6 +278,16 @@ void NodeAgent::Handler::HandleRegisterTensorShardRequest(
 void NodeAgent::Handler::HandleSubmitCopyRequest(
     const Identity& client_identity, const SubmitCopyRequest& request) {
   LOG_DEBUG("Handling SubmitCopyRequest from {} to {}",
+            request.copy_spec.src_name, request.copy_spec.dst_name);
+
+  request_id_to_client_identity_[request.request_id] = client_identity;
+
+  Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
+}
+
+void NodeAgent::Handler::HandleSubmitPullRequest(
+    const Identity& client_identity, const SubmitPullRequest& request) {
+  LOG_DEBUG("Handling SubmitPullRequest from {} to {}",
             request.copy_spec.src_name, request.copy_spec.dst_name);
 
   request_id_to_client_identity_[request.request_id] = client_identity;

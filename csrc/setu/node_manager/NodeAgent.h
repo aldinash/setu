@@ -60,6 +60,7 @@ using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
+using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::utils::ZmqContextPtr;
@@ -127,6 +128,8 @@ class NodeAgent {
         const RegisterTensorShardRequest& request);
     void HandleSubmitCopyRequest(const Identity& client_identity,
                                  const SubmitCopyRequest& request);
+    void HandleSubmitPullRequest(const Identity& client_identity,
+                                 const SubmitPullRequest& request);
     void HandleWaitForCopyRequest(const Identity& client_identity,
                                   const WaitForCopyRequest& request);
     void HandleGetTensorHandleRequest(const Identity& client_identity,
