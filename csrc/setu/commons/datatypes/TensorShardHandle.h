@@ -22,6 +22,7 @@
 #include "commons/Logging.h"
 #include "commons/Types.h"
 #include "commons/datatypes/TensorShard.h"
+#include "commons/utils/FileLock.h"
 //==============================================================================
 namespace setu::commons::datatypes {
 //==============================================================================
@@ -34,20 +35,21 @@ namespace setu::commons::datatypes {
 class TensorShardReadHandle : public NonCopyableNonMovable {
  public:
   /**
-   * @brief Constructs a read handle and acquires shared lock
+   * @brief Constructs a read handle and acquires shared flock
    *
    * @param shard_param Tensor shard to acquire read access for
    *
    * @throws std::invalid_argument if shard is null
    */
   explicit TensorShardReadHandle(TensorShardPtr shard_param)
-      : shard(shard_param), lock(shard->mutex) {
+      : shard(shard_param),
+        lock(shard->lock_file_path_, utils::FileLockMode::kShared) {
     ASSERT_VALID_POINTER_ARGUMENT(shard_param);
     LOG_DEBUG("Acquired read lock for shard: {}", shard->metadata.spec.name);
   }
 
   /**
-   * @brief Releases the shared lock on destruction
+   * @brief Releases the shared flock on destruction
    */
   ~TensorShardReadHandle() {
     LOG_DEBUG("Released read lock for shard: {}", shard->metadata.spec.name);
@@ -68,8 +70,8 @@ class TensorShardReadHandle : public NonCopyableNonMovable {
   [[nodiscard]] const TensorShard* GetShard() const { return shard.get(); }
 
  private:
-  const TensorShardPtr shard;                ///< Shard being accessed
-  std::shared_lock<std::shared_mutex> lock;  ///< Shared lock for read access
+  const TensorShardPtr shard;  ///< Shard being accessed
+  utils::FileLock lock;        ///< File-based shared lock for read access
 };
 //==============================================================================
 /**
@@ -82,20 +84,21 @@ class TensorShardReadHandle : public NonCopyableNonMovable {
 class TensorShardWriteHandle : public NonCopyableNonMovable {
  public:
   /**
-   * @brief Constructs a write handle and acquires exclusive lock
+   * @brief Constructs a write handle and acquires exclusive flock
    *
    * @param shard_param Tensor shard to acquire write access for
    *
    * @throws std::invalid_argument if shard is null
    */
   explicit TensorShardWriteHandle(TensorShardPtr shard_param)
-      : shard(shard_param), lock(shard->mutex) {
+      : shard(shard_param),
+        lock(shard->lock_file_path_, utils::FileLockMode::kExclusive) {
     ASSERT_VALID_POINTER_ARGUMENT(shard_param);
     LOG_DEBUG("Acquired write lock for shard: {}", shard->metadata.spec.name);
   }
 
   /**
-   * @brief Releases the exclusive lock on destruction
+   * @brief Releases the exclusive flock on destruction
    */
   ~TensorShardWriteHandle() {
     LOG_DEBUG("Released write lock for shard: {}", shard->metadata.spec.name);
@@ -117,8 +120,7 @@ class TensorShardWriteHandle : public NonCopyableNonMovable {
 
  private:
   const TensorShardPtr shard;  ///< Shard being accessed
-  std::unique_lock<std::shared_mutex>
-      lock;  ///< Exclusive lock for write access
+  utils::FileLock lock;  ///< File-based exclusive lock for write access
 };
 //==============================================================================
 /// @brief Shared pointer to TensorShardReadHandle

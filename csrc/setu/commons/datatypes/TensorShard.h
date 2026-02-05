@@ -16,6 +16,7 @@
 //==============================================================================
 #pragma once
 //==============================================================================
+#include "commons/BoostCommon.h"
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
@@ -33,17 +34,44 @@ namespace setu::commons::datatypes {
  */
 struct TensorShard {
   /**
-   * @brief Constructs a tensor shard with metadata and tensor
+   * @brief Constructs a tensor shard with metadata, tensor, and lock directory
    *
    * @param metadata_param Metadata describing this shard
    * @param tensor_param The torch tensor holding the shard data
+   * @param lock_dir Directory for lock files (default: /tmp/setu/locks)
    *
    * @throws std::invalid_argument if tensor_param is not defined
    */
-  TensorShard(TensorShardMetadata metadata_param, torch::Tensor tensor_param)
-      : metadata(std::move(metadata_param)), tensor(std::move(tensor_param)) {
+  TensorShard(TensorShardMetadata metadata_param, torch::Tensor tensor_param,
+              std::string lock_dir = "/tmp/setu/locks")
+      : metadata(std::move(metadata_param)),
+        tensor(std::move(tensor_param)),
+        lock_file_path_(
+            (std::filesystem::path(lock_dir) /
+             (boost::uuids::to_string(metadata.id) + ".lock"))
+                .string()) {
     ASSERT_VALID_ARGUMENTS(tensor.defined() && tensor.numel() > 0,
                            "Invalid tensor argument: tensor is not defined");
+    // Ensure the lock directory and file exist for cross-process locking
+    std::filesystem::create_directories(
+        std::filesystem::path(lock_file_path_).parent_path());
+    std::int32_t fd =
+        ::open(lock_file_path_.c_str(), O_RDWR | O_CREAT, 0666);
+    ASSERT_VALID_RUNTIME(fd >= 0, "Failed to create lock file '{}': {}",
+                         lock_file_path_, std::strerror(errno));
+    ::close(fd);
+  }
+
+  /**
+   * @brief Destructor. Removes the lock file.
+   */
+  ~TensorShard() {
+    std::error_code ec;
+    std::filesystem::remove(lock_file_path_, ec);
+    if (ec) {
+      LOG_WARNING("Failed to remove lock file '{}': {}", lock_file_path_,
+                  ec.message());
+    }
   }
 
   /**
@@ -69,7 +97,8 @@ struct TensorShard {
  private:
   friend class TensorShardReadHandle;
   friend class TensorShardWriteHandle;
-  mutable std::shared_mutex mutex;  ///< Mutex for thread-safe access to tensor
+  const std::string lock_file_path_;  ///< Path to flock file for cross-process
+                                      ///< locking
 };
 //==============================================================================
 /// @brief Shared pointer to a TensorShard object
