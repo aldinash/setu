@@ -315,17 +315,29 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
 
   // TODO: Think how this will change for a general tensor wrapper
   std::optional<setu::commons::utils::TensorIPCSpec> tensor_ipc_spec;
-  bool found = shard_id_to_tensor_.visit(
-      request.shard_id, [&tensor_ipc_spec](const auto& entry) {
-        tensor_ipc_spec.emplace(PrepareTensorIPCSpec(entry.second));
-      });
 
-  if (!found) {
+  bool found_metadata = tensor_shard_metadata_map_.find(request.shard_id) !=
+                        tensor_shard_metadata_map_.end();
+
+  if (!found_metadata) {
     LOG_ERROR("Shard not found: {}", request.shard_id);
     GetTensorHandleResponse response(request.request_id,
                                      ErrorCode::kTensorNotFound);
     Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
                                                     client_identity, response);
+    return;
+  }
+
+  bool found_allocated = shard_id_to_tensor_.visit(
+      request.shard_id, [&tensor_ipc_spec](const auto& entry) {
+        tensor_ipc_spec.emplace(PrepareTensorIPCSpec(entry.second));
+      });
+
+  if (!found_allocated) {
+    waiting_for_allocation_clients_[request.shard_id].push_back(
+        WaitingClient{client_identity, request});
+    LOG_DEBUG("Shard not yet allocated, added client to waiting list: {}",
+              request.shard_id);
     return;
   }
 
@@ -356,8 +368,8 @@ void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
               request.shard_id);
   } else {
     // Shard not yet allocated, add client to pending waits
-    pending_shard_allocation_waits_[request.shard_id].push_back(
-        client_identity);
+    waiting_for_allocation_clients_[request.shard_id].push_back(
+        WaitingClient{client_identity, request});
     LOG_DEBUG("Shard {} not yet allocated, client added to pending waits",
               request.shard_id);
   }
@@ -373,6 +385,20 @@ void NodeAgent::Handler::HandleAllocateTensorRequest(
                          "No metadata found for shard: {}", shard_id);
 
     AllocateTensor(*it->second);
+
+    // Check if there are clients waiting for this shard allocation
+    auto waiting_it = waiting_for_allocation_clients_.find(shard_id);
+    if (waiting_it == waiting_for_allocation_clients_.end()) {
+      continue;
+    }
+
+    for (const auto& waiting_client : waiting_it->second) {
+      HandleClientMessage(waiting_client.client_identity,
+                          waiting_client.request);
+    }
+
+    waiting_for_allocation_clients_.erase(waiting_it);
+    LOG_DEBUG("Unblocked waiting clients for allocated shard: {}", shard_id);
   }
 }
 
@@ -491,23 +517,10 @@ void NodeAgent::Handler::AllocateTensor(
       torch::TensorOptions().dtype(spec.dtype).device(spec.device.torch_device);
   torch::Tensor tensor = torch::empty(shape, options);
 
-  shard_id_to_tensor_.insert_or_assign(shard_metadata.id, std::move(tensor));
+  shard_id_to_tensor_.insert_or_assign(shard_metadata.id, tensor);
 
   LOG_DEBUG("Successfully allocated shard {} with shape {} on device {}",
             shard_metadata.id, shape, spec.device.torch_device.str());
-
-  // Notify any clients waiting for this shard to be allocated
-  auto it = pending_shard_allocation_waits_.find(shard_metadata.id);
-  if (it != pending_shard_allocation_waits_.end()) {
-    for (const auto& client_identity : it->second) {
-      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
-      Comm::SendWithIdentity<WaitForShardAllocationResponse>(
-          client_socket_, client_identity, response);
-      LOG_DEBUG("Notified waiting client for shard allocation: {}",
-                shard_metadata.id);
-    }
-    pending_shard_allocation_waits_.erase(it);
-  }
 }
 
 //==============================================================================
