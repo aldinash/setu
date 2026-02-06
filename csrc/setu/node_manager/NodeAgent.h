@@ -77,7 +77,8 @@ using setu::planner::Plan;
 class NodeAgent {
  public:
   NodeAgent(NodeId node_id, std::size_t port, std::string coordinator_endpoint,
-            const std::vector<Device>& devices);
+            const std::vector<Device>& devices,
+            std::string lock_base_dir = "/tmp/setu/locks");
   ~NodeAgent();
 
   std::optional<TensorShardRef> RegisterTensorShard(
@@ -110,7 +111,8 @@ class NodeAgent {
     Handler(NodeId node_id, std::shared_ptr<zmq::context_t> zmq_context,
             std::size_t port, const std::string& coordinator_endpoint,
             Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
-            TensorShardsConcurrentMap& shard_id_to_tensor);
+            TensorShardsConcurrentMap& shard_id_to_tensor,
+            std::string lock_base_dir);
     ~Handler();
 
     void Start();
@@ -183,6 +185,7 @@ class NodeAgent {
 
     TensorShardMetadataMap tensor_shard_metadata_map_;
     TensorShardsConcurrentMap& shard_id_to_tensor_;
+    std::string lock_base_dir_;  ///< Directory for file-based locks (IPC)
   };
 
   //============================================================================
@@ -236,6 +239,7 @@ class NodeAgent {
   std::unique_ptr<Executor> executor_;
 
   TensorShardsConcurrentMap shard_id_to_tensor_;
+  std::string lock_base_dir_;  ///< Directory for file-based locks (IPC)
 };
 //==============================================================================
 }  // namespace setu::node_manager

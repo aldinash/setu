@@ -24,6 +24,7 @@
 #include "commons/enums/Enums.h"
 #include "commons/utils/TorchTensorIPC.h"
 #include "commons/utils/ZmqHelper.h"
+#include "messaging/GetTensorHandleResponse.h"
 
 namespace setu::client {
 using setu::commons::CopyOperationId;
@@ -34,6 +35,7 @@ using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardRefPtr;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::enums::ErrorCode;
+using setu::commons::messages::GetTensorHandleResponse;
 using setu::commons::utils::TensorIPCSpec;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
@@ -62,7 +64,7 @@ class Client {
 
   void WaitForShardAllocation(ShardId shard_id);
 
-  TensorIPCSpec GetTensorHandle(const TensorShardRef& shard_ref);
+  GetTensorHandleResponse GetTensorHandle(const TensorShardRef& shard_ref);
 
   [[nodiscard]] std::vector<TensorShardRefPtr> GetShards() const;
 

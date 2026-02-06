@@ -26,16 +26,21 @@ using setu::commons::utils::BinaryWriter;
 
 void GetTensorHandleResponse::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(request_id, error_code, tensor_ipc_spec);
+  writer.WriteFields(request_id, error_code, tensor_ipc_spec, metadata,
+                     lock_base_dir);
 }
 
 GetTensorHandleResponse GetTensorHandleResponse::Deserialize(
     const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [request_id_val, error_code_val, tensor_ipc_spec_val] =
-      reader.ReadFields<RequestId, ErrorCode, std::optional<TensorIPCSpec>>();
+  auto [request_id_val, error_code_val, tensor_ipc_spec_val, metadata_val,
+        lock_base_dir_val] =
+      reader.ReadFields<RequestId, ErrorCode, std::optional<TensorIPCSpec>,
+                        std::optional<TensorShardMetadata>, std::string>();
   return GetTensorHandleResponse(request_id_val, error_code_val,
-                                 std::move(tensor_ipc_spec_val));
+                                 std::move(tensor_ipc_spec_val),
+                                 std::move(metadata_val),
+                                 std::move(lock_base_dir_val));
 }
 
 //==============================================================================

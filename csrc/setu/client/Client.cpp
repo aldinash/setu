@@ -203,7 +203,8 @@ void Client::WaitForShardAllocation(ShardId shard_id) {
       shard_id, response.error_code);
 }
 
-TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
+GetTensorHandleResponse Client::GetTensorHandle(
+    const TensorShardRef& shard_ref) {
   ClientRequest request = GetTensorHandleRequest(shard_ref.shard_id);
   Comm::Send(request_socket_, request);
 
@@ -220,8 +221,10 @@ TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
   ASSERT_VALID_RUNTIME(response.tensor_ipc_spec.has_value(),
                        "Tensor IPC spec is missing for shard {}",
                        shard_ref.shard_id);
+  ASSERT_VALID_RUNTIME(response.metadata.has_value(),
+                       "Metadata is missing for shard {}", shard_ref.shard_id);
 
-  return response.tensor_ipc_spec.value();
+  return response;
 }
 
 std::vector<TensorShardRefPtr> Client::GetShards() const {
