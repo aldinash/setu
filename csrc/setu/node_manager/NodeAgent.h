@@ -173,9 +173,13 @@ class NodeAgent {
     // Pending client waits: clients waiting for a copy operation to finish
     setu::commons::utils::PendingWaits<CopyOperationId> copy_waits_;
 
-    // Pending shard allocation waits: clients waiting for a shard to be
-    // allocated
-    setu::commons::utils::PendingWaits<ShardId> shard_allocation_waits_;
+    struct WaitingClient {
+      Identity client_identity;
+      ClientRequest request;
+    };
+
+    std::unordered_map<ShardId, std::vector<WaitingClient>>
+        waiting_for_allocation_clients_;
 
     TensorShardMetadataMap tensor_shard_metadata_map_;
     TensorShardsConcurrentMap& shard_id_to_tensor_;
