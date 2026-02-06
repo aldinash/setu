@@ -22,37 +22,37 @@
 #include "commons/Logging.h"
 #include "commons/Types.h"
 #include "commons/datatypes/TensorShard.h"
-#include "commons/utils/FileLock.h"
 //==============================================================================
 namespace setu::commons::datatypes {
 //==============================================================================
 /**
  * @brief RAII handle for read-only access to tensor shard device memory
  *
- * Provides thread-safe read access to a tensor shard's device memory using
- * a shared lock. Multiple readers can hold read handles simultaneously.
+ * Provides process-safe read access to a tensor shard's device memory using
+ * a shared file lock.
  */
 class TensorShardReadHandle : public NonCopyableNonMovable {
  public:
   /**
-   * @brief Constructs a read handle and acquires shared flock
+   * @brief Constructs a read handle and acquires shared file lock
    *
    * @param shard_param Tensor shard to acquire read access for
    *
    * @throws std::invalid_argument if shard is null
    */
   explicit TensorShardReadHandle(TensorShardPtr shard_param)
-      : shard(shard_param),
-        lock(shard->lock_file_path_, utils::FileLockMode::kShared) {
-    ASSERT_VALID_POINTER_ARGUMENT(shard_param);
-    LOG_DEBUG("Acquired read lock for shard: {}", shard->metadata.spec.name);
+      : shard_(std::move(shard_param)) {
+    ASSERT_VALID_POINTER_ARGUMENT(shard_);
+    shard_->lock_->lock_sharable();
+    LOG_DEBUG("Acquired read lock for shard: {}", shard_->metadata.spec.name);
   }
 
   /**
-   * @brief Releases the shared flock on destruction
+   * @brief Releases the shared file lock on destruction
    */
   ~TensorShardReadHandle() {
-    LOG_DEBUG("Released read lock for shard: {}", shard->metadata.spec.name);
+    shard_->lock_->unlock_sharable();
+    LOG_DEBUG("Released read lock for shard: {}", shard_->metadata.spec.name);
   }
 
   /**
@@ -60,48 +60,50 @@ class TensorShardReadHandle : public NonCopyableNonMovable {
    *
    * @return Const pointer to device memory
    */
-  [[nodiscard]] DevicePtr GetDevicePtr() const { return shard->GetDevicePtr(); }
+  [[nodiscard]] DevicePtr GetDevicePtr() const {
+    return shard_->GetDevicePtr();
+  }
 
   /**
    * @brief Get the shard being accessed
    *
    * @return Const pointer to the tensor shard
    */
-  [[nodiscard]] const TensorShard* GetShard() const { return shard.get(); }
+  [[nodiscard]] const TensorShard* GetShard() const { return shard_.get(); }
 
  private:
-  const TensorShardPtr shard;  ///< Shard being accessed
-  utils::FileLock lock;        ///< File-based shared lock for read access
+  const TensorShardPtr shard_;  ///< Shard being accessed
 };
 //==============================================================================
 /**
  * @brief RAII handle for read-write access to tensor shard device memory
  *
- * Provides thread-safe write access to a tensor shard's device memory using
- * an exclusive lock. Only one writer can hold a write handle at a time, and
- * no readers can access while a write lock is held.
+ * Provides process-safe write access to a tensor shard's device memory using
+ * an exclusive file lock. Only one writer can hold a write handle at a time,
+ * and no readers can access while a write lock is held.
  */
 class TensorShardWriteHandle : public NonCopyableNonMovable {
  public:
   /**
-   * @brief Constructs a write handle and acquires exclusive flock
+   * @brief Constructs a write handle and acquires exclusive file lock
    *
    * @param shard_param Tensor shard to acquire write access for
    *
    * @throws std::invalid_argument if shard is null
    */
   explicit TensorShardWriteHandle(TensorShardPtr shard_param)
-      : shard(shard_param),
-        lock(shard->lock_file_path_, utils::FileLockMode::kExclusive) {
-    ASSERT_VALID_POINTER_ARGUMENT(shard_param);
-    LOG_DEBUG("Acquired write lock for shard: {}", shard->metadata.spec.name);
+      : shard_(std::move(shard_param)) {
+    ASSERT_VALID_POINTER_ARGUMENT(shard_);
+    shard_->lock_->lock();
+    LOG_DEBUG("Acquired write lock for shard: {}", shard_->metadata.spec.name);
   }
 
   /**
-   * @brief Releases the exclusive flock on destruction
+   * @brief Releases the exclusive file lock on destruction
    */
   ~TensorShardWriteHandle() {
-    LOG_DEBUG("Released write lock for shard: {}", shard->metadata.spec.name);
+    shard_->lock_->unlock();
+    LOG_DEBUG("Released write lock for shard: {}", shard_->metadata.spec.name);
   }
 
   /**
@@ -109,18 +111,19 @@ class TensorShardWriteHandle : public NonCopyableNonMovable {
    *
    * @return Pointer to device memory
    */
-  [[nodiscard]] DevicePtr GetDevicePtr() const { return shard->GetDevicePtr(); }
+  [[nodiscard]] DevicePtr GetDevicePtr() const {
+    return shard_->GetDevicePtr();
+  }
 
   /**
    * @brief Get the shard being accessed
    *
    * @return Pointer to the tensor shard
    */
-  [[nodiscard]] TensorShard* GetShard() const { return shard.get(); }
+  [[nodiscard]] TensorShard* GetShard() const { return shard_.get(); }
 
  private:
-  const TensorShardPtr shard;  ///< Shard being accessed
-  utils::FileLock lock;  ///< File-based exclusive lock for write access
+  const TensorShardPtr shard_;  ///< Shard being accessed
 };
 //==============================================================================
 /// @brief Shared pointer to TensorShardReadHandle
