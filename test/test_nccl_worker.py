@@ -63,7 +63,7 @@ def test_nccl_worker_copy_instruction():
     node_id = uuid.uuid4()
     torch_device = torch.device("cuda:0")
     device = Device(torch_device)
-    worker = NCCLWorker(node_id, device, reply_port=0)
+    worker = NCCLWorker(node_id, device)
     worker.setup()
 
     num_elements = 128
@@ -114,7 +114,7 @@ def test_nccl_worker_copy_instruction_with_offset():
     node_id = uuid.uuid4()
     torch_device = torch.device("cuda:0")
     device = Device(torch_device)
-    worker = NCCLWorker(node_id, device, reply_port=0)
+    worker = NCCLWorker(node_id, device)
     worker.setup()
 
     # Buffer large enough for offset copy: copy 8 floats starting at byte 16
@@ -169,7 +169,7 @@ def test_nccl_worker_empty_program():
     node_id = uuid.uuid4()
     torch_device = torch.device("cuda:0")
     device = Device(torch_device)
-    worker = NCCLWorker(node_id, device, reply_port=0)
+    worker = NCCLWorker(node_id, device)
     worker.setup()
 
     program = []
@@ -265,7 +265,7 @@ def test_nccl_worker_send_receive():
 
     def run_worker_0():
         try:
-            worker = NCCLWorker(node_id_0, device_0, reply_port=0)
+            worker = NCCLWorker(node_id_0, device_0)
             worker.setup()
             worker.execute(program_0)
         except Exception as e:
@@ -273,7 +273,7 @@ def test_nccl_worker_send_receive():
 
     def run_worker_1():
         try:
-            worker = NCCLWorker(node_id_1, device_1, reply_port=0)
+            worker = NCCLWorker(node_id_1, device_1)
             worker.setup()
             worker.execute(program_1)
         except Exception as e:

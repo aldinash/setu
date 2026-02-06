@@ -19,6 +19,7 @@
 #include "commons/Logging.h"
 #include "commons/utils/Comm.h"
 #include "commons/utils/TorchTensorIPC.h"
+#include "node_manager/worker/NCCLWorker.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
@@ -75,6 +76,16 @@ NodeAgent::NodeAgent(NodeId node_id, std::size_t port,
       coordinator_endpoint_(std::move(coordinator_endpoint)),
       devices_(devices),
       zmq_context_(std::make_shared<zmq::context_t>()) {
+  // Create workers and connect them via inproc sockets on the shared context
+  for (const auto& device : devices_) {
+    auto device_rank = device.LocalDeviceIndex();
+    auto endpoint =
+        std::format("inproc://node_{}_worker_{}", node_id_, device_rank);
+    auto worker = std::make_unique<worker::NCCLWorker>(node_id_, device);
+    worker->Connect(zmq_context_, endpoint);
+    workers_.emplace(device_rank, std::move(worker));
+  }
+
   handler_ = std::make_unique<Handler>(node_id_, zmq_context_, port_,
                                        coordinator_endpoint_, executor_queue_,
                                        shard_id_to_tensor_);
@@ -92,6 +103,9 @@ NodeAgent::~NodeAgent() {
 
 void NodeAgent::Start() {
   LOG_DEBUG("Starting NodeAgent");
+  for (auto& [device_rank, worker] : workers_) {
+    worker->Start();
+  }
   handler_->Start();
   executor_->Start();
 }
@@ -102,6 +116,9 @@ void NodeAgent::Stop() {
   executor_queue_.close();
   handler_->Stop();
   executor_->Stop();
+  for (auto& [device_rank, worker] : workers_) {
+    worker->Stop();
+  }
 }
 
 std::optional<TensorShardRef> NodeAgent::RegisterTensorShard(
@@ -158,53 +175,40 @@ NodeAgent::Handler::~Handler() {
 }
 
 void NodeAgent::Handler::InitSockets() {
-  LOG_DEBUG("Handler: Initializing ZMQ sockets");
-
   client_socket_ = ZmqHelper::CreateAndBindSocket(
       zmq_context_, zmq::socket_type::router, port_);
 
   Identity identity = to_string(node_id_);
   coordinator_socket_ = ZmqHelper::CreateAndConnectSocket(
       zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_, identity);
-
-  LOG_DEBUG("Handler: Initialized ZMQ sockets with identity={}", identity);
 }
 
 void NodeAgent::Handler::CloseSockets() {
-  LOG_DEBUG("Handler: Closing ZMQ sockets");
-
   if (client_socket_) {
     client_socket_->close();
   }
   if (coordinator_socket_) {
     coordinator_socket_->close();
   }
-
-  LOG_DEBUG("Handler: Closed ZMQ sockets successfully");
 }
 
 void NodeAgent::Handler::Start() {
   if (running_.load()) {
     return;
   }
-  LOG_DEBUG("Starting handler loop");
   thread_ = std::thread(
       SETU_LAUNCH_THREAD([this]() { this->Loop(); }, "HandlerLoopThread"));
 }
 
 void NodeAgent::Handler::Stop() {
-  LOG_DEBUG("Stopping handler loop");
   running_ = false;
 
   if (thread_.joinable()) {
     thread_.join();
   }
-  LOG_DEBUG("Handler loop stopped");
 }
 
 void NodeAgent::Handler::Loop() {
-  LOG_DEBUG("Entering handler loop");
-
   running_ = true;
   while (running_) {
     auto ready = Comm::PollForRead({client_socket_, coordinator_socket_},
@@ -271,48 +275,34 @@ void NodeAgent::Handler::HandleCoordinatorMessage(
 void NodeAgent::Handler::HandleRegisterTensorShardRequest(
     const Identity& client_identity,
     const RegisterTensorShardRequest& request) {
-  LOG_DEBUG("Handling RegisterTensorShardRequest for tensor: {}",
-            request.tensor_shard_spec.name);
-
-  request_id_to_client_identity_[request.request_id] = client_identity;
+  request_router_.TrackRequest(request.request_id, client_identity);
 
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
 void NodeAgent::Handler::HandleSubmitCopyRequest(
     const Identity& client_identity, const SubmitCopyRequest& request) {
-  LOG_DEBUG("Handling SubmitCopyRequest from {} to {}",
-            request.copy_spec.src_name, request.copy_spec.dst_name);
-
-  request_id_to_client_identity_[request.request_id] = client_identity;
+  request_router_.TrackRequest(request.request_id, client_identity);
 
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
 void NodeAgent::Handler::HandleSubmitPullRequest(
     const Identity& client_identity, const SubmitPullRequest& request) {
-  LOG_DEBUG("Handling SubmitPullRequest from {} to {}",
-            request.copy_spec.src_name, request.copy_spec.dst_name);
-
-  request_id_to_client_identity_[request.request_id] = client_identity;
+  request_router_.TrackRequest(request.request_id, client_identity);
 
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
 void NodeAgent::Handler::HandleWaitForCopyRequest(
     const Identity& client_identity, const WaitForCopyRequest& request) {
-  LOG_DEBUG("Handling WaitForCopyRequest for copy operation ID: {}",
-            request.copy_operation_id);
-
-  pending_waits_[request.copy_operation_id].push_back(client_identity);
+  copy_waits_.AddWaiter(request.copy_operation_id, client_identity);
 
   WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
 }
 
 void NodeAgent::Handler::HandleGetTensorHandleRequest(
     const Identity& client_identity, const GetTensorHandleRequest& request) {
-  LOG_DEBUG("Handling GetTensorHandleRequest for shard: {}", request.shard_id);
-
   // TODO: Think how this will change for a general tensor wrapper
   std::optional<setu::commons::utils::TensorIPCSpec> tensor_ipc_spec;
 
@@ -345,16 +335,11 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
                                    std::move(*tensor_ipc_spec));
   Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
                                                   client_identity, response);
-
-  LOG_DEBUG("Sent tensor handle response for shard: {}", request.shard_id);
 }
 
 void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
     const Identity& client_identity,
     const WaitForShardAllocationRequest& request) {
-  LOG_DEBUG("Handling WaitForShardAllocationRequest for shard: {}",
-            request.shard_id);
-
   // Check if shard is already allocated
   bool already_allocated = shard_id_to_tensor_.contains(request.shard_id);
 
@@ -377,8 +362,6 @@ void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
 
 void NodeAgent::Handler::HandleAllocateTensorRequest(
     const AllocateTensorRequest& request) {
-  LOG_DEBUG("Handling AllocateTensorRequest for request: {}", request);
-
   for (const auto& shard_id : request.shard_ids) {
     auto it = tensor_shard_metadata_map_.find(shard_id);
     ASSERT_VALID_RUNTIME(it != tensor_shard_metadata_map_.end(),
@@ -404,39 +387,31 @@ void NodeAgent::Handler::HandleAllocateTensorRequest(
 
 void NodeAgent::Handler::HandleCopyOperationFinishedRequest(
     const CopyOperationFinishedRequest& request) {
-  LOG_DEBUG("Handling CopyOperationFinishedRequest for request: {}", request);
-
   // Get and remove all clients waiting for this copy operation
-  auto it = pending_waits_.find(request.copy_operation_id);
-  if (it != pending_waits_.end()) {
-    for (const auto& client_id : it->second) {
-      WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
+  auto waiters = copy_waits_.DrainWaiters(request.copy_operation_id);
+  for (const auto& client_id : waiters) {
+    WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
 
-      // unblock waiting clients
-      Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_id,
-                                                  response);
-    }
-    pending_waits_.erase(it);
+    // unblock waiting clients
+    Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_id,
+                                                response);
   }
 }
 
 void NodeAgent::Handler::HandleExecuteRequest(const ExecuteRequest& request) {
-  LOG_DEBUG("Handling ExecuteRequest for request: {}, request.node_plan: {}", request, request.node_plan);
-
   executor_queue_.push(std::make_pair(request.copy_op_id, request.node_plan));
 }
 
 void NodeAgent::Handler::HandleRegisterTensorShardCoordinatorResponse(
     const RegisterTensorShardCoordinatorResponse& response) {
-  auto it = request_id_to_client_identity_.find(response.request_id);
-  if (it == request_id_to_client_identity_.end()) {
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (!client_identity.has_value()) {
     LOG_WARNING(
         "Received RegisterTensorShardCoordinatorResponse for unknown "
         "request_id: {}, ignoring",
         response.request_id);
     return;
   }
-  const auto& client_identity = it->second;
 
   // Reconstruct TensorShardRef from TensorShardMetadata
   std::optional<TensorShardRef> shard_ref;
@@ -460,49 +435,39 @@ void NodeAgent::Handler::HandleRegisterTensorShardCoordinatorResponse(
   RegisterTensorShardNodeAgentResponse client_response(
       response.request_id, response.error_code, std::move(shard_ref));
   Comm::SendWithIdentity<RegisterTensorShardNodeAgentResponse>(
-      client_socket_, client_identity, client_response);
-
-  request_id_to_client_identity_.erase(it);
+      client_socket_, *client_identity, client_response);
 }
 
 void NodeAgent::Handler::HandleSubmitCopyResponse(
     const SubmitCopyResponse& response) {
-  auto it = request_id_to_client_identity_.find(response.request_id);
-  if (it == request_id_to_client_identity_.end()) {
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (!client_identity.has_value()) {
     LOG_WARNING(
         "Received SubmitCopyResponse for unknown request_id: {}, ignoring",
         response.request_id);
     return;
   }
-  const auto& client_identity = it->second;
 
-  Comm::SendWithIdentity<SubmitCopyResponse>(client_socket_, client_identity,
+  Comm::SendWithIdentity<SubmitCopyResponse>(client_socket_, *client_identity,
                                              response);
-
-  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::Handler::HandleWaitForCopyResponse(
     const WaitForCopyResponse& response) {
-  auto it = request_id_to_client_identity_.find(response.request_id);
-  if (it == request_id_to_client_identity_.end()) {
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (!client_identity.has_value()) {
     LOG_WARNING(
         "Received WaitForCopyResponse for unknown request_id: {}, ignoring",
         response.request_id);
     return;
   }
-  const auto& client_identity = it->second;
 
-  Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_identity,
+  Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, *client_identity,
                                               response);
-
-  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::Handler::AllocateTensor(
     const TensorShardMetadata& shard_metadata) {
-  LOG_DEBUG("Allocating tensor shard: shard_metadata={}", shard_metadata);
-
   const auto& spec = shard_metadata.spec;
 
   // Build the shape from dims (using owned size for each dimension)
@@ -546,23 +511,27 @@ NodeAgent::Executor::~Executor() {
 }
 
 void NodeAgent::Executor::InitSockets() {
-  LOG_DEBUG("Executor: Initializing ZMQ sockets");
-
   Identity identity = to_string(node_id_);
   coordinator_socket_ = ZmqHelper::CreateAndConnectSocket(
       zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_,
       identity + "_executor");
 
-  // TODO: Initialize worker sockets based on devices
-  LOG_DEBUG("Executor: devices={}", devices_);
+  // Connect REQ sockets to each worker's inproc endpoint
+  for (const auto& device : devices_) {
+    auto device_rank = device.LocalDeviceIndex();
+    auto endpoint = std::format("inproc://node_{}_worker_{}", node_id_,
+                                device_rank);
 
-  LOG_DEBUG("Executor: Initialized ZMQ sockets with identity={}",
-            identity + "_executor");
+    auto socket =
+        std::make_shared<zmq::socket_t>(*zmq_context_, zmq::socket_type::req);
+    socket->set(zmq::sockopt::linger, 0);
+    socket->connect(endpoint);
+
+    worker_sockets_.emplace(device_rank, std::move(socket));
+  }
 }
 
 void NodeAgent::Executor::CloseSockets() {
-  LOG_DEBUG("Executor: Closing ZMQ sockets");
-
   // Close worker REQ sockets
   for (auto& [device_rank, socket] : worker_sockets_) {
     if (socket) {
@@ -574,44 +543,36 @@ void NodeAgent::Executor::CloseSockets() {
   if (coordinator_socket_) {
     coordinator_socket_->close();
   }
-
-  LOG_DEBUG("Executor: Closed ZMQ sockets successfully");
 }
 
 void NodeAgent::Executor::Start() {
   if (running_.load()) {
     return;
   }
-  LOG_DEBUG("Starting executor loop");
   thread_ = std::thread(
       SETU_LAUNCH_THREAD([this]() { this->Loop(); }, "ExecutorLoopThread"));
 }
 
 void NodeAgent::Executor::Stop() {
-  LOG_DEBUG("Stopping executor loop");
   running_ = false;
 
   if (thread_.joinable()) {
     thread_.join();
   }
-  LOG_DEBUG("Executor loop stopped");
 }
 
 void NodeAgent::Executor::Loop() {
-  LOG_DEBUG("Entering executor loop");
-
   running_ = true;
   while (running_) {
     // Block until we receive a (copy_op_id, plan) pair from the queue
     try {
       auto [copy_op_id, plan] = executor_queue_.pull();
 
-      LOG_DEBUG("Executor received plan {} for copy_op_id: {}", plan, copy_op_id);
-
       // For each worker program in the plan, send it to the corresponding
-      // worker
+      // worker. We send all programs first so workers can execute in parallel,
+      // then collect all responses.
+      std::vector<std::int32_t> sent_device_ranks;
       for (auto& [participant, program] : plan.program) {
-        // Ensure worker is ready before sending
         auto device_rank = participant.LocalDeviceIndex();
         auto it = worker_sockets_.find(device_rank);
         ASSERT_VALID_RUNTIME(it != worker_sockets_.end(),
@@ -626,11 +587,14 @@ void NodeAgent::Executor::Loop() {
                   program.size(), device_rank);
         ExecuteProgramRequest request(program);
         Comm::Send(it->second, request);
+        sent_device_ranks.push_back(device_rank);
+      }
 
-        // Wait for acknowledgment from worker
-        auto response = Comm::Recv<ExecuteProgramResponse>(it->second);
-        LOG_DEBUG("Received acknowledgment from worker {}: {}", device_rank,
-                  response);
+      // Wait for acknowledgment from all workers
+      for (auto device_rank : sent_device_ranks) {
+        auto it = worker_sockets_.find(device_rank);
+        [[maybe_unused]] auto response =
+            Comm::Recv<ExecuteProgramResponse>(it->second);
       }
 
       LOG_DEBUG("All workers completed execution for copy_op_id: {}",
@@ -643,9 +607,7 @@ void NodeAgent::Executor::Loop() {
           "copy_op_id={}",
           copy_op_id);
       Comm::Send<NodeAgentRequest>(coordinator_socket_, response);
-      LOG_DEBUG("NodeAgent Executor: ExecuteResponse sent successfully");
     } catch (const boost::concurrent::sync_queue_is_closed&) {
-      LOG_DEBUG("Executor: executor_queue_ closed, exiting");
       return;
     }
   }

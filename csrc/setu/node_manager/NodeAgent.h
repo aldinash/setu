@@ -26,6 +26,8 @@
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
 #include "messaging/Messages.h"
+#include "commons/utils/PendingWaits.h"
+#include "commons/utils/RequestRouter.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
 #include "node_manager/worker/Worker.h"
@@ -164,16 +166,12 @@ class NodeAgent {
     std::thread thread_;
     std::atomic<bool> running_{false};
 
-    // stores mapping from request id to the client identity who sent this
-    // request. Used to route coordinator responses back to the client that
-    // initiated the request
-    std::unordered_map<RequestId, Identity> request_id_to_client_identity_;
+    // Routes coordinator responses back to the client that initiated the
+    // request
+    setu::commons::utils::RequestRouter request_router_;
 
-    // Pending client waits: maps copy_op_id to list of client identities
-    // waiting
-    std::unordered_map<CopyOperationId, std::vector<Identity>,
-                       boost::hash<CopyOperationId>>
-        pending_waits_;
+    // Pending client waits: clients waiting for a copy operation to finish
+    setu::commons::utils::PendingWaits<CopyOperationId> copy_waits_;
 
     struct WaitingClient {
       Identity client_identity;

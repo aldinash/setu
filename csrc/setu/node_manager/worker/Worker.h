@@ -34,14 +34,17 @@ using setu::ir::Program;
 //==============================================================================
 class Worker {
  public:
-  Worker(NodeId node_id, Device device, std::size_t port);
+  Worker(NodeId node_id, Device device);
   ~Worker();
+
+  void Connect(ZmqContextPtr zmq_context, std::string endpoint);
 
   void Start();
   void Stop();
 
   [[nodiscard]] bool IsRunning() const { return worker_running_.load(); }
   [[nodiscard]] const Device& GetDevice() const { return device_; }
+  [[nodiscard]] const std::string& GetEndpoint() const { return endpoint_; }
 
   virtual void Execute(const Program& program) = 0;
   virtual void Setup() = 0;
@@ -55,7 +58,7 @@ class Worker {
   NodeId node_id_;
   Device device_;
 
-  std::size_t port_;
+  std::string endpoint_;
   ZmqContextPtr zmq_context_;
   ZmqSocketPtr socket_;
 

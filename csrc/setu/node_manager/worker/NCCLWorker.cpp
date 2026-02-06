@@ -51,8 +51,8 @@ using setu::planner::Participant;
 // NCCLWorker
 //==============================================================================
 
-NCCLWorker::NCCLWorker(NodeId node_id, Device device, std::size_t reply_port)
-    : Worker(node_id, device, reply_port), stream_(nullptr) {}
+NCCLWorker::NCCLWorker(NodeId node_id, Device device)
+    : Worker(node_id, device), stream_(nullptr) {}
 
 NCCLWorker::~NCCLWorker() {
   if (stream_) {
@@ -70,8 +70,6 @@ void NCCLWorker::Setup() {
 }
 
 void NCCLWorker::Execute(const Program& program) {
-  LOG_DEBUG("Executing program:\n{}", program);
-
   bool group_started = false;
 
   for (const auto& instruction : program) {
