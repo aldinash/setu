@@ -182,8 +182,8 @@ void InitTensorShardMetadataPybind(py::module_& m) {
 //==============================================================================
 void InitTensorShardPybind(py::module_& m) {
   py::class_<TensorShard, TensorShardPtr>(m, "TensorShard", py::module_local())
-      .def(py::init<TensorShardMetadata, torch::Tensor>(), py::arg("metadata"),
-           py::arg("tensor"))
+      .def(py::init<TensorShardMetadata, torch::Tensor, std::string>(),
+           py::arg("metadata"), py::arg("tensor"), py::arg("lock_base_dir"))
       .def_readonly("metadata", &TensorShard::metadata,
                     "Metadata describing this shard")
       .def("get_device_ptr", &TensorShard::GetDevicePtr,
