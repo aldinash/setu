@@ -125,46 +125,33 @@ Coordinator::Gateway::~Gateway() {
 }
 
 void Coordinator::Gateway::InitSockets() {
-  LOG_DEBUG("Gateway: Initializing ZMQ sockets");
-
   node_agent_socket_ = ZmqHelper::CreateAndBindSocket(
       zmq_context_, zmq::socket_type::router, port_);
-
-  LOG_DEBUG("Gateway: Initialized ZMQ sockets successfully");
 }
 
 void Coordinator::Gateway::CloseSockets() {
-  LOG_DEBUG("Gateway: Closing ZMQ sockets");
-
   if (node_agent_socket_) {
     node_agent_socket_->close();
   }
-
-  LOG_DEBUG("Gateway: Closed ZMQ sockets successfully");
 }
 
 void Coordinator::Gateway::Start() {
   if (running_.load()) {
     return;
   }
-  LOG_DEBUG("Starting gateway loop");
   thread_ = std::thread(SETU_LAUNCH_THREAD([this]() { this->Loop(); },
                                            "CoordinatorGatewayThread"));
 }
 
 void Coordinator::Gateway::Stop() {
-  LOG_DEBUG("Stopping gateway loop");
   running_ = false;
 
   if (thread_.joinable()) {
     thread_.join();
   }
-  LOG_DEBUG("Gateway loop stopped");
 }
 
 void Coordinator::Gateway::Loop() {
-  LOG_DEBUG("Entering gateway loop");
-
   running_ = true;
   while (running_) {
     // Poll for incoming messages from NodeAgents
@@ -174,12 +161,9 @@ void Coordinator::Gateway::Loop() {
       if (socket == node_agent_socket_) {
         auto [node_agent_identity, request] =
             Comm::RecvWithIdentity<NodeAgentRequest, false>(socket);
-        LOG_DEBUG("Gateway: Received message from {} (variant index={})",
-                  node_agent_identity, request.index());
         auto status =
             inbox_queue_.try_push(InboxMessage{node_agent_identity, request});
         if (status == boost::queue_op_status::closed) {
-          LOG_DEBUG("Gateway: inbox_queue_ closed, exiting");
           return;
         }
       }
@@ -194,7 +178,6 @@ void Coordinator::Gateway::Loop() {
             outbox_msg.message);
       }
     } catch (const boost::concurrent::sync_queue_is_closed&) {
-      LOG_DEBUG("Gateway: outbox_queue_ closed, exiting");
       return;
     }
   }
@@ -216,45 +199,34 @@ void Coordinator::Handler::Start() {
   if (running_.load()) {
     return;
   }
-  LOG_DEBUG("Starting handler loop");
   thread_ = std::thread(SETU_LAUNCH_THREAD([this]() { this->Loop(); },
                                            "CoordinatorHandlerThread"));
 }
 
 void Coordinator::Handler::Stop() {
-  LOG_DEBUG("Stopping handler loop");
   running_ = false;
 
   if (thread_.joinable()) {
     thread_.join();
   }
-  LOG_DEBUG("Handler loop stopped");
 }
 
 void Coordinator::Handler::Loop() {
-  LOG_DEBUG("Entering handler loop");
-
   running_ = true;
   while (running_) {
     try {
       InboxMessage inbox_msg = inbox_queue_.pull();
-      LOG_DEBUG("Handler: Processing message from {} (variant index={})",
-                inbox_msg.node_agent_identity, inbox_msg.request.index());
       std::visit(
           [&](const auto& msg) {
             using T = std::decay_t<decltype(msg)>;
             if constexpr (std::is_same_v<T, RegisterTensorShardRequest>) {
-              LOG_DEBUG("Handler: Dispatching RegisterTensorShardRequest");
               HandleRegisterTensorShardRequest(inbox_msg.node_agent_identity,
                                                msg);
             } else if constexpr (std::is_same_v<T, SubmitCopyRequest>) {
-              LOG_DEBUG("Handler: Dispatching SubmitCopyRequest");
               HandleSubmitCopyRequest(inbox_msg.node_agent_identity, msg);
             } else if constexpr (std::is_same_v<T, SubmitPullRequest>) {
-              LOG_DEBUG("Handler: Dispatching SubmitPullRequest");
               HandleSubmitPullRequest(inbox_msg.node_agent_identity, msg);
             } else if constexpr (std::is_same_v<T, ExecuteResponse>) {
-              LOG_DEBUG("Handler: Dispatching ExecuteResponse");
               HandleExecuteResponse(inbox_msg.node_agent_identity, msg);
             } else {
               LOG_WARNING("Handler: Unknown message type (index={})",
@@ -263,7 +235,6 @@ void Coordinator::Handler::Loop() {
           },
           inbox_msg.request);
     } catch (const boost::concurrent::sync_queue_is_closed&) {
-      LOG_DEBUG("Handler: inbox_queue_ closed, exiting");
       return;
     }
   }
@@ -512,10 +483,7 @@ void Coordinator::Handler::HandleSubmitPullRequest(
 }
 
 void Coordinator::Handler::HandleExecuteResponse(
-    const Identity& node_identity, const ExecuteResponse& response) {
-  LOG_DEBUG("Handling ExecuteResponse from {} for copy_op_id: {}",
-            node_identity, response.copy_op_id);
-
+    const Identity& /*node_identity*/, const ExecuteResponse& response) {
   auto it = copy_operations_.find(response.copy_op_id);
   if (it == copy_operations_.end()) {
     LOG_WARNING("ExecuteResponse for unknown copy_op_id: {}, ignoring",
@@ -563,24 +531,19 @@ void Coordinator::Executor::Start() {
   if (running_.load()) {
     return;
   }
-  LOG_DEBUG("Starting executor loop");
   thread_ = std::thread(SETU_LAUNCH_THREAD([this]() { this->Loop(); },
                                            "CoordinatorExecutorThread"));
 }
 
 void Coordinator::Executor::Stop() {
-  LOG_DEBUG("Stopping executor loop");
   running_ = false;
 
   if (thread_.joinable()) {
     thread_.join();
   }
-  LOG_DEBUG("Executor loop stopped");
 }
 
 void Coordinator::Executor::Loop() {
-  LOG_DEBUG("Entering executor loop");
-
   running_ = true;
   while (running_) {
     try {
@@ -597,14 +560,9 @@ void Coordinator::Executor::Loop() {
       // Fragment the plan by NodeId
       auto fragments = plan.Fragments();
 
-      LOG_DEBUG("Fragmented plan into {} node-specific plans", fragments.size());
-
       // Send ExecuteRequest to each node agent
       for (auto& [node_id, node_plan] : fragments) {
         Identity node_identity = boost::uuids::to_string(node_id);
-
-        LOG_DEBUG("Sending ExecuteRequest to node {} for fragment {} with copy_op_id: {}",
-                  node_identity, node_plan, task.copy_op_id);
 
         ExecuteRequest execute_request(task.copy_op_id, std::move(node_plan));
 
@@ -619,7 +577,6 @@ void Coordinator::Executor::Loop() {
                 fragments.size(), task.copy_op_id);
 
     } catch (const boost::concurrent::sync_queue_is_closed&) {
-      LOG_DEBUG("Executor: planner_queue_ closed, exiting");
       return;
     }
   }
