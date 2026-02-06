@@ -67,11 +67,11 @@ void InitWorkerPybindClass(py::module_& m) {
 void InitNodeAgentPybindClass(py::module_& m) {
   py::class_<NodeAgent, std::shared_ptr<NodeAgent>>(m, "NodeAgent")
       .def(py::init<NodeId, std::size_t, std::string,
-                    const std::vector<Device>&>(),
+                    const std::vector<Device>&, std::string>(),
            py::arg("node_id"), py::arg("port"), py::arg("coordinator_endpoint"),
-           py::arg("devices"),
-           "Create a NodeAgent with specified port, coordinator endpoint, and "
-           "devices")
+           py::arg("devices"), py::arg("lock_base_dir") = "/tmp/setu/locks",
+           "Create a NodeAgent with specified port, coordinator endpoint, "
+           "devices, and lock directory")
       .def("start", &NodeAgent::Start, "Start the NodeAgent handler loop")
       .def("stop", &NodeAgent::Stop, "Stop the NodeAgent handler loop")
       .def("register_tensor_shard", &NodeAgent::RegisterTensorShard,
