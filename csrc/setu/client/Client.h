@@ -60,6 +60,8 @@ class Client {
 
   void WaitForCopy(CopyOperationId copy_op_id);
 
+  void WaitForShardAllocation(ShardId shard_id);
+
   TensorIPCSpec GetTensorHandle(const TensorShardRef& shard_ref);
 
   [[nodiscard]] std::vector<TensorShardRefPtr> GetShards() const;

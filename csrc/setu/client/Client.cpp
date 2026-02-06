@@ -33,6 +33,8 @@ using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
+using setu::commons::messages::WaitForShardAllocationRequest;
+using setu::commons::messages::WaitForShardAllocationResponse;
 using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 //==============================================================================
@@ -205,6 +207,19 @@ void Client::WaitForCopy(CopyOperationId copy_op_id) {
   LOG_DEBUG(
       "Client finished waiting for copy operation ID: {} with error code: {}",
       copy_op_id, response.error_code);
+}
+
+void Client::WaitForShardAllocation(ShardId shard_id) {
+  LOG_DEBUG("Client waiting for shard allocation: {}", shard_id);
+
+  ClientRequest request = WaitForShardAllocationRequest(shard_id);
+  Comm::Send(request_socket_, request);
+
+  auto response = Comm::Recv<WaitForShardAllocationResponse>(request_socket_);
+
+  LOG_DEBUG(
+      "Client finished waiting for shard allocation: {} with error code: {}",
+      shard_id, response.error_code);
 }
 
 TensorIPCSpec Client::GetTensorHandle(const TensorShardRef& shard_ref) {
