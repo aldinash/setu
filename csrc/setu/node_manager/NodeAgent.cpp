@@ -395,9 +395,8 @@ void NodeAgent::Handler::HandleCopyOperationFinishedRequest(
 }
 
 void NodeAgent::Handler::HandleExecuteRequest(const ExecuteRequest& request) {
-  LOG_DEBUG("Handling ExecuteRequest for request: {}", request);
+  LOG_DEBUG("Handling ExecuteRequest for request: {}, request.node_plan: {}", request, request.node_plan);
 
-  // Put (copy_op_id, node_plan) into executor queue
   executor_queue_.push(std::make_pair(request.copy_op_id, request.node_plan));
 }
 
@@ -594,7 +593,7 @@ void NodeAgent::Executor::Loop() {
     try {
       auto [copy_op_id, plan] = executor_queue_.pull();
 
-      LOG_DEBUG("Executor received plan for copy_op_id: {}", copy_op_id);
+      LOG_DEBUG("Executor received plan {} for copy_op_id: {}", plan, copy_op_id);
 
       // For each worker program in the plan, send it to the corresponding
       // worker
