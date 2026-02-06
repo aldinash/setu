@@ -12,6 +12,7 @@ target_link_libraries(
             Boost::container_hash
             Boost::stacktrace
             Boost::dynamic_bitset
+            Boost::interprocess
             libzmq-static
             dl
             backtrace
