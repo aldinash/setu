@@ -353,10 +353,7 @@ void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
               request.shard_id);
   } else {
     // Shard not yet allocated, add client to pending waits
-    waiting_for_allocation_clients_[request.shard_id].push_back(
-        WaitingClient{client_identity, request});
-    LOG_DEBUG("Shard {} not yet allocated, client added to pending waits",
-              request.shard_id);
+    shard_allocation_waits_.AddWaiter(request.shard_id, client_identity);
   }
 }
 
@@ -486,6 +483,15 @@ void NodeAgent::Handler::AllocateTensor(
 
   LOG_DEBUG("Successfully allocated shard {} with shape {} on device {}",
             shard_metadata.id, shape, spec.device.torch_device.str());
+
+  auto waiters = shard_allocation_waits_.DrainWaiters(shard_metadata.id);
+  for (const auto& client_identity : waiters) {
+    WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
+    Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+        client_socket_, client_identity, response);
+    LOG_DEBUG("Notified waiting client for shard allocation: {}",
+              shard_metadata.id);
+  }
 }
 
 //==============================================================================
