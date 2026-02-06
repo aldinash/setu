@@ -54,6 +54,8 @@ using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
+using setu::commons::messages::WaitForShardAllocationRequest;
+using setu::commons::messages::WaitForShardAllocationResponse;
 using setu::commons::utils::Comm;
 using setu::commons::utils::PrepareTensorIPCSpec;
 using setu::commons::utils::ZmqHelper;
@@ -236,6 +238,8 @@ void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
           HandleWaitForCopyRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, GetTensorHandleRequest>) {
           HandleGetTensorHandleRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, WaitForShardAllocationRequest>) {
+          HandleWaitForShardAllocationRequest(client_identity, msg);
         }
       },
       request);
@@ -331,6 +335,32 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
                                                   client_identity, response);
 
   LOG_DEBUG("Sent tensor handle response for shard: {}", request.shard_id);
+}
+
+void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
+    const Identity& client_identity,
+    const WaitForShardAllocationRequest& request) {
+  LOG_DEBUG("Handling WaitForShardAllocationRequest for shard: {}",
+            request.shard_id);
+
+  // Check if shard is already allocated
+  bool already_allocated = shard_id_to_tensor_.contains(request.shard_id);
+
+  if (already_allocated) {
+    // Shard is already allocated, respond immediately
+    WaitForShardAllocationResponse response(request.request_id,
+                                            ErrorCode::kSuccess);
+    Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+        client_socket_, client_identity, response);
+    LOG_DEBUG("Shard {} already allocated, responded immediately",
+              request.shard_id);
+  } else {
+    // Shard not yet allocated, add client to pending waits
+    pending_shard_allocation_waits_[request.shard_id].push_back(
+        client_identity);
+    LOG_DEBUG("Shard {} not yet allocated, client added to pending waits",
+              request.shard_id);
+  }
 }
 
 void NodeAgent::Handler::HandleAllocateTensorRequest(
@@ -466,6 +496,19 @@ void NodeAgent::Handler::AllocateTensor(
 
   LOG_DEBUG("Successfully allocated shard {} with shape {} on device {}",
             shard_metadata.id, shape, spec.device.torch_device.str());
+
+  // Notify any clients waiting for this shard to be allocated
+  auto it = pending_shard_allocation_waits_.find(shard_metadata.id);
+  if (it != pending_shard_allocation_waits_.end()) {
+    for (const auto& client_identity : it->second) {
+      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
+      Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+          client_socket_, client_identity, response);
+      LOG_DEBUG("Notified waiting client for shard allocation: {}",
+                shard_metadata.id);
+    }
+    pending_shard_allocation_waits_.erase(it);
+  }
 }
 
 //==============================================================================
@@ -495,12 +538,14 @@ void NodeAgent::Executor::InitSockets() {
 
   Identity identity = to_string(node_id_);
   coordinator_socket_ = ZmqHelper::CreateAndConnectSocket(
-      zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_, identity+"_executor");
+      zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_,
+      identity + "_executor");
 
   // TODO: Initialize worker sockets based on devices
   LOG_DEBUG("Executor: devices={}", devices_);
 
-  LOG_DEBUG("Executor: Initialized ZMQ sockets with identity={}", identity+"_executor");
+  LOG_DEBUG("Executor: Initialized ZMQ sockets with identity={}",
+            identity + "_executor");
 }
 
 void NodeAgent::Executor::CloseSockets() {
@@ -581,9 +626,10 @@ void NodeAgent::Executor::Loop() {
 
       // Notify coordinator that execution is complete
       ExecuteResponse response(RequestId{}, copy_op_id, ErrorCode::kSuccess);
-      LOG_INFO("NodeAgent Executor: Sending ExecuteResponse to Coordinator for "
-               "copy_op_id={}",
-               copy_op_id);
+      LOG_INFO(
+          "NodeAgent Executor: Sending ExecuteResponse to Coordinator for "
+          "copy_op_id={}",
+          copy_op_id);
       Comm::Send<NodeAgentRequest>(coordinator_socket_, response);
       LOG_DEBUG("NodeAgent Executor: ExecuteResponse sent successfully");
     } catch (const boost::concurrent::sync_queue_is_closed&) {

@@ -63,6 +63,8 @@ using setu::commons::messages::SubmitCopyResponse;
 using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
+using setu::commons::messages::WaitForShardAllocationRequest;
+using setu::commons::messages::WaitForShardAllocationResponse;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::ir::Program;
@@ -134,6 +136,9 @@ class NodeAgent {
                                   const WaitForCopyRequest& request);
     void HandleGetTensorHandleRequest(const Identity& client_identity,
                                       const GetTensorHandleRequest& request);
+    void HandleWaitForShardAllocationRequest(
+        const Identity& client_identity,
+        const WaitForShardAllocationRequest& request);
 
     // Coordinator message handlers
     void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
@@ -169,6 +174,11 @@ class NodeAgent {
     std::unordered_map<CopyOperationId, std::vector<Identity>,
                        boost::hash<CopyOperationId>>
         pending_waits_;
+
+    // Pending shard allocation waits: maps shard_id to list of client
+    // identities waiting for that shard to be allocated
+    std::unordered_map<ShardId, std::vector<Identity>, boost::hash<ShardId>>
+        pending_shard_allocation_waits_;
 
     TensorShardMetadataMap tensor_shard_metadata_map_;
     TensorShardsConcurrentMap& shard_id_to_tensor_;

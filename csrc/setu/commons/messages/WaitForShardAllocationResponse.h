@@ -16,62 +16,39 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include "commons/BoostCommon.h"
 #include "commons/StdCommon.h"
+//==============================================================================
 #include "commons/Types.h"
-//==============================================================================
-#include "commons/datatypes/CopySpec.h"
+#include "commons/messages/BaseResponse.h"
 #include "commons/utils/Serialization.h"
-#include "ir/Instruction.h"
-#include "metastore/MetaStore.h"
-#include "planner/Participant.h"
 //==============================================================================
-namespace setu::planner {
+namespace setu::commons::messages {
 //==============================================================================
-
-using setu::commons::BinaryBuffer;
-using setu::commons::BinaryRange;
-using setu::commons::datatypes::CopySpec;
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
-using setu::ir::Program;
-using setu::metastore::MetaStore;
-
+using setu::commons::RequestId;
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
 //==============================================================================
 
-struct Plan {
-  std::unordered_map<NodeId, Plan> Fragments();
+struct WaitForShardAllocationResponse : public BaseResponse {
+  explicit WaitForShardAllocationResponse(
+      RequestId request_id_param,
+      ErrorCode error_code_param = ErrorCode::kSuccess)
+      : BaseResponse(request_id_param, error_code_param) {}
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("Plan(participants={}, programs={})", participants,
-                       program);
+    return std::format(
+        "WaitForShardAllocationResponse(request_id={}, "
+        "error_code={})",
+        request_id, error_code);
   }
 
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    writer.WriteFields(participants, program);
-  }
+  void Serialize(BinaryBuffer& buffer) const;
 
-  static Plan Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    auto [participants_val, program_val] =
-        reader.ReadFields<Participants,
-                          std::unordered_map<Participant, Program>>();
-    Plan plan;
-    plan.participants = std::move(participants_val);
-    plan.program = std::move(program_val);
-    return plan;
-  }
-
-  Participants participants;
-  std::unordered_map<Participant, Program> program;
+  static WaitForShardAllocationResponse Deserialize(const BinaryRange& range);
 };
+using WaitForShardAllocationResponsePtr =
+    std::shared_ptr<WaitForShardAllocationResponse>;
 
-class Planner {
- public:
-  virtual ~Planner() = default;
-  virtual Plan Compile(CopySpec& spec, MetaStore& metastore) = 0;
-};
 //==============================================================================
-}  // namespace setu::planner
+}  // namespace setu::commons::messages
 //==============================================================================

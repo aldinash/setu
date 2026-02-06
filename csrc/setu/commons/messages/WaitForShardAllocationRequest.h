@@ -16,62 +16,50 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include "commons/BoostCommon.h"
 #include "commons/StdCommon.h"
+//==============================================================================
 #include "commons/Types.h"
-//==============================================================================
-#include "commons/datatypes/CopySpec.h"
+#include "commons/messages/BaseRequest.h"
 #include "commons/utils/Serialization.h"
-#include "ir/Instruction.h"
-#include "metastore/MetaStore.h"
-#include "planner/Participant.h"
 //==============================================================================
-namespace setu::planner {
+namespace setu::commons::messages {
 //==============================================================================
-
-using setu::commons::BinaryBuffer;
-using setu::commons::BinaryRange;
-using setu::commons::datatypes::CopySpec;
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
-using setu::ir::Program;
-using setu::metastore::MetaStore;
-
+using setu::commons::RequestId;
+using setu::commons::ShardId;
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
 //==============================================================================
 
-struct Plan {
-  std::unordered_map<NodeId, Plan> Fragments();
+struct WaitForShardAllocationRequest : public BaseRequest {
+  /// @brief Constructs a request with auto-generated request ID.
+  explicit WaitForShardAllocationRequest(ShardId shard_id_param)
+      : BaseRequest(), shard_id(shard_id_param) {
+    ASSERT_VALID_ARGUMENTS(!shard_id.is_nil(), "Shard ID cannot be nil");
+  }
+
+  /// @brief Constructs a request with explicit request ID (for
+  /// deserialization).
+  WaitForShardAllocationRequest(RequestId request_id_param,
+                                ShardId shard_id_param)
+      : BaseRequest(request_id_param), shard_id(shard_id_param) {
+    ASSERT_VALID_ARGUMENTS(!shard_id.is_nil(), "Shard ID cannot be nil");
+  }
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("Plan(participants={}, programs={})", participants,
-                       program);
+    return std::format(
+        "WaitForShardAllocationRequest(request_id={}, shard_id={})", request_id,
+        shard_id);
   }
 
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    writer.WriteFields(participants, program);
-  }
+  void Serialize(BinaryBuffer& buffer) const;
 
-  static Plan Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    auto [participants_val, program_val] =
-        reader.ReadFields<Participants,
-                          std::unordered_map<Participant, Program>>();
-    Plan plan;
-    plan.participants = std::move(participants_val);
-    plan.program = std::move(program_val);
-    return plan;
-  }
+  static WaitForShardAllocationRequest Deserialize(const BinaryRange& range);
 
-  Participants participants;
-  std::unordered_map<Participant, Program> program;
+  const ShardId shard_id;
 };
+using WaitForShardAllocationRequestPtr =
+    std::shared_ptr<WaitForShardAllocationRequest>;
 
-class Planner {
- public:
-  virtual ~Planner() = default;
-  virtual Plan Compile(CopySpec& spec, MetaStore& metastore) = 0;
-};
 //==============================================================================
-}  // namespace setu::planner
+}  // namespace setu::commons::messages
 //==============================================================================

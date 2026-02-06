@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
+#include "commons/utils/Pybind.h"
+
 #include "client/Client.h"
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
@@ -23,7 +25,6 @@
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
 #include "commons/enums/Enums.h"
-#include "commons/utils/Pybind.h"
 #include "commons/utils/TorchTensorIPC.h"
 //==============================================================================
 namespace setu::client {
@@ -60,6 +61,8 @@ void InitClientPybindClass(py::module_& m) {
            "Submit a pull operation and return an operation ID")
       .def("wait_for_copy", &Client::WaitForCopy, py::arg("copy_op_id"),
            "Wait for a copy operation to complete")
+      .def("wait_for_shard_allocation", &Client::WaitForShardAllocation,
+           py::arg("shard_id"), "Wait for a tensor shard to be allocated")
       .def("get_tensor_handle", &Client::GetTensorHandle, py::arg("shard_ref"),
            "Get the IPC handle for a tensor shard")
       .def("get_shards", &Client::GetShards,
