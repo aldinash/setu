@@ -625,9 +625,10 @@ void NodeAgent::Executor::Loop() {
       LOG_DEBUG("Executor received plan {} for copy_op_id: {}", plan, copy_op_id);
 
       // For each worker program in the plan, send it to the corresponding
-      // worker
+      // worker. We send all programs first so workers can execute in parallel,
+      // then collect all responses.
+      std::vector<std::int32_t> sent_device_ranks;
       for (auto& [participant, program] : plan.program) {
-        // Ensure worker is ready before sending
         auto device_rank = participant.LocalDeviceIndex();
         auto it = worker_sockets_.find(device_rank);
         ASSERT_VALID_RUNTIME(it != worker_sockets_.end(),
@@ -642,8 +643,12 @@ void NodeAgent::Executor::Loop() {
                   program.size(), device_rank);
         ExecuteProgramRequest request(program);
         Comm::Send(it->second, request);
+        sent_device_ranks.push_back(device_rank);
+      }
 
-        // Wait for acknowledgment from worker
+      // Wait for acknowledgment from all workers
+      for (auto device_rank : sent_device_ranks) {
+        auto it = worker_sockets_.find(device_rank);
         auto response = Comm::Recv<ExecuteProgramResponse>(it->second);
         LOG_DEBUG("Received acknowledgment from worker {}: {}", device_rank,
                   response);

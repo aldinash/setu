@@ -86,6 +86,7 @@ void NCCLWorker::Execute(const Program& program) {
 
 void NCCLWorker::ExecuteInstruction(const Instruction& instruction,
                                     bool& group_started) {
+  LOG_DEBUG("Executing instruction: {}", instruction.ToString());
   std::visit(
       [this, &group_started](const auto& inst) {
         using T = std::decay_t<decltype(inst)>;
