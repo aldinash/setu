@@ -35,6 +35,7 @@ using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
 using setu::commons::datatypes::TensorShardRef;
 using setu::commons::datatypes::TensorShardSpec;
+using setu::commons::utils::ZmqContextPtr;
 using setu::node_manager::worker::NCCLWorker;
 using setu::node_manager::worker::Worker;
 //==============================================================================
@@ -42,6 +43,9 @@ void InitWorkerPybindClass(py::module_& m) {
   // Worker is abstract (has pure virtual Execute and Setup methods)
   // so we don't provide py::init - it can only be used as a base class
   py::class_<Worker, std::shared_ptr<Worker>>(m, "Worker")
+      .def("connect", &Worker::Connect, py::arg("zmq_context"),
+           py::arg("endpoint"),
+           "Connect the worker to an inproc endpoint on a shared ZMQ context")
       .def("start", &Worker::Start, "Start the worker executor loop")
       .def("stop", &Worker::Stop, "Stop the worker executor loop")
       .def("is_running", &Worker::IsRunning, "Check if worker is running")
@@ -49,9 +53,8 @@ void InitWorkerPybindClass(py::module_& m) {
                              "Get the device this worker is bound to");
 
   py::class_<NCCLWorker, Worker, std::shared_ptr<NCCLWorker>>(m, "NCCLWorker")
-      .def(py::init<NodeId, Device, std::size_t>(), py::arg("node_id"),
-           py::arg("device"), py::arg("reply_port"),
-           "Create an NCCL worker for the given node ID, device and reply port")
+      .def(py::init<NodeId, Device>(), py::arg("node_id"), py::arg("device"),
+           "Create an NCCL worker for the given node ID and device")
       .def("setup", &NCCLWorker::Setup,
            py::call_guard<py::gil_scoped_release>(),
            "Initialize CUDA device and stream (call before execute)")

@@ -48,7 +48,7 @@ using setu::ir::UseComm;
 
 class NCCLWorker : public Worker {
  public:
-  NCCLWorker(NodeId node_id, Device device, std::size_t reply_port);
+  NCCLWorker(NodeId node_id, Device device);
   ~NCCLWorker();
 
   void Execute(const Program& program) override;

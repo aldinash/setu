@@ -33,10 +33,8 @@ using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 using setu::ir::Instruction;
 //==============================================================================
-Worker::Worker(NodeId node_id, Device device, std::size_t port)
-    : node_id_(node_id), device_(device), port_(port), worker_running_{false} {
-  InitZmqSockets();
-}
+Worker::Worker(NodeId node_id, Device device)
+    : node_id_(node_id), device_(device), worker_running_{false} {}
 
 Worker::~Worker() {
   Stop();
@@ -64,24 +62,30 @@ void Worker::Stop() {
   }
 }
 
+void Worker::Connect(ZmqContextPtr zmq_context, std::string endpoint) {
+  ASSERT_VALID_POINTER_ARGUMENT(zmq_context);
+  zmq_context_ = std::move(zmq_context);
+  endpoint_ = std::move(endpoint);
+  InitZmqSockets();
+}
+
 void Worker::InitZmqSockets() {
-  LOG_DEBUG("Initializing ZMQ sockets");
+  LOG_DEBUG("Worker: Binding REP socket on {}", endpoint_);
 
-  zmq_context_ = std::make_shared<zmq::context_t>();
+  socket_ =
+      std::make_shared<zmq::socket_t>(*zmq_context_, zmq::socket_type::rep);
+  socket_->set(zmq::sockopt::linger, 0);
+  socket_->bind(endpoint_);
 
-  socket_ = ZmqHelper::CreateAndBindSocket(zmq_context_, zmq::socket_type::rep,
-                                           port_);
-
-  LOG_DEBUG("Initialized ZMQ sockets successfully");
+  LOG_DEBUG("Worker: Initialized ZMQ socket on {}", endpoint_);
 }
 
 void Worker::CloseZmqSockets() {
-  LOG_DEBUG("Closing ZMQ sockets");
+  LOG_DEBUG("Worker: Closing ZMQ socket on {}", endpoint_);
 
   if (socket_) socket_->close();
-  if (zmq_context_) zmq_context_->close();
 
-  LOG_DEBUG("Closed ZMQ sockets successfully");
+  LOG_DEBUG("Worker: Closed ZMQ socket on {}", endpoint_);
 }
 
 void Worker::WorkerLoop() {

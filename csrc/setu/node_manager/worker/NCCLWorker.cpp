@@ -51,8 +51,8 @@ using setu::planner::Participant;
 // NCCLWorker
 //==============================================================================
 
-NCCLWorker::NCCLWorker(NodeId node_id, Device device, std::size_t reply_port)
-    : Worker(node_id, device, reply_port), stream_(nullptr) {}
+NCCLWorker::NCCLWorker(NodeId node_id, Device device)
+    : Worker(node_id, device), stream_(nullptr) {}
 
 NCCLWorker::~NCCLWorker() {
   if (stream_) {

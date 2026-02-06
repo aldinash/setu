@@ -19,6 +19,7 @@
 #include "commons/Logging.h"
 #include "commons/utils/Comm.h"
 #include "commons/utils/TorchTensorIPC.h"
+#include "node_manager/worker/NCCLWorker.h"
 //==============================================================================
 namespace setu::node_manager {
 //==============================================================================
@@ -75,6 +76,16 @@ NodeAgent::NodeAgent(NodeId node_id, std::size_t port,
       coordinator_endpoint_(std::move(coordinator_endpoint)),
       devices_(devices),
       zmq_context_(std::make_shared<zmq::context_t>()) {
+  // Create workers and connect them via inproc sockets on the shared context
+  for (const auto& device : devices_) {
+    auto device_rank = device.LocalDeviceIndex();
+    auto endpoint =
+        std::format("inproc://node_{}_worker_{}", node_id_, device_rank);
+    auto worker = std::make_unique<worker::NCCLWorker>(node_id_, device);
+    worker->Connect(zmq_context_, endpoint);
+    workers_.emplace(device_rank, std::move(worker));
+  }
+
   handler_ = std::make_unique<Handler>(node_id_, zmq_context_, port_,
                                        coordinator_endpoint_, executor_queue_,
                                        shard_id_to_tensor_);
@@ -92,6 +103,9 @@ NodeAgent::~NodeAgent() {
 
 void NodeAgent::Start() {
   LOG_DEBUG("Starting NodeAgent");
+  for (auto& [device_rank, worker] : workers_) {
+    worker->Start();
+  }
   handler_->Start();
   executor_->Start();
 }
@@ -102,6 +116,9 @@ void NodeAgent::Stop() {
   executor_queue_.close();
   handler_->Stop();
   executor_->Stop();
+  for (auto& [device_rank, worker] : workers_) {
+    worker->Stop();
+  }
 }
 
 std::optional<TensorShardRef> NodeAgent::RegisterTensorShard(
@@ -540,8 +557,20 @@ void NodeAgent::Executor::InitSockets() {
       zmq_context_, zmq::socket_type::dealer, coordinator_endpoint_,
       identity + "_executor");
 
-  // TODO: Initialize worker sockets based on devices
-  LOG_DEBUG("Executor: devices={}", devices_);
+  // Connect REQ sockets to each worker's inproc endpoint
+  for (const auto& device : devices_) {
+    auto device_rank = device.LocalDeviceIndex();
+    auto endpoint = std::format("inproc://node_{}_worker_{}", node_id_,
+                                device_rank);
+
+    auto socket =
+        std::make_shared<zmq::socket_t>(*zmq_context_, zmq::socket_type::req);
+    socket->set(zmq::sockopt::linger, 0);
+    socket->connect(endpoint);
+
+    worker_sockets_.emplace(device_rank, std::move(socket));
+    LOG_DEBUG("Executor: Connected REQ socket to worker at {}", endpoint);
+  }
 
   LOG_DEBUG("Executor: Initialized ZMQ sockets with identity={}",
             identity + "_executor");
