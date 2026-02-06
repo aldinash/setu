@@ -275,28 +275,28 @@ void NodeAgent::Handler::HandleCoordinatorMessage(
 void NodeAgent::Handler::HandleRegisterTensorShardRequest(
     const Identity& client_identity,
     const RegisterTensorShardRequest& request) {
-  request_id_to_client_identity_[request.request_id] = client_identity;
+  request_router_.TrackRequest(request.request_id, client_identity);
 
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
 void NodeAgent::Handler::HandleSubmitCopyRequest(
     const Identity& client_identity, const SubmitCopyRequest& request) {
-  request_id_to_client_identity_[request.request_id] = client_identity;
+  request_router_.TrackRequest(request.request_id, client_identity);
 
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
 void NodeAgent::Handler::HandleSubmitPullRequest(
     const Identity& client_identity, const SubmitPullRequest& request) {
-  request_id_to_client_identity_[request.request_id] = client_identity;
+  request_router_.TrackRequest(request.request_id, client_identity);
 
   Comm::Send<NodeAgentRequest>(coordinator_socket_, request);
 }
 
 void NodeAgent::Handler::HandleWaitForCopyRequest(
     const Identity& client_identity, const WaitForCopyRequest& request) {
-  pending_waits_[request.copy_operation_id].push_back(client_identity);
+  copy_waits_.AddWaiter(request.copy_operation_id, client_identity);
 
   WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
 }
@@ -341,8 +341,7 @@ void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
               request.shard_id);
   } else {
     // Shard not yet allocated, add client to pending waits
-    pending_shard_allocation_waits_[request.shard_id].push_back(
-        client_identity);
+    shard_allocation_waits_.AddWaiter(request.shard_id, client_identity);
     LOG_DEBUG("Shard {} not yet allocated, client added to pending waits",
               request.shard_id);
   }
@@ -362,16 +361,13 @@ void NodeAgent::Handler::HandleAllocateTensorRequest(
 void NodeAgent::Handler::HandleCopyOperationFinishedRequest(
     const CopyOperationFinishedRequest& request) {
   // Get and remove all clients waiting for this copy operation
-  auto it = pending_waits_.find(request.copy_operation_id);
-  if (it != pending_waits_.end()) {
-    for (const auto& client_id : it->second) {
-      WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
+  auto waiters = copy_waits_.DrainWaiters(request.copy_operation_id);
+  for (const auto& client_id : waiters) {
+    WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
 
-      // unblock waiting clients
-      Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_id,
-                                                  response);
-    }
-    pending_waits_.erase(it);
+    // unblock waiting clients
+    Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_id,
+                                                response);
   }
 }
 
@@ -381,15 +377,14 @@ void NodeAgent::Handler::HandleExecuteRequest(const ExecuteRequest& request) {
 
 void NodeAgent::Handler::HandleRegisterTensorShardCoordinatorResponse(
     const RegisterTensorShardCoordinatorResponse& response) {
-  auto it = request_id_to_client_identity_.find(response.request_id);
-  if (it == request_id_to_client_identity_.end()) {
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (!client_identity.has_value()) {
     LOG_WARNING(
         "Received RegisterTensorShardCoordinatorResponse for unknown "
         "request_id: {}, ignoring",
         response.request_id);
     return;
   }
-  const auto& client_identity = it->second;
 
   // Reconstruct TensorShardRef from TensorShardMetadata
   std::optional<TensorShardRef> shard_ref;
@@ -413,43 +408,35 @@ void NodeAgent::Handler::HandleRegisterTensorShardCoordinatorResponse(
   RegisterTensorShardNodeAgentResponse client_response(
       response.request_id, response.error_code, std::move(shard_ref));
   Comm::SendWithIdentity<RegisterTensorShardNodeAgentResponse>(
-      client_socket_, client_identity, client_response);
-
-  request_id_to_client_identity_.erase(it);
+      client_socket_, *client_identity, client_response);
 }
 
 void NodeAgent::Handler::HandleSubmitCopyResponse(
     const SubmitCopyResponse& response) {
-  auto it = request_id_to_client_identity_.find(response.request_id);
-  if (it == request_id_to_client_identity_.end()) {
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (!client_identity.has_value()) {
     LOG_WARNING(
         "Received SubmitCopyResponse for unknown request_id: {}, ignoring",
         response.request_id);
     return;
   }
-  const auto& client_identity = it->second;
 
-  Comm::SendWithIdentity<SubmitCopyResponse>(client_socket_, client_identity,
+  Comm::SendWithIdentity<SubmitCopyResponse>(client_socket_, *client_identity,
                                              response);
-
-  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::Handler::HandleWaitForCopyResponse(
     const WaitForCopyResponse& response) {
-  auto it = request_id_to_client_identity_.find(response.request_id);
-  if (it == request_id_to_client_identity_.end()) {
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (!client_identity.has_value()) {
     LOG_WARNING(
         "Received WaitForCopyResponse for unknown request_id: {}, ignoring",
         response.request_id);
     return;
   }
-  const auto& client_identity = it->second;
 
-  Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_identity,
+  Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, *client_identity,
                                               response);
-
-  request_id_to_client_identity_.erase(it);
 }
 
 void NodeAgent::Handler::AllocateTensor(
@@ -474,16 +461,13 @@ void NodeAgent::Handler::AllocateTensor(
             shard_metadata.id, shape, spec.device.torch_device.str());
 
   // Notify any clients waiting for this shard to be allocated
-  auto it = pending_shard_allocation_waits_.find(shard_metadata.id);
-  if (it != pending_shard_allocation_waits_.end()) {
-    for (const auto& client_identity : it->second) {
-      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
-      Comm::SendWithIdentity<WaitForShardAllocationResponse>(
-          client_socket_, client_identity, response);
-      LOG_DEBUG("Notified waiting client for shard allocation: {}",
-                shard_metadata.id);
-    }
-    pending_shard_allocation_waits_.erase(it);
+  auto waiters = shard_allocation_waits_.DrainWaiters(shard_metadata.id);
+  for (const auto& client_identity : waiters) {
+    WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
+    Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+        client_socket_, client_identity, response);
+    LOG_DEBUG("Notified waiting client for shard allocation: {}",
+              shard_metadata.id);
   }
 }
 
