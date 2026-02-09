@@ -21,25 +21,15 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 #include "commons/datatypes/CopySpec.h"
-#include "commons/datatypes/TensorDim.h"
-#include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
 #include "commons/enums/Enums.h"
-#include "commons/utils/TorchTensorIPC.h"
 //==============================================================================
 namespace setu::client {
 //==============================================================================
 using setu::commons::CopyOperationId;
-using setu::commons::ShardId;
-using setu::commons::TensorName;
 using setu::commons::datatypes::CopySpec;
-using setu::commons::datatypes::TensorDimMap;
-using setu::commons::datatypes::TensorShardRef;
-using setu::commons::datatypes::TensorShardRefPtr;
 using setu::commons::datatypes::TensorShardSpec;
 using setu::commons::enums::ErrorCode;
-using setu::commons::utils::TensorIPCSpec;
-using setu::commons::utils::TensorIPCSpecPtr;
 //==============================================================================
 void InitClientPybindClass(py::module_& m) {
   py::class_<Client, std::shared_ptr<Client>>(m, "Client")
@@ -63,8 +53,17 @@ void InitClientPybindClass(py::module_& m) {
            "Wait for a copy operation to complete")
       .def("wait_for_shard_allocation", &Client::WaitForShardAllocation,
            py::arg("shard_id"), "Wait for a tensor shard to be allocated")
-      .def("get_tensor_handle", &Client::GetTensorHandle, py::arg("shard_ref"),
-           "Get the IPC handle for a tensor shard")
+      .def(
+          "get_tensor_handle",
+          [](Client& self, const TensorShardRef& shard_ref) {
+            auto response = self.GetTensorHandle(shard_ref);
+            return py::make_tuple(response.tensor_ipc_spec.value(),
+                                  response.metadata.value(),
+                                  response.lock_base_dir);
+          },
+          py::arg("shard_ref"),
+          "Get the IPC handle for a tensor shard. Returns "
+          "(TensorIPCSpec, TensorShardMetadata, lock_base_dir)")
       .def("get_shards", &Client::GetShards,
            "Get all registered tensor shard references");
 }
@@ -78,29 +77,12 @@ void InitEnumsPybindClass(py::module_& m) {
       .value("TENSOR_NOT_FOUND", ErrorCode::kTensorNotFound);
 }
 //==============================================================================
-void InitTensorShardRefPybindClass(py::module_& m) {
-  py::class_<TensorShardRef, TensorShardRefPtr>(m, "TensorShardRef",
-                                                py::module_local())
-      .def(py::init<TensorName, ShardId, TensorDimMap>(), py::arg("name"),
-           py::arg("shard_id"), py::arg("dims"))
-      .def_readonly("name", &TensorShardRef::name,
-                    "Name of the tensor being sharded")
-      .def_readonly("shard_id", &TensorShardRef::shard_id,
-                    "UUID identifier for this shard")
-      .def_readonly("dims", &TensorShardRef::dims,
-                    "Map of dimension names to TensorDim objects")
-      .def("get_num_dims", &TensorShardRef::GetNumDims,
-           "Get number of dimensions in this shard")
-      .def("__str__", &TensorShardRef::ToString)
-      .def("__repr__", &TensorShardRef::ToString);
-}
 }  // namespace setu::client
 //==============================================================================
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   setu::commons::Logger::InitializeLogLevel();
 
   setu::client::InitEnumsPybindClass(m);
-  setu::client::InitTensorShardRefPybindClass(m);
   setu::client::InitClientPybindClass(m);
 }
 //==============================================================================

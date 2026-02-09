@@ -105,6 +105,22 @@ void InitExecuteProgramResponsePybind(py::module_& m) {
       .def("__repr__", &ExecuteProgramResponse::ToString);
 }
 //==============================================================================
+void InitGetTensorHandleResponsePybind(py::module_& m) {
+  py::class_<GetTensorHandleResponse>(m, "GetTensorHandleResponse")
+      .def_readonly("request_id", &GetTensorHandleResponse::request_id,
+                    "The request ID this response corresponds to")
+      .def_readonly("error_code", &GetTensorHandleResponse::error_code,
+                    "The error code of the response")
+      .def_readonly("tensor_ipc_spec", &GetTensorHandleResponse::tensor_ipc_spec,
+                    "IPC spec for rebuilding the tensor")
+      .def_readonly("metadata", &GetTensorHandleResponse::metadata,
+                    "Metadata for the tensor shard")
+      .def_readonly("lock_base_dir", &GetTensorHandleResponse::lock_base_dir,
+                    "Base directory for file-based locks")
+      .def("__str__", &GetTensorHandleResponse::ToString)
+      .def("__repr__", &GetTensorHandleResponse::ToString);
+}
+//==============================================================================
 void InitMessagesPybindSubmodule(py::module_& pm) {
   auto m = pm.def_submodule("messages", "Messages submodule");
 
@@ -113,6 +129,7 @@ void InitMessagesPybindSubmodule(py::module_& pm) {
   InitRegisterTensorShardNodeAgentResponsePybind(m);
   InitExecuteProgramRequestPybind(m);
   InitExecuteProgramResponsePybind(m);
+  InitGetTensorHandleResponsePybind(m);
 }
 //==============================================================================
 }  // namespace setu::commons::messages

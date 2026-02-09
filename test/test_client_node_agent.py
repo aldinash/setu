@@ -127,7 +127,7 @@ def _register_and_get_handle(endpoint: str, tensor_name: str, dims_spec):
     if shard_ref is None:
         raise RuntimeError("Failed to register tensor")
 
-    tensor_ipc_spec = client.get_tensor_handle(shard_ref)
+    tensor_ipc_spec, metadata, lock_base_dir = client.get_tensor_handle(shard_ref)
     client.disconnect()
 
     return tensor_ipc_spec
@@ -354,10 +354,10 @@ def test_multiple_shards_same_client_get_handles(infrastructure):
 
     # Get handles for all registered shards
     for shard_ref, (tensor_name, dim_sizes) in zip(registered_refs, tensor_configs):
-        handle = client.get_tensor_handle(shard_ref)
-        assert handle is not None, f"Failed to get handle for {tensor_name}"
+        tensor_ipc_spec, metadata, lock_base_dir = client.get_tensor_handle(shard_ref)
+        assert tensor_ipc_spec is not None, f"Failed to get handle for {tensor_name}"
 
-        spec_dict = handle.to_dict()
+        spec_dict = tensor_ipc_spec.to_dict()
         expected_sizes = [size for _, size in dim_sizes]
         assert spec_dict["tensor_size"] == expected_sizes, (
             f"Size mismatch for {tensor_name}: "
@@ -683,19 +683,19 @@ def test_distributed_tensor_allocation(multi_node_infrastructure):
     # Verify both NodeAgents allocated the tensor by getting handles
     client_0 = Client()
     client_0.connect(infra["client_endpoint_0"])
-    handle_0 = client_0.get_tensor_handle(shard_ref_0)
+    ipc_spec_0, metadata_0, lock_dir_0 = client_0.get_tensor_handle(shard_ref_0)
     client_0.disconnect()
 
     client_1 = Client()
     client_1.connect(infra["client_endpoint_1"])
-    handle_1 = client_1.get_tensor_handle(shard_ref_1)
+    ipc_spec_1, metadata_1, lock_dir_1 = client_1.get_tensor_handle(shard_ref_1)
     client_1.disconnect()
 
-    assert handle_0 is not None, "NodeAgent 0 should have allocated tensor"
-    assert handle_1 is not None, "NodeAgent 1 should have allocated tensor"
+    assert ipc_spec_0 is not None, "NodeAgent 0 should have allocated tensor"
+    assert ipc_spec_1 is not None, "NodeAgent 1 should have allocated tensor"
 
-    assert handle_0.to_dict()["tensor_size"] == [512, 768]
-    assert handle_1.to_dict()["tensor_size"] == [512, 768]
+    assert ipc_spec_0.to_dict()["tensor_size"] == [512, 768]
+    assert ipc_spec_1.to_dict()["tensor_size"] == [512, 768]
 
 
 def _register_and_get_handle_with_timing(
@@ -745,7 +745,7 @@ def _register_and_get_handle_with_timing(
 
     # Now get handle - this should block until tensor is allocated
     get_handle_start = time.time()
-    tensor_ipc_spec = client.get_tensor_handle(shard_ref)
+    tensor_ipc_spec, metadata, lock_base_dir = client.get_tensor_handle(shard_ref)
     get_handle_end = time.time()
 
     client.disconnect()

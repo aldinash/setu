@@ -71,12 +71,14 @@ constexpr std::int32_t kPollTimeoutMs = 100;
 //==============================================================================
 NodeAgent::NodeAgent(NodeId node_id, std::size_t port,
                      std::string coordinator_endpoint,
-                     const std::vector<Device>& devices)
+                     const std::vector<Device>& devices,
+                     std::string lock_base_dir)
     : node_id_(node_id),
       port_(port),
       coordinator_endpoint_(std::move(coordinator_endpoint)),
       devices_(devices),
-      zmq_context_(std::make_shared<zmq::context_t>()) {
+      zmq_context_(std::make_shared<zmq::context_t>()),
+      lock_base_dir_(std::move(lock_base_dir)) {
   // Create workers and connect them via inproc sockets on the shared context
   for (const auto& device : devices_) {
     auto device_rank = device.LocalDeviceIndex();
@@ -89,7 +91,7 @@ NodeAgent::NodeAgent(NodeId node_id, std::size_t port,
 
   handler_ = std::make_unique<Handler>(node_id_, zmq_context_, port_,
                                        coordinator_endpoint_, executor_queue_,
-                                       shard_id_to_tensor_);
+                                       shard_id_to_tensor_, lock_base_dir_);
   executor_ = std::make_unique<Executor>(node_id_, zmq_context_,
                                          coordinator_endpoint_, devices_,
                                          executor_queue_, shard_id_to_tensor_);
@@ -129,13 +131,14 @@ NodeAgent::Handler::Handler(
     NodeId node_id, std::shared_ptr<zmq::context_t> zmq_context,
     std::size_t port, const std::string& coordinator_endpoint,
     Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
-    TensorShardsConcurrentMap& shard_id_to_tensor)
+    TensorShardsConcurrentMap& shard_id_to_tensor, std::string lock_base_dir)
     : node_id_(node_id),
       zmq_context_(zmq_context),
       port_(port),
       coordinator_endpoint_(coordinator_endpoint),
       executor_queue_(executor_queue),
-      shard_id_to_tensor_(shard_id_to_tensor) {
+      shard_id_to_tensor_(shard_id_to_tensor),
+      lock_base_dir_(std::move(lock_base_dir)) {
   InitSockets();
 }
 
@@ -298,7 +301,8 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
   if (!found_metadata) {
     LOG_ERROR("Shard not found: {}", request.shard_id);
     GetTensorHandleResponse response(request.request_id,
-                                     ErrorCode::kTensorNotFound);
+                                     ErrorCode::kTensorNotFound, std::nullopt,
+                                     std::nullopt, lock_base_dir_);
     Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
                                                     client_identity, response);
     return;
@@ -318,8 +322,16 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
     return;
   }
 
+  // Look up metadata for this shard
+  std::optional<TensorShardMetadata> metadata;
+  auto it = tensor_shard_metadata_map_.find(request.shard_id);
+  if (it != tensor_shard_metadata_map_.end()) {
+    metadata.emplace(*it->second);
+  }
+
   GetTensorHandleResponse response(request.request_id, ErrorCode::kSuccess,
-                                   std::move(*tensor_ipc_spec));
+                                   std::move(*tensor_ipc_spec),
+                                   std::move(metadata), lock_base_dir_);
   Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
                                                   client_identity, response);
 }
