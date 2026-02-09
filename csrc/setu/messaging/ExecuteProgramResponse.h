@@ -18,8 +18,8 @@
 //==============================================================================
 #include "setu/commons/StdCommon.h"
 //==============================================================================
-#include "setu/commons/Types.h"
 #include "messaging/BaseResponse.h"
+#include "setu/commons/Types.h"
 #include "setu/commons/utils/Serialization.h"
 //==============================================================================
 namespace setu::commons::messages {

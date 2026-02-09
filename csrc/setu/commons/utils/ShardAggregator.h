@@ -68,18 +68,16 @@ class ShardAggregator {
   ///   otherwise.
   template <typename ValidateFn>
   [[nodiscard]] std::optional<CompletedGroup<PayloadType>> Submit(
-      const KeyType& key /*[in]*/,
-      const ShardId& shard_id /*[in]*/,
+      const KeyType& key /*[in]*/, const ShardId& shard_id /*[in]*/,
       const PayloadType& payload /*[in]*/,
       AggregationParticipant participant /*[in]*/,
-      std::size_t expected_count /*[in]*/,
-      ValidateFn validate_fn /*[in]*/) {
+      std::size_t expected_count /*[in]*/, ValidateFn validate_fn /*[in]*/) {
     auto& group = groups_[key];
 
     // Check for duplicate shard submission
-    ASSERT_VALID_RUNTIME(
-        !group.shards_received.contains(shard_id),
-        "ShardAggregator: duplicate shard submission: {}", shard_id);
+    ASSERT_VALID_RUNTIME(!group.shards_received.contains(shard_id),
+                         "ShardAggregator: duplicate shard submission: {}",
+                         shard_id);
 
     // Store or validate the payload
     if (!group.payload.has_value()) {
@@ -93,9 +91,8 @@ class ShardAggregator {
 
     // Check if all expected shards have arrived
     if (group.shards_received.size() == expected_count) {
-      CompletedGroup<PayloadType> result{
-          std::move(group.payload.value()),
-          std::move(group.participants)};
+      CompletedGroup<PayloadType> result{std::move(group.payload.value()),
+                                         std::move(group.participants)};
       groups_.erase(key);
       return result;
     }

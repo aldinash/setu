@@ -15,8 +15,9 @@
 // limitations under the License.
 //==============================================================================
 #include "planner/backends/nccl.h"
-#include "planner/TensorShardRangeView.h"
+
 #include "ir/Instruction.h"
+#include "planner/TensorShardRangeView.h"
 //==============================================================================
 #include "commons/Logging.h"
 //==============================================================================
@@ -38,8 +39,9 @@ struct ShardBufferState {
   }
 
   void Consume(std::size_t sz) {
-    ASSERT_VALID_ARGUMENTS(sz <= Remaining(),
-                           "Tried to consume more than what the buffer has left");
+    ASSERT_VALID_ARGUMENTS(
+        sz <= Remaining(),
+        "Tried to consume more than what the buffer has left");
     consumed += sz;
   }
 
@@ -54,7 +56,7 @@ struct ShardBufferState {
 };
 
 // Naive compilation scheme
-// 
+//
 // This scheme emits Send/Recv pairs for each pair of same-sized buffers in src
 // and dst. If the buffers reside on the same device, it emits an Copy
 // instruction instead.
@@ -100,7 +102,7 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
       }
     }
   };
-  
+
   auto& parts = plan.participants;
   auto& program = plan.program;
 
@@ -115,24 +117,22 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
     parts.insert(src_part);
     parts.insert(dst_part);
 
-    auto src_shard_ref = ir::ShardRef(src.buf.metadata->id,
-                                      src.buf.metadata->spec.name,
-                                      src.buf.metadata->owner);
-    auto dst_shard_ref = ir::ShardRef(dst.buf.metadata->id,
-                                      dst.buf.metadata->spec.name,
-                                      dst.buf.metadata->owner);
+    auto src_shard_ref =
+        ir::ShardRef(src.buf.metadata->id, src.buf.metadata->spec.name,
+                     src.buf.metadata->owner);
+    auto dst_shard_ref =
+        ir::ShardRef(dst.buf.metadata->id, dst.buf.metadata->spec.name,
+                     dst.buf.metadata->owner);
     auto dtype = src.buf.metadata->spec.dtype;
 
-    copy_ops.emplace_back(CopyOp{
-      .src_part=src_part,
-      .src_ref=src_shard_ref,
-      .src_offset_bytes=src.CurrentOffsetBytes(),
-      .dst_part=dst_part,
-      .dst_ref=dst_shard_ref,
-      .dst_offset_bytes=dst.CurrentOffsetBytes(),
-      .to_copy=to_copy,
-      .dtype=dtype
-    });
+    copy_ops.emplace_back(CopyOp{.src_part = src_part,
+                                 .src_ref = src_shard_ref,
+                                 .src_offset_bytes = src.CurrentOffsetBytes(),
+                                 .dst_part = dst_part,
+                                 .dst_ref = dst_shard_ref,
+                                 .dst_offset_bytes = dst.CurrentOffsetBytes(),
+                                 .to_copy = to_copy,
+                                 .dtype = dtype});
 
     src.Consume(to_copy);
     dst.Consume(to_copy);
@@ -152,13 +152,10 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
     ncclGetUniqueId(&comm_id);
     DeviceRank rank = 0;
     std::unordered_map<Participant, DeviceRank> ranks;
-    for (auto part: parts) {
+    for (auto part : parts) {
       ranks[part] = rank++;
     }
-    comm_cache_[parts] = CommCacheEntry{
-      .id=comm_id,
-      .ranks=ranks
-    };
+    comm_cache_[parts] = CommCacheEntry{.id = comm_id, .ranks = ranks};
     new_comm = true;
   }
 
@@ -173,15 +170,18 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
     }
   }
 
-  for (auto op: copy_ops) {
-    auto [src_part, src_ref, src_offset_bytes, dst_part, dst_ref, dst_offset_bytes, to_copy, dtype] = op;
+  for (auto op : copy_ops) {
+    auto [src_part, src_ref, src_offset_bytes, dst_part, dst_ref,
+          dst_offset_bytes, to_copy, dtype] = op;
     if (src_part == dst_part) {
-      program[src_part].emplace_back(ir::Copy(src_ref, src_offset_bytes, dst_ref, dst_offset_bytes, to_copy, dtype));
+      program[src_part].emplace_back(ir::Copy(src_ref, src_offset_bytes,
+                                              dst_ref, dst_offset_bytes,
+                                              to_copy, dtype));
     } else {
-      program[src_part].emplace_back(
-          ir::Send(src_ref, src_offset_bytes, to_copy, dtype, entry.ranks[dst_part]));
-      program[dst_part].emplace_back(
-          ir::Receive(dst_ref, dst_offset_bytes, to_copy, dtype, entry.ranks[src_part]));
+      program[src_part].emplace_back(ir::Send(
+          src_ref, src_offset_bytes, to_copy, dtype, entry.ranks[dst_part]));
+      program[dst_part].emplace_back(ir::Receive(
+          dst_ref, dst_offset_bytes, to_copy, dtype, entry.ranks[src_part]));
     }
   }
 

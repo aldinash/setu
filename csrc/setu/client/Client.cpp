@@ -17,9 +17,9 @@
 #include "client/Client.h"
 //==============================================================================
 #include "commons/Logging.h"
-#include "messaging/Messages.h"
 #include "commons/utils/Comm.h"
 #include "commons/utils/ZmqHelper.h"
+#include "messaging/Messages.h"
 //==============================================================================
 namespace setu::client {
 //==============================================================================

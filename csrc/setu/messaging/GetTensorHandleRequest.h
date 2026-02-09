@@ -19,8 +19,8 @@
 #include "commons/StdCommon.h"
 //==============================================================================
 #include "commons/Types.h"
-#include "messaging/BaseRequest.h"
 #include "commons/utils/Serialization.h"
+#include "messaging/BaseRequest.h"
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================

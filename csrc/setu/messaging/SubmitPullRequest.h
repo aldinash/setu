@@ -20,8 +20,8 @@
 //==============================================================================
 #include "commons/Types.h"
 #include "commons/datatypes/CopySpec.h"
-#include "messaging/BaseRequest.h"
 #include "commons/utils/Serialization.h"
+#include "messaging/BaseRequest.h"
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================

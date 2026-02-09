@@ -25,11 +25,11 @@
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
-#include "messaging/Messages.h"
 #include "commons/utils/PendingWaits.h"
 #include "commons/utils/RequestRouter.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
+#include "messaging/Messages.h"
 #include "node_manager/worker/Worker.h"
 #include "planner/Planner.h"
 //==============================================================================
@@ -79,17 +79,6 @@ class NodeAgent {
   NodeAgent(NodeId node_id, std::size_t port, std::string coordinator_endpoint,
             const std::vector<Device>& devices);
   ~NodeAgent();
-
-  std::optional<TensorShardRef> RegisterTensorShard(
-      const TensorShardSpec& shard_spec);
-
-  std::optional<CopyOperationId> SubmitCopy(const CopySpec& copy_spec);
-
-  void WaitForCopy(CopyOperationId copy_op_id);
-
-  void CopyOperationFinished(CopyOperationId copy_op_id);
-
-  void Execute(Plan plan);
 
   void Start();
   void Stop();

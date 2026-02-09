@@ -22,7 +22,8 @@ namespace setu::ir {
 std::string UseComm::ToString() const {
   std::string hex;
   for (std::size_t i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
-    hex += std::format("{:02x}", static_cast<std::uint8_t>(comm_id.internal[i]));
+    hex +=
+        std::format("{:02x}", static_cast<std::uint8_t>(comm_id.internal[i]));
   }
   return std::format("UseComm(comm_id={})", hex);
 }

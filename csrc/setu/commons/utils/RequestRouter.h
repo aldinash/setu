@@ -24,7 +24,8 @@
 namespace setu::commons::utils {
 //==============================================================================
 
-/// @brief Tracks which client sent a request so the response can be routed back.
+/// @brief Tracks which client sent a request so the response can be routed
+/// back.
 ///
 /// Pattern: forward-and-route-back. When a NodeAgent forwards a client request
 /// to the Coordinator, it calls TrackRequest to remember the originating client
@@ -38,8 +39,7 @@ class RequestRouter {
   void TrackRequest(const RequestId& request_id /*[in]*/,
                     const Identity& identity /*[in]*/) {
     auto [_, inserted] = map_.emplace(request_id, identity);
-    ASSERT_VALID_RUNTIME(inserted,
-                         "RequestRouter: duplicate request_id: {}",
+    ASSERT_VALID_RUNTIME(inserted, "RequestRouter: duplicate request_id: {}",
                          request_id);
   }
 

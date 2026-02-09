@@ -19,9 +19,9 @@
 #include "node_manager/worker/Worker.h"
 //==============================================================================
 #include "commons/Logging.h"
-#include "messaging/Messages.h"
 #include "commons/utils/Comm.h"
 #include "commons/utils/ThreadingUtils.h"
+#include "messaging/Messages.h"
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
