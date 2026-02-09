@@ -314,10 +314,11 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
       });
 
   if (!found_allocated) {
-    waiting_for_allocation_clients_[request.shard_id].push_back(
-        WaitingClient{client_identity, request});
-    LOG_DEBUG("Shard not yet allocated, added client to waiting list: {}",
-              request.shard_id);
+    LOG_ERROR("Shard registered but not yet allocated: {}", request.shard_id);
+    GetTensorHandleResponse response(request.request_id,
+                                     ErrorCode::kTensorNotAllocated);
+    Comm::SendWithIdentity<GetTensorHandleResponse>(client_socket_,
+                                                    client_identity, response);
     return;
   }
 
@@ -338,23 +339,37 @@ void NodeAgent::Handler::HandleGetTensorHandleRequest(
 void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
     const Identity& client_identity,
     const WaitForShardAllocationRequest& request) {
-  // Check if shard is already allocated
-  bool already_allocated = shard_id_to_tensor_.contains(request.shard_id);
+  LOG_DEBUG("WaitForShardAllocation request: shard={}, client={}",
+            request.shard_id, client_identity);
 
-  if (already_allocated) {
-    // Shard is already allocated, respond immediately
-    WaitForShardAllocationResponse response(request.request_id,
-                                            ErrorCode::kSuccess);
-    Comm::SendWithIdentity<WaitForShardAllocationResponse>(
-        client_socket_, client_identity, response);
-    LOG_DEBUG("Shard {} already allocated, responded immediately",
-              request.shard_id);
-  } else {
-    // Shard not yet allocated, add client to pending waits
-    waiting_for_allocation_clients_[request.shard_id].push_back(
-        WaitingClient{client_identity, request});
-    LOG_DEBUG("Shard {} not yet allocated, client added to pending waits",
-              request.shard_id);
+  auto result =
+      pending_shard_allocs_.AddWaiter(request.shard_id, client_identity);
+
+  switch (result) {
+    case AddWaiterResult::kAlreadyComplete: {
+      LOG_DEBUG(
+          "WaitForShardAllocation: shard {} already complete, responding "
+          "immediately to client {}",
+          request.shard_id, client_identity);
+      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
+      Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+          client_socket_, client_identity, response);
+      return;
+    }
+    case AddWaiterResult::kNotRegistered: {
+      LOG_ERROR("WaitForShardAllocation for unknown shard_id: {}, client={}",
+                request.shard_id, client_identity);
+      WaitForShardAllocationResponse response(RequestId{},
+                                              ErrorCode::kInvalidArguments);
+      Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+          client_socket_, client_identity, response);
+      return;
+    }
+    case AddWaiterResult::kWaiterAdded:
+      LOG_DEBUG(
+          "WaitForShardAllocation: client {} added as waiter for shard {}",
+          client_identity, request.shard_id);
+      return;
   }
 }
 
@@ -367,19 +382,17 @@ void NodeAgent::Handler::HandleAllocateTensorRequest(
 
     AllocateTensor(*it->second);
 
-    // Check if there are clients waiting for this shard allocation
-    auto waiting_it = waiting_for_allocation_clients_.find(shard_id);
-    if (waiting_it == waiting_for_allocation_clients_.end()) {
-      continue;
-    }
+    LOG_DEBUG("Marking shard allocation complete: {}", shard_id);
+    pending_shard_allocs_.MarkComplete(shard_id);
 
-    for (const auto& waiting_client : waiting_it->second) {
-      HandleClientMessage(waiting_client.client_identity,
-                          waiting_client.request);
+    auto waiters = pending_shard_allocs_.DrainWaiters(shard_id);
+    LOG_DEBUG("Draining {} waiters for shard {}", waiters.size(), shard_id);
+    for (const auto& client_id : waiters) {
+      LOG_DEBUG("Responding to waiter {} for shard {}", client_id, shard_id);
+      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
+      Comm::SendWithIdentity<WaitForShardAllocationResponse>(
+          client_socket_, client_id, response);
     }
-
-    waiting_for_allocation_clients_.erase(waiting_it);
-    LOG_DEBUG("Unblocked waiting clients for allocated shard: {}", shard_id);
   }
 }
 
@@ -418,6 +431,10 @@ void NodeAgent::Handler::HandleRegisterTensorShardCoordinatorResponse(
     // Store the metadata for later allocation
     auto metadata_ptr = std::make_shared<TensorShardMetadata>(metadata);
     tensor_shard_metadata_map_.emplace(metadata.id, metadata_ptr);
+
+    // Register the shard so clients can wait for its allocation
+    pending_shard_allocs_.RegisterOperation(metadata.id);
+    LOG_DEBUG("Registered pending shard allocation for shard: {}", metadata.id);
 
     // Build TensorDimMap from the spec's dims
     TensorDimMap dims;

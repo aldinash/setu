@@ -140,6 +140,7 @@ def _run_source_client(
             f"[Source {client_id}] Shard registered: {shard_ref.shard_id} for tensor '{tensor_name}'",
             flush=True,
         )
+        client.wait_for_shard_allocation(shard_ref.shard_id)
 
         # Get tensor handle and initialize data
         print(f"[Source {client_id}] Getting tensor handle...", flush=True)
@@ -246,6 +247,8 @@ def _run_dest_client(
         shard_ref = client.register_tensor_shard(shard_spec)
         if shard_ref is None:
             raise RuntimeError(f"Failed to register dest shard {dst_tensor_name}")
+        print(f"[Dest {client_id}] register_tensor_shard called!")
+        client.wait_for_shard_allocation(shard_ref.shard_id)
         print(f"[Dest {client_id}] Shard registered: {shard_ref.shard_id}", flush=True)
 
         # Build CopySpec for pull operation
@@ -260,11 +263,10 @@ def _run_dest_client(
             src_tensor_name, dst_tensor_name, src_selection, dst_selection
         )
 
-        time.sleep(2)
-
         # Submit pull operation
         print(
-            f"[Dest {client_id}] Submitting pull from {src_tensor_name}...", flush=True
+            f"[Dest {client_id}] Submitting pull from '{src_tensor_name}'...",
+            flush=True,
         )
         copy_op_id = client.submit_pull(copy_spec)
         if copy_op_id is None:

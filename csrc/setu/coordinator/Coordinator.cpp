@@ -268,33 +268,31 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
     return;
   }
 
-  AllocateTensorRequest allocate_request({shard_metadata_ptr->id});
-  outbox_queue_.push(OutboxMessage{to_string(owner_node_id), allocate_request});
+  // Check if all shards for this tensor are registered
+  if (metastore_.AllShardsRegistered(request.tensor_shard_spec.name)) {
+    LOG_INFO(
+        "All shards registered for tensor: {}, sending AllocateTensorRequest "
+        "to all owners",
+        request.tensor_shard_spec.name);
 
-  // // Check if all shards for this tensor are registered
-  // if (metastore_.AllShardsRegistered(request.tensor_shard_spec.name)) {
-  //   LOG_INFO(
-  //       "All shards registered for tensor: {}, sending AllocateTensorRequest
-  //       " "to all owners", request.tensor_shard_spec.name);
+    // Get tensor metadata to find all owner NodeIds
+    auto metadata =
+        metastore_.GetTensorMetadata(request.tensor_shard_spec.name);
+    ASSERT_VALID_POINTER_ARGUMENT(metadata);
 
-  //   // Get tensor metadata to find all owner NodeIds
-  //   auto metadata =
-  //       metastore_.GetTensorMetadata(request.tensor_shard_spec.name);
-  //   ASSERT_VALID_POINTER_ARGUMENT(metadata);
+    // Group shard IDs by owner node
+    std::unordered_map<NodeId, std::vector<ShardId>> owner_to_shard_ids;
+    for (const auto& [shard_id, shard_metadata] : metadata->shards) {
+      owner_to_shard_ids[shard_metadata->owner].push_back(shard_id);
+    }
 
-  //   // Group shard IDs by owner node
-  //   std::unordered_map<NodeId, std::vector<ShardId>> owner_to_shard_ids;
-  //   for (const auto& [shard_id, shard_metadata] : metadata->shards) {
-  //     owner_to_shard_ids[shard_metadata->owner].push_back(shard_id);
-  //   }
-
-  //   // Send AllocateTensorRequest to each NodeAgent with its shard IDs
-  //   for (const auto& [owner_id, shard_ids] : owner_to_shard_ids) {
-  //     Identity owner_identity = to_string(owner_id);
-  //     AllocateTensorRequest allocate_request(shard_ids);
-  //     outbox_queue_.push(OutboxMessage{owner_identity, allocate_request});
-  //   }
-  // }
+    // Send AllocateTensorRequest to each NodeAgent with its shard IDs
+    for (const auto& [owner_id, shard_ids] : owner_to_shard_ids) {
+      Identity owner_identity = to_string(owner_id);
+      AllocateTensorRequest allocate_request(shard_ids);
+      outbox_queue_.push(OutboxMessage{owner_identity, allocate_request});
+    }
+  }
 }
 
 void Coordinator::Handler::HandleSubmitCopyRequest(
