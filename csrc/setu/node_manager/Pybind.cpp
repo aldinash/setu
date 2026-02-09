@@ -73,18 +73,7 @@ void InitNodeAgentPybindClass(py::module_& m) {
            "Create a NodeAgent with specified port, coordinator endpoint, "
            "devices, and lock directory")
       .def("start", &NodeAgent::Start, "Start the NodeAgent handler loop")
-      .def("stop", &NodeAgent::Stop, "Stop the NodeAgent handler loop")
-      .def("register_tensor_shard", &NodeAgent::RegisterTensorShard,
-           py::arg("shard_spec"),
-           "Register a tensor shard and return a reference to it")
-      .def("submit_copy", &NodeAgent::SubmitCopy, py::arg("copy_spec"),
-           "Submit a copy operation and return an operation ID")
-      .def("wait_for_copy", &NodeAgent::WaitForCopy, py::arg("copy_op_id"),
-           "Wait for a copy operation to complete")
-      .def("copy_operation_finished", &NodeAgent::CopyOperationFinished,
-           py::arg("copy_op_id"), "Notify that a copy operation has completed")
-      .def("execute", &NodeAgent::Execute, py::arg("plan"),
-           "Execute a coordinator plan");
+      .def("stop", &NodeAgent::Stop, "Stop the NodeAgent handler loop");
 }
 //==============================================================================
 }  // namespace setu::node_manager

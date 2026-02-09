@@ -53,7 +53,8 @@ Coordinator::Coordinator(std::size_t port)
                                        outbox_queue_);
   handler_ = std::make_unique<Handler>(inbox_queue_, outbox_queue_, metastore_,
                                        planner_queue_);
-  executor_ = std::make_unique<Executor>(planner_queue_, outbox_queue_, metastore_);
+  executor_ =
+      std::make_unique<Executor>(planner_queue_, outbox_queue_, metastore_);
 }
 
 Coordinator::~Coordinator() {
@@ -273,9 +274,8 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   // // Check if all shards for this tensor are registered
   // if (metastore_.AllShardsRegistered(request.tensor_shard_spec.name)) {
   //   LOG_INFO(
-  //       "All shards registered for tensor: {}, sending AllocateTensorRequest "
-  //       "to all owners",
-  //       request.tensor_shard_spec.name);
+  //       "All shards registered for tensor: {}, sending AllocateTensorRequest
+  //       " "to all owners", request.tensor_shard_spec.name);
 
   //   // Get tensor metadata to find all owner NodeIds
   //   auto metadata =
@@ -407,9 +407,10 @@ void Coordinator::Handler::HandleExecuteResponse(
 
   // Check if all participants completed
   if (state->completed_responses == expected) {
-    LOG_INFO("All {} participants completed for copy_op_id {}, notifying {} "
-             "submitters",
-             expected, response.copy_op_id, state->submitters.size());
+    LOG_INFO(
+        "All {} participants completed for copy_op_id {}, notifying {} "
+        "submitters",
+        expected, response.copy_op_id, state->submitters.size());
 
     // Send CopyOperationFinishedRequest to all SUBMITTERS
     for (const auto& submitter_identity : state->submitters) {

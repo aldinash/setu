@@ -20,8 +20,8 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 #include "commons/Types.h"
-#include "messaging/Messages.h"
 #include "ir/Instruction.h"
+#include "messaging/Messages.h"
 //==============================================================================
 namespace setu::commons::messages {
 //==============================================================================

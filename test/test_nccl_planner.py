@@ -4,11 +4,17 @@ Tests for NCCLPlanner compilation.
 
 import uuid
 
-import pytest
 import torch
 
-from setu._native.datatypes import CopySpec, Device, TensorDim, TensorDimSpec, TensorSelection, TensorShardSpec
 from setu._native import MetaStore, NCCLPlanner
+from setu._native.datatypes import (
+    CopySpec,
+    Device,
+    TensorDim,
+    TensorDimSpec,
+    TensorSelection,
+    TensorShardSpec,
+)
 
 
 def test_nccl_planner_basic_copy():

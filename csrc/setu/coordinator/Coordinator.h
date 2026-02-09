@@ -24,11 +24,11 @@
 #include "commons/datatypes/TensorShard.h"
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardSpec.h"
-#include "messaging/Messages.h"
 #include "commons/utils/ShardAggregator.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
 #include "coordinator/datatypes/CopyOperation.h"
+#include "messaging/Messages.h"
 #include "metastore/MetaStore.h"
 #include "planner/backends/nccl.h"
 //==============================================================================
@@ -53,8 +53,8 @@ using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::coordinator::datatypes::CopyOperationPtr;
 using setu::metastore::MetaStore;
-using setu::planner::backends::nccl::NCCLPlanner;
 using setu::planner::Plan;
+using setu::planner::backends::nccl::NCCLPlanner;
 
 /// @brief Shared state for tracking a copy operation across Handler and
 /// Executor threads.
@@ -194,9 +194,9 @@ class Coordinator {
                                  const SubmitCopyRequest& request);
     void HandleSubmitPullRequest(const Identity& node_agent_identity,
                                  const SubmitPullRequest& request);
-    void HandleExecuteResponse(const Identity& node_identity,
-                               const setu::commons::messages::ExecuteResponse&
-                                   response);
+    void HandleExecuteResponse(
+        const Identity& node_identity,
+        const setu::commons::messages::ExecuteResponse& response);
 
     /// @brief Unified shard submission logic for both Copy and Pull.
     void HandleShardSubmission(const Identity& node_agent_identity,
@@ -239,8 +239,8 @@ class Coordinator {
   // Executor: Compiles CopySpecs and dispatches execution plans to NodeAgents
   //============================================================================
   struct Executor {
-    Executor(Queue<PlannerTask>& planner_queue, Queue<OutboxMessage>& outbox_queue,
-             MetaStore& metastore);
+    Executor(Queue<PlannerTask>& planner_queue,
+             Queue<OutboxMessage>& outbox_queue, MetaStore& metastore);
 
     void Start();
     void Stop();
@@ -265,7 +265,8 @@ class Coordinator {
   Queue<InboxMessage> inbox_queue_;
   Queue<OutboxMessage> outbox_queue_;
 
-  /// Queue of PlannerTasks (CopyOperationId + CopySpec) for the Executor to compile and dispatch
+  /// Queue of PlannerTasks (CopyOperationId + CopySpec) for the Executor to
+  /// compile and dispatch
   Queue<PlannerTask> planner_queue_;
 
   std::unique_ptr<Gateway> gateway_;

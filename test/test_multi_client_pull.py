@@ -110,7 +110,10 @@ def _run_source_client(
     from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     try:
-        print(f"[Source {client_id}] Starting for {tensor_name} with dims_data {dims_data}...", flush=True)
+        print(
+            f"[Source {client_id}] Starting for {tensor_name} with dims_data {dims_data}...",
+            flush=True,
+        )
         client = Client()
         client.connect(client_endpoint)
         print(f"[Source {client_id}] Connected to {client_endpoint}", flush=True)
@@ -133,7 +136,10 @@ def _run_source_client(
         shard_ref = client.register_tensor_shard(shard_spec)
         if shard_ref is None:
             raise RuntimeError(f"Failed to register source shard {tensor_name}")
-        print(f"[Source {client_id}] Shard registered: {shard_ref.shard_id} for tensor '{tensor_name}'", flush=True)
+        print(
+            f"[Source {client_id}] Shard registered: {shard_ref.shard_id} for tensor '{tensor_name}'",
+            flush=True,
+        )
 
         # Get tensor handle and initialize data
         print(f"[Source {client_id}] Getting tensor handle...", flush=True)
@@ -144,12 +150,14 @@ def _run_source_client(
         torch.cuda.synchronize()
         print(f"[Source {client_id}] Tensor initialized!", flush=True)
 
-        result_queue.put({
-            "success": True,
-            "client_id": client_id,
-            "tensor_name": tensor_name,
-            "shard_id": shard_ref.shard_id,
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "client_id": client_id,
+                "tensor_name": tensor_name,
+                "shard_id": shard_ref.shard_id,
+            }
+        )
 
         # Signal that this source is initialized
         init_done_event.set()
@@ -162,13 +170,16 @@ def _run_source_client(
 
     except Exception as e:
         import traceback
+
         print(f"[Source {client_id}] ERROR: {e}", flush=True)
-        result_queue.put({
-            "success": False,
-            "client_id": client_id,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        })
+        result_queue.put(
+            {
+                "success": False,
+                "client_id": client_id,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
+        )
 
 
 def _run_dest_client(
@@ -203,7 +214,10 @@ def _run_dest_client(
     )
 
     try:
-        print(f"[Dest {client_id}] Starting for {dst_tensor_name}... with dims_data {dims_data}", flush=True)
+        print(
+            f"[Dest {client_id}] Starting for {dst_tensor_name}... with dims_data {dims_data}",
+            flush=True,
+        )
         # Wait for all sources to be ready
         print(f"[Dest {client_id}] Waiting for sources...", flush=True)
         if not all_sources_ready_event.wait(timeout=30):
@@ -249,7 +263,9 @@ def _run_dest_client(
         time.sleep(2)
 
         # Submit pull operation
-        print(f"[Dest {client_id}] Submitting pull from {src_tensor_name}...", flush=True)
+        print(
+            f"[Dest {client_id}] Submitting pull from {src_tensor_name}...", flush=True
+        )
         copy_op_id = client.submit_pull(copy_spec)
         if copy_op_id is None:
             raise RuntimeError("Failed to submit pull operation")
@@ -268,29 +284,37 @@ def _run_dest_client(
 
         actual_value = tensor.mean().item()
         values_match = abs(actual_value - expected_value) < 1e-5
-        print(f"[Dest {client_id}] Value check: expected={expected_value}, actual={actual_value}, match={values_match}", flush=True)
+        print(
+            f"[Dest {client_id}] Value check: expected={expected_value}, actual={actual_value}, match={values_match}",
+            flush=True,
+        )
 
-        result_queue.put({
-            "success": True,
-            "client_id": client_id,
-            "tensor_name": dst_tensor_name,
-            "expected_value": expected_value,
-            "actual_value": actual_value,
-            "values_match": values_match,
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "client_id": client_id,
+                "tensor_name": dst_tensor_name,
+                "expected_value": expected_value,
+                "actual_value": actual_value,
+                "values_match": values_match,
+            }
+        )
 
         client.disconnect()
         print(f"[Dest {client_id}] Done!", flush=True)
 
     except Exception as e:
         import traceback
+
         print(f"[Dest {client_id}] ERROR: {e}", flush=True)
-        result_queue.put({
-            "success": False,
-            "client_id": client_id,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        })
+        result_queue.put(
+            {
+                "success": False,
+                "client_id": client_id,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
+        )
 
 
 @pytest.mark.gpu
@@ -314,7 +338,7 @@ def test_multi_client_pull_same_device():
     init_value = 10.0
 
     dim_names = ["a", "b"]
-    dim_sizes = [4,4]
+    dim_sizes = [4, 4]
 
     def make_dims_data(dim_names, dim_sizes, num_shards, i, shard_dim=0):
         dim_owned_range = []
@@ -324,8 +348,11 @@ def test_multi_client_pull_same_device():
                 dim_owned_range.append((i * shard_sz, (i + 1) * shard_sz))
             else:
                 dim_owned_range.append((0, sz))
-        return [(n, sz, s, e) for (n, sz, (s, e)) in zip(dim_names, dim_sizes, dim_owned_range)]
-        
+        return [
+            (n, sz, s, e)
+            for (n, sz, (s, e)) in zip(dim_names, dim_sizes, dim_owned_range)
+        ]
+
     ctx = mp.get_context("spawn")
 
     # Events
@@ -487,7 +514,10 @@ def test_multi_client_pull_multi_device():
                 dim_owned_range.append((i * shard_sz, (i + 1) * shard_sz))
             else:
                 dim_owned_range.append((0, sz))
-        return [(n, sz, s, e) for (n, sz, (s, e)) in zip(dim_names, dim_sizes, dim_owned_range)]
+        return [
+            (n, sz, s, e)
+            for (n, sz, (s, e)) in zip(dim_names, dim_sizes, dim_owned_range)
+        ]
 
     ctx = mp.get_context("spawn")
 

@@ -25,11 +25,11 @@
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
-#include "messaging/Messages.h"
-#include "commons/utils/PendingWaits.h"
+#include "commons/utils/PendingOperations.h"
 #include "commons/utils/RequestRouter.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
+#include "messaging/Messages.h"
 #include "node_manager/worker/Worker.h"
 #include "planner/Planner.h"
 //==============================================================================
@@ -80,17 +80,6 @@ class NodeAgent {
             const std::vector<Device>& devices,
             std::string lock_base_dir = "/tmp/setu/locks");
   ~NodeAgent();
-
-  std::optional<TensorShardRef> RegisterTensorShard(
-      const TensorShardSpec& shard_spec);
-
-  std::optional<CopyOperationId> SubmitCopy(const CopySpec& copy_spec);
-
-  void WaitForCopy(CopyOperationId copy_op_id);
-
-  void CopyOperationFinished(CopyOperationId copy_op_id);
-
-  void Execute(Plan plan);
 
   void Start();
   void Stop();
@@ -172,8 +161,8 @@ class NodeAgent {
     // request
     setu::commons::utils::RequestRouter request_router_;
 
-    // Pending client waits: clients waiting for a copy operation to finish
-    setu::commons::utils::PendingWaits<CopyOperationId> copy_waits_;
+    // Tracks pending copy operations: registration, waiting, and completion
+    setu::commons::utils::PendingOperations<CopyOperationId> pending_copies_;
 
     struct WaitingClient {
       Identity client_identity;
