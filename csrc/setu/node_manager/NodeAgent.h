@@ -25,7 +25,7 @@
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
-#include "commons/utils/PendingWaits.h"
+#include "commons/utils/PendingOperations.h"
 #include "commons/utils/RequestRouter.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
@@ -159,8 +159,8 @@ class NodeAgent {
     // request
     setu::commons::utils::RequestRouter request_router_;
 
-    // Pending client waits: clients waiting for a copy operation to finish
-    setu::commons::utils::PendingWaits<CopyOperationId> copy_waits_;
+    // Tracks pending copy operations: registration, waiting, and completion
+    setu::commons::utils::PendingOperations<CopyOperationId> pending_copies_;
 
     struct WaitingClient {
       Identity client_identity;

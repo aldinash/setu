@@ -57,6 +57,7 @@ using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
 using setu::commons::messages::WaitForShardAllocationRequest;
 using setu::commons::messages::WaitForShardAllocationResponse;
+using setu::commons::utils::AddWaiterResult;
 using setu::commons::utils::Comm;
 using setu::commons::utils::PrepareTensorIPCSpec;
 using setu::commons::utils::ZmqHelper;
@@ -234,8 +235,6 @@ void NodeAgent::Handler::HandleCoordinatorMessage(
           HandleRegisterTensorShardCoordinatorResponse(msg);
         } else if constexpr (std::is_same_v<T, SubmitCopyResponse>) {
           HandleSubmitCopyResponse(msg);
-        } else if constexpr (std::is_same_v<T, WaitForCopyResponse>) {
-          HandleWaitForCopyResponse(msg);
         }
       },
       message);
@@ -265,9 +264,27 @@ void NodeAgent::Handler::HandleSubmitPullRequest(
 
 void NodeAgent::Handler::HandleWaitForCopyRequest(
     const Identity& client_identity, const WaitForCopyRequest& request) {
-  copy_waits_.AddWaiter(request.copy_operation_id, client_identity);
+  auto result =
+      pending_copies_.AddWaiter(request.copy_operation_id, client_identity);
 
-  WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
+  switch (result) {
+    case AddWaiterResult::kAlreadyComplete: {
+      WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
+      Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_,
+                                                  client_identity, response);
+      return;
+    }
+    case AddWaiterResult::kNotRegistered: {
+      LOG_ERROR("WaitForCopy for unknown copy_operation_id: {}",
+                request.copy_operation_id);
+      WaitForCopyResponse response(RequestId{}, ErrorCode::kInvalidArguments);
+      Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_,
+                                                  client_identity, response);
+      return;
+    }
+    case AddWaiterResult::kWaiterAdded:
+      return;
+  }
 }
 
 void NodeAgent::Handler::HandleGetTensorHandleRequest(
@@ -356,12 +373,11 @@ void NodeAgent::Handler::HandleAllocateTensorRequest(
 
 void NodeAgent::Handler::HandleCopyOperationFinishedRequest(
     const CopyOperationFinishedRequest& request) {
-  // Get and remove all clients waiting for this copy operation
-  auto waiters = copy_waits_.DrainWaiters(request.copy_operation_id);
+  pending_copies_.MarkComplete(request.copy_operation_id);
+
+  auto waiters = pending_copies_.DrainWaiters(request.copy_operation_id);
   for (const auto& client_id : waiters) {
     WaitForCopyResponse response(RequestId{}, ErrorCode::kSuccess);
-
-    // unblock waiting clients
     Comm::SendWithIdentity<WaitForCopyResponse>(client_socket_, client_id,
                                                 response);
   }
@@ -416,6 +432,8 @@ void NodeAgent::Handler::HandleSubmitCopyResponse(
         response.request_id);
     return;
   }
+
+  pending_copies_.RegisterOperation(response.copy_operation_id);
 
   Comm::SendWithIdentity<SubmitCopyResponse>(client_socket_, *client_identity,
                                              response);
