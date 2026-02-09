@@ -162,13 +162,8 @@ class NodeAgent {
     // Tracks pending copy operations: registration, waiting, and completion
     setu::commons::utils::PendingOperations<CopyOperationId> pending_copies_;
 
-    struct WaitingClient {
-      Identity client_identity;
-      ClientRequest request;
-    };
-
-    std::unordered_map<ShardId, std::vector<WaitingClient>>
-        waiting_for_allocation_clients_;
+    // Tracks pending shard allocation: registration, waiting, and completion
+    setu::commons::utils::PendingOperations<ShardId> pending_shard_allocs_;
 
     TensorShardMetadataMap tensor_shard_metadata_map_;
     TensorShardsConcurrentMap& shard_id_to_tensor_;
