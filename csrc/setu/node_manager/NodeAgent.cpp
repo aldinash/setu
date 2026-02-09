@@ -339,16 +339,14 @@ void NodeAgent::Handler::HandleWaitForShardAllocationRequest(
           "WaitForShardAllocation: shard {} already complete, responding "
           "immediately to client {}",
           request.shard_id, client_identity);
-      WaitForShardAllocationResponse response(RequestId{},
-                                              ErrorCode::kSuccess);
+      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
       Comm::SendWithIdentity<WaitForShardAllocationResponse>(
           client_socket_, client_identity, response);
       return;
     }
     case AddWaiterResult::kNotRegistered: {
-      LOG_ERROR(
-          "WaitForShardAllocation for unknown shard_id: {}, client={}",
-          request.shard_id, client_identity);
+      LOG_ERROR("WaitForShardAllocation for unknown shard_id: {}, client={}",
+                request.shard_id, client_identity);
       WaitForShardAllocationResponse response(RequestId{},
                                               ErrorCode::kInvalidArguments);
       Comm::SendWithIdentity<WaitForShardAllocationResponse>(
@@ -379,8 +377,7 @@ void NodeAgent::Handler::HandleAllocateTensorRequest(
     LOG_DEBUG("Draining {} waiters for shard {}", waiters.size(), shard_id);
     for (const auto& client_id : waiters) {
       LOG_DEBUG("Responding to waiter {} for shard {}", client_id, shard_id);
-      WaitForShardAllocationResponse response(RequestId{},
-                                              ErrorCode::kSuccess);
+      WaitForShardAllocationResponse response(RequestId{}, ErrorCode::kSuccess);
       Comm::SendWithIdentity<WaitForShardAllocationResponse>(
           client_socket_, client_id, response);
     }

@@ -271,7 +271,9 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   // Check if all shards for this tensor are registered
   if (metastore_.AllShardsRegistered(request.tensor_shard_spec.name)) {
     LOG_INFO(
-        "All shards registered for tensor: {}, sending AllocateTensorRequest to all owners", request.tensor_shard_spec.name);
+        "All shards registered for tensor: {}, sending AllocateTensorRequest "
+        "to all owners",
+        request.tensor_shard_spec.name);
 
     // Get tensor metadata to find all owner NodeIds
     auto metadata =

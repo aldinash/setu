@@ -265,7 +265,8 @@ def _run_dest_client(
 
         # Submit pull operation
         print(
-            f"[Dest {client_id}] Submitting pull from '{src_tensor_name}'...", flush=True
+            f"[Dest {client_id}] Submitting pull from '{src_tensor_name}'...",
+            flush=True,
         )
         copy_op_id = client.submit_pull(copy_spec)
         if copy_op_id is None:
