@@ -6,19 +6,27 @@ from __future__ import annotations
 
 import torch
 from expecttest import assert_expected_inline
+from planner_test_utils import PlannerTestHelper
 
 from setu._commons.datatypes import TensorDimSpec
-from planner_test_utils import PlannerTestHelper
 
 
 def test_nccl_planner_basic_copy():
     helper = PlannerTestHelper()
 
     helper.register_tensor(
-        "tensor_a", "shard_a", torch.device("cpu"), "node_1", [TensorDimSpec("dim0", 128, 0, 128)]
+        "tensor_a",
+        "shard_a",
+        torch.device("cpu"),
+        "node_1",
+        [TensorDimSpec("dim0", 128, 0, 128)],
     )
     helper.register_tensor(
-        "tensor_b", "shard_b", torch.device("cpu"), "node_1", [TensorDimSpec("dim0", 128, 0, 128)]
+        "tensor_b",
+        "shard_b",
+        torch.device("cpu"),
+        "node_1",
+        [TensorDimSpec("dim0", 128, 0, 128)],
     )
 
     plan = helper.compile(helper.select("tensor_a"), helper.select("tensor_b"))
@@ -40,10 +48,18 @@ def test_nccl_planner_partial_copy():
     helper = PlannerTestHelper()
 
     helper.register_tensor(
-        "tensor_a", "shard_a", torch.device("cpu"), "node_1", [TensorDimSpec("dim0", 128, 0, 128)]
+        "tensor_a",
+        "shard_a",
+        torch.device("cpu"),
+        "node_1",
+        [TensorDimSpec("dim0", 128, 0, 128)],
     )
     helper.register_tensor(
-        "tensor_b", "shard_b", torch.device("cpu"), "node_1", [TensorDimSpec("dim0", 128, 0, 128)]
+        "tensor_b",
+        "shard_b",
+        torch.device("cpu"),
+        "node_1",
+        [TensorDimSpec("dim0", 128, 0, 128)],
     )
 
     # Select only the first 64 elements from each tensor
@@ -61,6 +77,7 @@ Plan(num_participants=1):
     InitComm(comm=COMM_0, ranks={'Participant(node=node_1, device=Device(torch_device=cpu))': 0})
     Copy(src=(shard_a, node=node_1), src_offset=0, dst=(shard_b, node=node_1), dst_offset=0, count=64, dtype=torch.float32)""",
     )
+
 
 def test_nccl_planner_2d_sharded_copy():
     """Test copy from a full 2D CPU tensor to a tensor sharded across two GPUs."""

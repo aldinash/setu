@@ -144,17 +144,13 @@ class PlannerTestHelper:
                     remap = rank_remap[current_comm_key]
                     ranks = {
                         self._format_participant(p): remap[r]
-                        for p, r in self._sorted_ranks(
-                            inner.participant_to_rank
-                        )
+                        for p, r in self._sorted_ranks(inner.participant_to_rank)
                     }
                     lines.append(
                         f"    InitComm(comm={rename_comm(inner.comm_id)}, ranks={ranks})"
                     )
                 elif name == "UseComm":
-                    lines.append(
-                        f"    UseComm(comm={rename_comm(inner.comm_id)})"
-                    )
+                    lines.append(f"    UseComm(comm={rename_comm(inner.comm_id)})")
                 elif name == "Copy":
                     lines.append(
                         f"    Copy(src={self._format_shard(inner.src_shard)}, "
