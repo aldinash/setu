@@ -80,6 +80,25 @@ std::vector<Value> Operation::Uses() const {
       op);
 }
 
+std::vector<Value> Operation::ConsumedOperands() const {
+  return std::visit(
+      [](const auto& op) -> std::vector<Value> {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, ViewOp>) {
+          return {};
+        } else if constexpr (std::is_same_v<T, AllocTmpOp>) {
+          return {};
+        } else if constexpr (std::is_same_v<T, CopyOp>) {
+          return {op.dst_in};
+        } else if constexpr (std::is_same_v<T, PackOp>) {
+          return {op.dst_in};
+        } else if constexpr (std::is_same_v<T, UnpackOp>) {
+          return op.dst_ins;
+        }
+      },
+      op);
+}
+
 std::string Operation::ToString() const {
   return std::visit([](const auto& op) { return op.ToString(); }, op);
 }
