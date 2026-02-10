@@ -17,9 +17,9 @@
 #include "node_manager/worker/Worker.h"
 //==============================================================================
 #include "commons/Logging.h"
-#include "commons/messages/Messages.h"
 #include "commons/utils/Comm.h"
 #include "commons/utils/ThreadingUtils.h"
+#include "messaging/Messages.h"
 //==============================================================================
 namespace setu::node_manager::worker {
 //==============================================================================
@@ -33,10 +33,8 @@ using setu::commons::utils::Comm;
 using setu::commons::utils::ZmqHelper;
 using setu::ir::Instruction;
 //==============================================================================
-Worker::Worker(Device device, std::size_t port)
-    : device_(device), port_(port), worker_running_{false} {
-  InitZmqSockets();
-}
+Worker::Worker(NodeId node_id, Device device)
+    : node_id_(node_id), device_(device), worker_running_{false} {}
 
 Worker::~Worker() {
   Stop();
@@ -46,7 +44,6 @@ Worker::~Worker() {
 void Worker::Start() {
   if (worker_running_) return;
 
-  LOG_DEBUG("Starting Worker");
   if (!worker_running_.load()) {
     worker_running_ = true;
     worker_thread_ = std::thread(
@@ -64,24 +61,22 @@ void Worker::Stop() {
   }
 }
 
+void Worker::Connect(ZmqContextPtr zmq_context, std::string endpoint) {
+  ASSERT_VALID_POINTER_ARGUMENT(zmq_context);
+  zmq_context_ = std::move(zmq_context);
+  endpoint_ = std::move(endpoint);
+  InitZmqSockets();
+}
+
 void Worker::InitZmqSockets() {
-  LOG_DEBUG("Initializing ZMQ sockets");
-
-  zmq_context_ = std::make_shared<zmq::context_t>();
-
-  socket_ = ZmqHelper::CreateAndBindSocket(zmq_context_, zmq::socket_type::rep,
-                                           port_);
-
-  LOG_DEBUG("Initialized ZMQ sockets successfully");
+  socket_ =
+      std::make_shared<zmq::socket_t>(*zmq_context_, zmq::socket_type::rep);
+  socket_->set(zmq::sockopt::linger, 0);
+  socket_->bind(endpoint_);
 }
 
 void Worker::CloseZmqSockets() {
-  LOG_DEBUG("Closing ZMQ sockets");
-
   if (socket_) socket_->close();
-  if (zmq_context_) zmq_context_->close();
-
-  LOG_DEBUG("Closed ZMQ sockets successfully");
 }
 
 void Worker::WorkerLoop() {
@@ -93,12 +88,8 @@ void Worker::WorkerLoop() {
     auto request = Comm::Recv<ExecuteProgramRequest>(socket_);
     const auto& program = request.program;
 
-    LOG_DEBUG("Worker received program with {} instructions", program.size());
-
     // Execute each instruction in the program
     this->Execute(program);
-
-    LOG_DEBUG("Worker completed executing all instructions");
 
     // Send acknowledgment back to NodeAgent
     ExecuteProgramResponse response(RequestId{}, ErrorCode::kSuccess);

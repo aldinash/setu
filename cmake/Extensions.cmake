@@ -12,6 +12,7 @@ target_link_libraries(
             Boost::container_hash
             Boost::stacktrace
             Boost::dynamic_bitset
+            Boost::interprocess
             libzmq-static
             dl
             backtrace
@@ -98,34 +99,43 @@ file(GLOB_RECURSE KERNELS_SRC "csrc/setu/kernels/*.cpp")
 define_setu_extension(_kernels "${KERNELS_SRC}" "setu_common_objects" "_kernels_common")
 define_setu_static(_kernels_static "${KERNELS_SRC}" "setu_common_objects" "_kernels_common")
 
-define_setu_extension(_commons "csrc/setu/commons/Pybind.cpp" "setu_common_objects" "")
-define_setu_static(_commons_static "" "setu_common_objects" "")
+define_setu_extension(_commons "csrc/setu/commons/Pybind.cpp" "setu_common_objects"
+                      "_messaging_static")
+define_setu_static(_commons_static "" "setu_common_objects" "_messaging_static")
 
 file(GLOB_RECURSE CLIENT_SRC "csrc/setu/client/*.cpp")
-define_setu_extension(_client "${CLIENT_SRC}" "setu_common_objects" "")
-define_setu_static(_client_static "${CLIENT_SRC}" "setu_common_objects" "")
+define_setu_extension(_client "${CLIENT_SRC}" "setu_common_objects" "_messaging_static")
+define_setu_static(_client_static "${CLIENT_SRC}" "setu_common_objects" "_messaging_static")
 
 file(GLOB_RECURSE IR_SRC "csrc/setu/ir/*.cpp")
 define_setu_extension(_ir "${IR_SRC}" "setu_common_objects" "")
 define_setu_static(_ir_static "${IR_SRC}" "setu_common_objects" "")
 
+file(GLOB_RECURSE MESSAGES_SRC "csrc/setu/messaging/*.cpp")
+define_setu_static(_messaging_static "${MESSAGES_SRC}" "setu_common_objects"
+                   "_planner_static;_ir_static")
+
 file(GLOB_RECURSE NODE_MANAGER_SRC "csrc/setu/node_manager/*.cpp")
 define_setu_extension(_node_manager "${NODE_MANAGER_SRC}" "setu_common_objects"
-                      "_kernels_common;_ir_static")
+                      "_kernels_common;_messaging_static")
 define_setu_static(_node_manager_static "${NODE_MANAGER_SRC}" "setu_common_objects"
-                   "_kernels_common;_ir_static")
+                   "_kernels_common;_messaging_static")
 
 file(GLOB_RECURSE METASTORE_SRC "csrc/setu/metastore/*.cpp")
+define_setu_extension(_metastore "${METASTORE_SRC}" "setu_common_objects" "")
 define_setu_static(_metastore_static "${METASTORE_SRC}" "setu_common_objects" "")
 
 file(GLOB_RECURSE PLANNER_SRC "csrc/setu/planner/*.cpp")
-define_setu_static(_planner_static "${PLANNER_SRC}" "setu_common_objects" "_metastore_static")
+define_setu_extension(_planner "${PLANNER_SRC}" "setu_common_objects"
+                      "_metastore_static;_ir_static")
+define_setu_static(_planner_static "${PLANNER_SRC}" "setu_common_objects"
+                   "_metastore_static;_ir_static")
 
 file(GLOB_RECURSE COORDINATOR_SRC "csrc/setu/coordinator/*.cpp")
 define_setu_extension(_coordinator "${COORDINATOR_SRC}" "setu_common_objects"
-                      "${NCCL_LIBRARY};_metastore_static")
+                      "${NCCL_LIBRARY};_messaging_static;_metastore_static;_planner_static")
 define_setu_static(_coordinator_static "${COORDINATOR_SRC}" "setu_common_objects"
-                   "${NCCL_LIBRARY};_metastore_static")
+                   "${NCCL_LIBRARY};_messaging_static;_metastore_static;_planner_static")
 target_include_directories(_coordinator PRIVATE ${NCCL_INCLUDE_DIR})
 target_include_directories(_coordinator_static PRIVATE ${NCCL_INCLUDE_DIR})
 

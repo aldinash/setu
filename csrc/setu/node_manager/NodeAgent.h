@@ -25,9 +25,11 @@
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardRef.h"
 #include "commons/datatypes/TensorShardSpec.h"
-#include "commons/messages/Messages.h"
+#include "commons/utils/PendingOperations.h"
+#include "commons/utils/RequestRouter.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
+#include "messaging/Messages.h"
 #include "node_manager/worker/Worker.h"
 #include "planner/Planner.h"
 //==============================================================================
@@ -60,8 +62,11 @@ using setu::commons::messages::RegisterTensorShardCoordinatorResponse;
 using setu::commons::messages::RegisterTensorShardRequest;
 using setu::commons::messages::SubmitCopyRequest;
 using setu::commons::messages::SubmitCopyResponse;
+using setu::commons::messages::SubmitPullRequest;
 using setu::commons::messages::WaitForCopyRequest;
 using setu::commons::messages::WaitForCopyResponse;
+using setu::commons::messages::WaitForShardAllocationRequest;
+using setu::commons::messages::WaitForShardAllocationResponse;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
 using setu::ir::Program;
@@ -72,19 +77,9 @@ using setu::planner::Plan;
 class NodeAgent {
  public:
   NodeAgent(NodeId node_id, std::size_t port, std::string coordinator_endpoint,
-            const std::vector<Device>& devices);
+            const std::vector<Device>& devices,
+            std::string lock_base_dir = "/tmp/setu/locks");
   ~NodeAgent();
-
-  std::optional<TensorShardRef> RegisterTensorShard(
-      const TensorShardSpec& shard_spec);
-
-  std::optional<CopyOperationId> SubmitCopy(const CopySpec& copy_spec);
-
-  void WaitForCopy(CopyOperationId copy_op_id);
-
-  void CopyOperationFinished(CopyOperationId copy_op_id);
-
-  void Execute(Plan plan);
 
   void Start();
   void Stop();
@@ -105,7 +100,8 @@ class NodeAgent {
     Handler(NodeId node_id, std::shared_ptr<zmq::context_t> zmq_context,
             std::size_t port, const std::string& coordinator_endpoint,
             Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
-            TensorShardsConcurrentMap& shard_id_to_tensor);
+            TensorShardsConcurrentMap& shard_id_to_tensor,
+            std::string lock_base_dir);
     ~Handler();
 
     void Start();
@@ -127,10 +123,15 @@ class NodeAgent {
         const RegisterTensorShardRequest& request);
     void HandleSubmitCopyRequest(const Identity& client_identity,
                                  const SubmitCopyRequest& request);
+    void HandleSubmitPullRequest(const Identity& client_identity,
+                                 const SubmitPullRequest& request);
     void HandleWaitForCopyRequest(const Identity& client_identity,
                                   const WaitForCopyRequest& request);
     void HandleGetTensorHandleRequest(const Identity& client_identity,
                                       const GetTensorHandleRequest& request);
+    void HandleWaitForShardAllocationRequest(
+        const Identity& client_identity,
+        const WaitForShardAllocationRequest& request);
 
     // Coordinator message handlers
     void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
@@ -156,19 +157,19 @@ class NodeAgent {
     std::thread thread_;
     std::atomic<bool> running_{false};
 
-    // stores mapping from request id to the client identity who sent this
-    // request. Used to route coordinator responses back to the client that
-    // initiated the request
-    std::unordered_map<RequestId, Identity> request_id_to_client_identity_;
+    // Routes coordinator responses back to the client that initiated the
+    // request
+    setu::commons::utils::RequestRouter request_router_;
 
-    // Pending client waits: maps copy_op_id to list of client identities
-    // waiting
-    std::unordered_map<CopyOperationId, std::vector<Identity>,
-                       boost::hash<CopyOperationId>>
-        pending_waits_;
+    // Tracks pending copy operations: registration, waiting, and completion
+    setu::commons::utils::PendingOperations<CopyOperationId> pending_copies_;
+
+    // Tracks pending shard allocation: registration, waiting, and completion
+    setu::commons::utils::PendingOperations<ShardId> pending_shard_allocs_;
 
     TensorShardMetadataMap tensor_shard_metadata_map_;
     TensorShardsConcurrentMap& shard_id_to_tensor_;
+    std::string lock_base_dir_;  ///< Directory for file-based locks (IPC)
   };
 
   //============================================================================
@@ -222,6 +223,7 @@ class NodeAgent {
   std::unique_ptr<Executor> executor_;
 
   TensorShardsConcurrentMap shard_id_to_tensor_;
+  std::string lock_base_dir_;  ///< Directory for file-based locks (IPC)
 };
 //==============================================================================
 }  // namespace setu::node_manager
