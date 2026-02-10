@@ -24,6 +24,7 @@
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
+#include "commons/utils/Pybind.h"
 //==============================================================================
 #include "setu/ir/Instruction.h"
 #include "setu/ir/ShardRef.h"
@@ -165,6 +166,29 @@ void InitInstructionPybind(py::module_& m) {
           py::arg("resolver"),
           "Resolve (shard_id, tensor_name) to device pointer. Resolver must "
           "return int (e.g. tensor.data_ptr()).")
+      .def_property_readonly(
+          "type_name",
+          [](const Instruction& self) -> std::string {
+            return std::visit(
+                [](const auto& v) -> std::string {
+                  using T = std::decay_t<decltype(v)>;
+                  if constexpr (std::is_same_v<T, InitComm>) return "InitComm";
+                  if constexpr (std::is_same_v<T, UseComm>) return "UseComm";
+                  if constexpr (std::is_same_v<T, Copy>) return "Copy";
+                  if constexpr (std::is_same_v<T, Send>) return "Send";
+                  if constexpr (std::is_same_v<T, Receive>) return "Receive";
+                },
+                self.instr);
+          },
+          "Name of the instruction type (e.g. 'Copy', 'InitComm')")
+      .def_property_readonly(
+          "inner",
+          [](const Instruction& self) -> py::object {
+            return std::visit(
+                [](const auto& v) -> py::object { return py::cast(v); },
+                self.instr);
+          },
+          "The underlying instruction object (Copy, InitComm, etc.)")
       .def("__str__", &Instruction::ToString)
       .def("__repr__", &Instruction::ToString);
 }

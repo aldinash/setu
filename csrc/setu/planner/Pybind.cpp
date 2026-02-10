@@ -19,14 +19,21 @@
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
+#include "commons/datatypes/Pybind.h"
+#include "commons/enums/Pybind.h"
 #include "commons/utils/Pybind.h"
+#include "setu/ir/Pybind.h"
 //==============================================================================
+#include "planner/Planner.h"
+#include "planner/backends/nccl.h"
 #include "setu/planner/Participant.h"
 //==============================================================================
 namespace setu::planner {
 //==============================================================================
 using setu::commons::NodeId;
+using setu::commons::datatypes::CopySpec;
 using setu::commons::datatypes::Device;
+using setu::metastore::MetaStore;
 //==============================================================================
 void InitParticipantPybind(py::module_& m) {
   py::class_<Participant>(m, "Participant")
@@ -46,12 +53,42 @@ void InitParticipantPybind(py::module_& m) {
       });
 }
 //==============================================================================
-void InitPlannerPybind(py::module_& m) { InitParticipantPybind(m); }
+void InitPlanPybind(py::module_& m) {
+  py::class_<Plan>(m, "Plan")
+      .def(py::init<>(), "Create an empty plan")
+      .def_readwrite("participants", &Plan::participants,
+                     "Set of participants involved in the plan")
+      .def_readwrite("program", &Plan::program,
+                     "Map of participant to program (list of instructions)")
+      .def("fragments", &Plan::Fragments, "Split plan into per-node fragments")
+      .def("to_string", &Plan::ToString,
+           "Get string representation of the plan")
+      .def("__str__", &Plan::ToString)
+      .def("__repr__", &Plan::ToString);
+}
+//==============================================================================
+void InitNCCLPlannerPybind(py::module_& m) {
+  py::class_<backends::nccl::NCCLPlanner>(m, "NCCLPlanner")
+      .def(py::init<>(), "Create a new NCCLPlanner instance")
+      .def("compile", &backends::nccl::NCCLPlanner::Compile,
+           py::arg("copy_spec"), py::arg("metastore"),
+           "Compile a copy specification into an execution plan");
+}
+//==============================================================================
+void InitPlannerPybind(py::module_& m) {
+  InitParticipantPybind(m);
+  InitPlanPybind(m);
+  InitNCCLPlannerPybind(m);
+}
 //==============================================================================
 }  // namespace setu::planner
 //==============================================================================
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   setu::commons::Logger::InitializeLogLevel();
+
+  setu::commons::enums::InitEnumsPybindSubmodule(m);
+  setu::commons::datatypes::InitDatatypesPybindSubmodule(m);
+  setu::ir::InitIrPybind(m);
   setu::planner::InitPlannerPybind(m);
 }
 //==============================================================================

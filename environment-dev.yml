@@ -36,6 +36,7 @@ dependencies:
       - cmake>=4.0 # python wrapper
       - codespell
       - datasets
+      - expecttest
       - huggingface-hub
       - isort
       - py-spy

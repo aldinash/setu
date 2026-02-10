@@ -315,6 +315,8 @@ ext_modules = []
 
 ext_modules.append(CMakeExtension(name="setu._commons"))
 ext_modules.append(CMakeExtension(name="setu._client"))
+ext_modules.append(CMakeExtension(name="setu._metastore"))
+ext_modules.append(CMakeExtension(name="setu._planner"))
 
 
 setup(

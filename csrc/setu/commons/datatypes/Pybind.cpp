@@ -63,7 +63,7 @@ void InitTensorSlicePybind(py::module_& m) {
 }
 //==============================================================================
 void InitTensorDimPybind(py::module_& m) {
-  py::class_<TensorDim>(m, "TensorDim")
+  py::class_<TensorDim>(m, "TensorDim", py::module_local())
       .def(py::init<TensorDimName, std::size_t>(), py::arg("name"),
            py::arg("size"))
       .def_readonly("name", &TensorDim::name, "Name of the tensor dimension")
@@ -131,6 +131,10 @@ void InitTensorSelectionPybind(py::module_& m) {
            "Create new selection with specified slice for a dimension")
       .def("__str__", &TensorSelection::ToString)
       .def("__repr__", &TensorSelection::ToString);
+
+  m.def("create_selection_from_shard_metadata",
+        &CreateSelectionFromShardMetadata, py::arg("shard_metadata"),
+        "Create a TensorSelection from a TensorShardMetadata");
 }
 //==============================================================================
 //==============================================================================
@@ -176,7 +180,7 @@ void InitTensorDimShardPybind(py::module_& m) {
 //==============================================================================
 void InitTensorShardMetadataPybind(py::module_& m) {
   py::class_<TensorShardMetadata, TensorShardMetadataPtr>(
-      m, "TensorShardMetadata")
+      m, "TensorShardMetadata", py::module_local())
       .def(py::init<TensorShardSpec, NodeId>(), py::arg("spec"),
            py::arg("owner"), "Create metadata with auto-generated ID")
       .def(py::init<ShardId, TensorShardSpec, NodeId>(), py::arg("id"),
@@ -229,7 +233,8 @@ void InitTensorShardSpecPybind(py::module_& m) {
 }
 //==============================================================================
 void InitTensorShardRefPybind(py::module_& m) {
-  py::class_<TensorShardRef, TensorShardRefPtr>(m, "TensorShardRef")
+  py::class_<TensorShardRef, TensorShardRefPtr>(m, "TensorShardRef",
+                                                py::module_local())
       .def(py::init<TensorName, ShardId, TensorDimMap>(), py::arg("name"),
            py::arg("shard_id"), py::arg("dims"))
       .def_readonly("name", &TensorShardRef::name,
@@ -251,8 +256,7 @@ void InitTensorShardRefPybind(py::module_& m) {
             if (t.size() != 3) {
               throw std::runtime_error("Invalid state for TensorShardRef");
             }
-            return TensorShardRef(t[0].cast<TensorName>(),
-                                  t[1].cast<ShardId>(),
+            return TensorShardRef(t[0].cast<TensorName>(), t[1].cast<ShardId>(),
                                   t[2].cast<TensorDimMap>());
           }));
 }

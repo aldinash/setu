@@ -53,6 +53,7 @@ add_custom_target(
           _ir_static
           _node_manager
           _node_manager_static
+          _metastore
           _metastore_static
           _planner
           _planner_static
