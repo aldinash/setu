@@ -22,7 +22,7 @@
 #include "metastore/MetaStore.h"
 #include "planner/ir/cir/Program.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 using setu::commons::datatypes::CopySpec;
@@ -42,5 +42,5 @@ class CIRLowering {
 };
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

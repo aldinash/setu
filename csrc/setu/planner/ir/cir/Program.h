@@ -25,7 +25,7 @@
 #include "planner/ir/cir/Value.h"
 #include "planner/ir/llc/ShardRef.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 /// A CIR Program is both the container for the SSA dataflow graph and the
@@ -164,5 +164,5 @@ class ProgramRewriter {
 };
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

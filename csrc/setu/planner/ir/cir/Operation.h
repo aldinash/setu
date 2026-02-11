@@ -25,7 +25,7 @@
 #include "planner/ir/cir/operations/Unpack.h"
 #include "planner/ir/cir/operations/View.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 enum class OpType : std::uint8_t {
@@ -60,8 +60,13 @@ struct Operation {
   /// Returns all Values defined (produced) by this operation
   [[nodiscard]] std::vector<Value> Defs() const;
 
-  /// Returns all Values used (consumed) by this operation
+  /// Returns all Values used (consumed or read) by this operation
   [[nodiscard]] std::vector<Value> Uses() const;
+
+  /// Returns the subset of Uses() whose ownership is transferred
+  /// (the value is destroyed and replaced by a new SSA version).
+  /// CopyOp: {dst_in}, PackOp: {dst_in}, UnpackOp: {dst_ins...}
+  [[nodiscard]] std::vector<Value> ConsumedOperands() const;
 
   [[nodiscard]] std::string ToString() const;
 
@@ -69,5 +74,5 @@ struct Operation {
 };
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

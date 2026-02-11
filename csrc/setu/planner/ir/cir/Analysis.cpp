@@ -18,8 +18,26 @@
 //==============================================================================
 #include "commons/Logging.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
+
+// ========================= Linearity =======================================
+
+void Linearity::Check(const Program& program) {
+  std::unordered_set<Value> consumed;
+  for (std::uint32_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
+    const auto& op = program.Operations()[op_idx];
+    for (const auto& used : op.Uses()) {
+      ASSERT_VALID_RUNTIME(
+          consumed.find(used) == consumed.end(),
+          "Linearity violation at op [{}] {}: value {} was already consumed",
+          op_idx, op.ToString(), used.ToString());
+    }
+    for (const auto& val : op.ConsumedOperands()) {
+      consumed.insert(val);
+    }
+  }
+}
 
 // ========================= DefUseChains ====================================
 
@@ -27,7 +45,7 @@ DefUseChains DefUseChains::Build(const Program& program) {
   DefUseChains chains;
   chains.uses.resize(program.NumValues());
 
-  for (std::size_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
+  for (std::uint32_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
     const auto& op = program.Operations()[op_idx];
     for (const auto& used_value : op.Uses()) {
       chains.uses[used_value.id].push_back(op_idx);
@@ -44,20 +62,18 @@ LivenessInfo LivenessInfo::Build(const Program& program) {
   info.ranges.resize(program.NumValues());
 
   // Initialize: each value is defined at its def_op_index, last_use = first_def
-  for (std::size_t v = 0; v < program.NumValues(); ++v) {
-    auto def_idx =
-        program.GetValueInfo(Value{static_cast<std::uint32_t>(v)}).def_op_index;
+  for (std::uint32_t v = 0; v < program.NumValues(); ++v) {
+    auto def_idx = program.GetValueInfo(Value{v}).def_op_index;
     info.ranges[v] = LiveRange{.first_def = def_idx, .last_use = def_idx};
   }
 
   // Extend last_use based on actual uses.
   // Because we don't have control flow, no fixpoint iteration needed :)
-  for (std::size_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
+  for (std::uint32_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
     const auto& op = program.Operations()[op_idx];
     for (const auto& used_value : op.Uses()) {
       auto& range = info.ranges[used_value.id];
-      range.last_use =
-          std::max(range.last_use, static_cast<std::uint32_t>(op_idx));
+      range.last_use = std::max(range.last_use, op_idx);
     }
   }
 
@@ -66,10 +82,10 @@ LivenessInfo LivenessInfo::Build(const Program& program) {
 
 std::vector<Value> LivenessInfo::LiveAt(std::uint32_t op_index) const {
   std::vector<Value> result;
-  for (std::size_t v = 0; v < ranges.size(); ++v) {
+  for (std::uint32_t v = 0; v < ranges.size(); ++v) {
     const auto& range = ranges[v];
     if (range.first_def <= op_index && op_index <= range.last_use) {
-      result.push_back(Value{static_cast<std::uint32_t>(v)});
+      result.push_back(Value{v});
     }
   }
   return result;
@@ -81,6 +97,7 @@ RegisterAllocation RegisterAllocation::Build(
     const Program& program, const LivenessInfo& liveness,
     const std::unordered_map<Device, std::uint32_t>& pool_sizes) {
   RegisterAllocation result;
+  result.allocation.resize(program.NumValues());
 
   // Per-device state: track which physical registers are free and when
   // they become available (sorted by end time)
@@ -109,7 +126,7 @@ RegisterAllocation RegisterAllocation::Build(
 
   // Collect AllocTmpOp values sorted by their def op index (already in order)
   std::vector<Value> tmp_values;
-  for (std::size_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
+  for (std::uint32_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
     const auto& op = program.Operations()[op_idx];
     if (op.Type() == OpType::kAllocTmp) {
       for (const auto& def : op.Defs()) {
@@ -157,8 +174,7 @@ RegisterAllocation RegisterAllocation::Build(
                          "pool exhausted ({} slots)",
                          val.ToString(), device.ToString(), pool_it->second);
 
-    result.allocation.emplace(
-        val.id,
+    result.allocation[val.id].emplace(
         PhysicalRegister{.device = device, .register_index = *assigned_slot});
 
     // Return slot to pool after this value's last use
@@ -169,5 +185,5 @@ RegisterAllocation RegisterAllocation::Build(
 }
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

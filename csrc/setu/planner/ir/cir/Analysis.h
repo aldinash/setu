@@ -21,7 +21,17 @@
 #include "planner/ir/cir/Program.h"
 #include "planner/ir/cir/Value.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
+//==============================================================================
+/// Linearity check: verifies that consumed operands (dst_in in copy/pack,
+/// dst_ins in unpack) are never used after their consuming operation.
+/// A consumed value is dead -- subsequent operations must use the new SSA
+/// version (dst_out) instead.
+struct Linearity {
+  /// Checks linearity of the program.
+  /// Asserts on the first violation with a descriptive error message.
+  static void Check(const Program& program /*[in]*/);
+};
 //==============================================================================
 
 /// Def-use chains: for each Value, which operations use it.
@@ -76,8 +86,8 @@ struct RegisterAllocation {
     }
   };
 
-  /// Keyed by Value::id. Only populated for AllocTmpOp-defined values.
-  std::unordered_map<std::uint32_t, PhysicalRegister> allocation;
+  /// Indexed by Value::id. Only populated for AllocTmpOp-defined values.
+  std::vector<std::optional<PhysicalRegister>> allocation;
 
   /// Build register allocation using linear scan on liveness info.
   /// Only allocates registers for AllocTmpOp-defined values.
@@ -92,5 +102,5 @@ struct RegisterAllocation {
 };
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

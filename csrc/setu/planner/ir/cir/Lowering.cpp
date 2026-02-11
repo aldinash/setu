@@ -20,7 +20,7 @@
 #include "planner/Participant.h"
 #include "planner/TensorShardRangeView.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 using setu::planner::Participant;
@@ -127,5 +127,5 @@ Program CIRLowering::Lower(CopySpec& copy_spec, MetaStore& metastore) {
 }
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

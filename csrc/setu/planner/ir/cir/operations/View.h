@@ -23,7 +23,7 @@
 #include "planner/ir/cir/Value.h"
 #include "planner/ir/llc/ShardRef.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 /// %out = view(@node:device, &shard_ref, [offset, size])
@@ -46,5 +46,5 @@ struct ViewOp {
 };
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================

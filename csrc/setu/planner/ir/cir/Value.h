@@ -21,7 +21,7 @@
 //==============================================================================
 #include "planner/Participant.h"
 //==============================================================================
-namespace setu::cir {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 /// CIR Device is a (NodeId, Device) pair identifying a physical device in the
@@ -68,14 +68,15 @@ struct ValueInfo {
 };
 
 //==============================================================================
-}  // namespace setu::cir
+}  // namespace setu::planner::ir::cir
 //==============================================================================
 // Hash specialization for Value
 //==============================================================================
 namespace std {
 template <>
-struct hash<setu::cir::Value> {
-  std::size_t operator()(const setu::cir::Value& v) const noexcept {
+struct hash<setu::planner::ir::cir::Value> {
+  std::size_t operator()(
+      const setu::planner::ir::cir::Value& v) const noexcept {
     return std::hash<std::uint32_t>{}(v.id);
   }
 };
