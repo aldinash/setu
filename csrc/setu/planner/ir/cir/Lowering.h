@@ -16,62 +16,31 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include "commons/BoostCommon.h"
 #include "commons/StdCommon.h"
-#include "commons/Types.h"
 //==============================================================================
 #include "commons/datatypes/CopySpec.h"
-#include "commons/utils/Serialization.h"
 #include "metastore/MetaStore.h"
-#include "planner/Participant.h"
-#include "planner/ir/llc/Instruction.h"
+#include "planner/ir/cir/Program.h"
 //==============================================================================
-namespace setu::planner {
+namespace setu::cir {
 //==============================================================================
 
-using setu::commons::BinaryBuffer;
-using setu::commons::BinaryRange;
 using setu::commons::datatypes::CopySpec;
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
 using setu::metastore::MetaStore;
-using setu::planner::ir::llc::Program;
 
-//==============================================================================
-
-struct Plan {
-  std::unordered_map<NodeId, Plan> Fragments();
-
-  [[nodiscard]] std::string ToString() const {
-    return std::format("Plan(participants={}, programs={})", participants,
-                       program);
-  }
-
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    writer.WriteFields(participants, program);
-  }
-
-  static Plan Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    auto [participants_val, program_val] =
-        reader.ReadFields<Participants,
-                          std::unordered_map<Participant, Program>>();
-    Plan plan;
-    plan.participants = std::move(participants_val);
-    plan.program = std::move(program_val);
-    return plan;
-  }
-
-  Participants participants;
-  std::unordered_map<Participant, Program> program;
-};
-
-class Planner {
+/// Lowers a CopySpec into a CIR Program.
+///
+/// Uses a two-pointer walk over source and destination selections to match
+/// buffer regions. For each matched region, emits:
+///   - view() for the src shard slice (element offsets)
+///   - view() for the dst shard slice (element offsets)
+///   - copy() from src view to dst view
+class CIRLowering {
  public:
-  virtual ~Planner() = default;
-  virtual Plan Compile(CopySpec& spec, MetaStore& metastore) = 0;
+  [[nodiscard]] static Program Lower(CopySpec& copy_spec /*[in]*/,
+                                     MetaStore& metastore /*[in]*/);
 };
+
 //==============================================================================
-}  // namespace setu::planner
+}  // namespace setu::cir
 //==============================================================================
