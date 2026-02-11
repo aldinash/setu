@@ -14,18 +14,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/ir/cir/Lowering.h"
+#include "planner/passes/CopySpecToCIR.h"
 //==============================================================================
 #include "commons/Logging.h"
-#include "planner/Participant.h"
 #include "planner/TensorShardRangeView.h"
+#include "planner/ir/llc/ShardRef.h"
 //==============================================================================
-namespace setu::planner::ir::cir {
+namespace setu::planner::passes {
 //==============================================================================
 
-using setu::planner::Participant;
 using setu::planner::ShardBufferRange;
 using setu::planner::TensorShardRangeView;
+using setu::planner::ir::cir::Device;
+using setu::planner::ir::cir::Slice;
+namespace llc = setu::planner::ir::llc;
 
 //==============================================================================
 
@@ -58,21 +60,22 @@ struct ShardBufferState {
 
 //==============================================================================
 
-Program CIRLowering::Lower(CopySpec& copy_spec, MetaStore& metastore) {
+cir::Program CopySpecToCIR::Run(const CopySpec& copy_spec,
+                                MetaStore& metastore) {
   auto src_own = metastore.GetTensorMetadata(copy_spec.src_name)
                      ->GetOwnershipMap(copy_spec.src_selection);
   auto dst_own = metastore.GetTensorMetadata(copy_spec.dst_name)
                      ->GetOwnershipMap(copy_spec.dst_selection);
 
   auto src_view = TensorShardRangeView(src_own);
-  auto src_it = src_view.begin();
   auto dst_view = TensorShardRangeView(dst_own);
-  auto dst_it = dst_view.begin();
-
   ASSERT_VALID_RUNTIME(!src_view.empty() && !dst_view.empty(),
                        "Source and destination views must not be empty");
 
-  Program program;
+  auto src_it = src_view.begin();
+  auto dst_it = dst_view.begin();
+
+  cir::Program program;
 
   auto src = ShardBufferState(*src_it);
   auto dst = ShardBufferState(*dst_it);
@@ -94,12 +97,12 @@ Program CIRLowering::Lower(CopySpec& copy_spec, MetaStore& metastore) {
     auto dst_device =
         Device(dst.buf.metadata->owner, dst.buf.metadata->spec.device);
 
-    auto src_shard_ref = setu::planner::ir::llc::ShardRef(
-        src.buf.metadata->id, src.buf.metadata->spec.name,
-        src.buf.metadata->owner);
-    auto dst_shard_ref = setu::planner::ir::llc::ShardRef(
-        dst.buf.metadata->id, dst.buf.metadata->spec.name,
-        dst.buf.metadata->owner);
+    auto src_shard_ref =
+        llc::ShardRef(src.buf.metadata->id, src.buf.metadata->spec.name,
+                      src.buf.metadata->owner);
+    auto dst_shard_ref =
+        llc::ShardRef(dst.buf.metadata->id, dst.buf.metadata->spec.name,
+                      dst.buf.metadata->owner);
 
     auto dtype = src.buf.metadata->spec.dtype;
 
@@ -127,5 +130,5 @@ Program CIRLowering::Lower(CopySpec& copy_spec, MetaStore& metastore) {
 }
 
 //==============================================================================
-}  // namespace setu::planner::ir::cir
+}  // namespace setu::planner::passes
 //==============================================================================

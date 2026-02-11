@@ -25,9 +25,9 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 //==============================================================================
+#include "planner/Participant.h"
 #include "planner/ir/llc/Instruction.h"
 #include "planner/ir/llc/ShardRef.h"
-#include "setu/planner/Planner.h"
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================

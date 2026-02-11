@@ -16,27 +16,21 @@
 //==============================================================================
 #pragma once
 //==============================================================================
-#include <nccl.h>
+#include "planner/Plan.h"
+#include "planner/ir/cir/Program.h"
 //==============================================================================
-#include "planner/Planner.h"
+namespace setu::planner::targets {
 //==============================================================================
-namespace setu::planner::backends::nccl {
-//==============================================================================
-using setu::commons::DeviceRank;
-using setu::commons::datatypes::CopySpec;
-using setu::metastore::MetaStore;
 
-class NCCLPlanner : public Planner {
+namespace cir = setu::planner::ir::cir;
+
+/// Abstract backend that lowers a CIR Program into a per-device LLC Plan.
+class Backend {
  public:
-  Plan Compile(CopySpec& copy_spec, MetaStore& metastore) override;
-
- private:
-  struct CommCacheEntry {
-    ncclUniqueId id;
-    std::unordered_map<Participant, DeviceRank> ranks;
-  };
-  std::map<Participants, CommCacheEntry> comm_cache_;
+  virtual ~Backend() = default;
+  [[nodiscard]] virtual Plan Run(const cir::Program& program /*[in]*/) = 0;
 };
+
 //==============================================================================
-}  // namespace setu::planner::backends::nccl
+}  // namespace setu::planner::targets
 //==============================================================================

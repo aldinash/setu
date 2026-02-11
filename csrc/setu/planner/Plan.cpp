@@ -14,33 +14,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "planner/Plan.h"
 //==============================================================================
-#include "commons/StdCommon.h"
+#include "commons/Logging.h"
 //==============================================================================
-#include "commons/datatypes/CopySpec.h"
-#include "metastore/MetaStore.h"
-#include "planner/ir/cir/Program.h"
-//==============================================================================
-namespace setu::planner::ir::cir {
+namespace setu::planner {
 //==============================================================================
 
-using setu::commons::datatypes::CopySpec;
-using setu::metastore::MetaStore;
+std::unordered_map<NodeId, Plan> Plan::Fragments() {
+  std::unordered_map<NodeId, Plan> fragments;
 
-/// Lowers a CopySpec into a CIR Program.
-///
-/// Uses a two-pointer walk over source and destination selections to match
-/// buffer regions. For each matched region, emits:
-///   - view() for the src shard slice (element offsets)
-///   - view() for the dst shard slice (element offsets)
-///   - copy() from src view to dst view
-class CIRLowering {
- public:
-  [[nodiscard]] static Program Lower(CopySpec& copy_spec /*[in]*/,
-                                     MetaStore& metastore /*[in]*/);
-};
+  // Group programs by NodeId, keeping participants the same across all
+  // fragments
+  for (const auto& [participant, prog] : program) {
+    auto& fragment = fragments[participant.node_id];
+    fragment.participants = participants;
+    fragment.program[participant] = prog;
+  }
+
+  return fragments;
+}
 
 //==============================================================================
-}  // namespace setu::planner::ir::cir
+}  // namespace setu::planner
 //==============================================================================
