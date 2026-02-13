@@ -27,13 +27,14 @@
 //==============================================================================
 #include "planner/Participant.h"
 #include "planner/ir/llc/Instruction.h"
-#include "planner/ir/llc/ShardRef.h"
+#include "planner/ir/ref/ShardRef.h"
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
 using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::ShardId;
+using setu::commons::TensorName;
 using setu::planner::Participant;
 //==============================================================================
 void InitShardRefPybind(py::module_& m) {
@@ -61,17 +62,17 @@ void InitShardRefPybind(py::module_& m) {
 //==============================================================================
 void InitCopyInstructionPybind(py::module_& m) {
   py::class_<Copy>(m, "Copy")
-      .def(py::init<ShardRef, std::size_t, ShardRef, std::size_t, std::size_t,
+      .def(py::init<BufferRef, std::size_t, BufferRef, std::size_t, std::size_t,
                     torch::Dtype>(),
-           py::arg("src_shard"), py::arg("src_offset_bytes"),
-           py::arg("dst_shard"), py::arg("dst_offset_bytes"), py::arg("count"),
+           py::arg("src_ref"), py::arg("src_offset_bytes"),
+           py::arg("dst_ref"), py::arg("dst_offset_bytes"), py::arg("count"),
            py::arg("dtype"),
            "Create a copy instruction for GPU memory transfer")
-      .def_readonly("src_shard", &Copy::src_shard, "Source shard reference")
+      .def_readonly("src_ref", &Copy::src_ref, "Source buffer reference")
       .def_readonly("src_offset_bytes", &Copy::src_offset_bytes,
                     "Byte offset in source memory")
-      .def_readonly("dst_shard", &Copy::dst_shard,
-                    "Destination shard reference")
+      .def_readonly("dst_ref", &Copy::dst_ref,
+                    "Destination buffer reference")
       .def_readonly("dst_offset_bytes", &Copy::dst_offset_bytes,
                     "Byte offset in destination memory")
       .def_readonly("count", &Copy::count, "Number of elements to copy")
@@ -82,14 +83,14 @@ void InitCopyInstructionPybind(py::module_& m) {
 //==============================================================================
 void InitSendInstructionPybind(py::module_& m) {
   py::class_<Send>(m, "Send")
-      .def(py::init<ShardRef, std::size_t, std::size_t, torch::Dtype,
+      .def(py::init<BufferRef, std::size_t, std::size_t, torch::Dtype,
                     DeviceRank>(),
-           py::arg("src_shard"), py::arg("offset"), py::arg("count"),
+           py::arg("src_ref"), py::arg("offset"), py::arg("count"),
            py::arg("dtype"), py::arg("peer_rank"),
            "Create a send instruction for NCCL point-to-point communication")
       .def_readonly("peer_rank", &Send::peer_rank,
                     "Destination device rank in the communicator")
-      .def_readonly("src_shard", &Send::src_shard, "Source shard reference")
+      .def_readonly("src_ref", &Send::src_ref, "Source buffer reference")
       .def_readonly("offset_bytes", &Send::offset_bytes,
                     "Byte offset in source memory")
       .def_readonly("count", &Send::count, "Number of elements to send")
@@ -100,17 +101,17 @@ void InitSendInstructionPybind(py::module_& m) {
 //==============================================================================
 void InitReceiveInstructionPybind(py::module_& m) {
   py::class_<Receive>(m, "Receive")
-      .def(py::init<ShardRef, std::size_t, std::size_t, torch::Dtype,
+      .def(py::init<BufferRef, std::size_t, std::size_t, torch::Dtype,
                     DeviceRank>(),
-           py::arg("dst_shard"), py::arg("offset_bytes"), py::arg("count"),
+           py::arg("dst_ref"), py::arg("offset_bytes"), py::arg("count"),
            py::arg("dtype"), py::arg("peer_rank"),
            "Create a receive instruction for NCCL point-to-point communication")
       .def_readonly("peer_rank", &Receive::peer_rank,
                     "Source device rank in the communicator")
-      .def_readonly("dst_shard", &Receive::dst_shard,
-                    "Destination shard reference")
+      .def_readonly("dst_ref", &Receive::dst_ref,
+                    "Destination buffer reference")
       .def_readonly("offset_bytes", &Receive::offset_bytes,
-                    "Byte offset in destination shard")
+                    "Byte offset in destination buffer")
       .def_readonly("count", &Receive::count, "Number of elements to receive")
       .def_readonly("dtype", &Receive::dtype, "Data type of elements")
       .def("__str__", &Receive::ToString)
