@@ -23,10 +23,10 @@
 namespace setu::planner::passes {
 //==============================================================================
 
-using setu::planner::ShardBufferRange;
-using setu::planner::TensorShardRangeView;
 using setu::planner::ir::cir::Device;
 using setu::planner::ir::cir::Slice;
+using setu::planner::ShardBufferRange;
+using setu::planner::TensorShardRangeView;
 namespace llc = setu::planner::ir::llc;
 
 //==============================================================================
@@ -97,12 +97,12 @@ cir::Program CopySpecToCIR::Run(const CopySpec& copy_spec,
     auto dst_device =
         Device(dst.buf.metadata->owner, dst.buf.metadata->spec.device);
 
-    auto src_shard_ref =
-        llc::ShardRef(src.buf.metadata->id, src.buf.metadata->spec.name,
-                      src.buf.metadata->owner);
-    auto dst_shard_ref =
-        llc::ShardRef(dst.buf.metadata->id, dst.buf.metadata->spec.name,
-                      dst.buf.metadata->owner);
+    auto src_shard_ref = llc::ShardRef(src.buf.metadata->id,
+                                       src.buf.metadata->spec.name,
+                                       src.buf.metadata->owner);
+    auto dst_shard_ref = llc::ShardRef(dst.buf.metadata->id,
+                                       dst.buf.metadata->spec.name,
+                                       dst.buf.metadata->owner);
 
     auto dtype = src.buf.metadata->spec.dtype;
 
