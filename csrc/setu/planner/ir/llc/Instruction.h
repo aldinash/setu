@@ -47,7 +47,6 @@ using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
-using setu::planner::ir::ref::BufferRef;
 using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 
