@@ -25,11 +25,9 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 //==============================================================================
-#include "planner/ir/llc/Instruction.h"
-#include "planner/ir/ref/BufferRef.h"
-#include "planner/ir/ref/RegisterRef.h"
-#include "planner/ir/ref/ShardRef.h"
 #include "planner/Participant.h"
+#include "planner/ir/llc/Instruction.h"
+#include "planner/ir/llc/ShardRef.h"
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
@@ -37,9 +35,6 @@ using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::ShardId;
 using setu::planner::Participant;
-using setu::commons::TensorName;
-using setu::planner::ir::ref::BufferRef;
-using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 void InitShardRefPybind(py::module_& m) {
   py::class_<ShardRef>(m, "ShardRef")
@@ -64,45 +59,19 @@ void InitShardRefPybind(py::module_& m) {
       .def("__eq__", &ShardRef::operator==);
 }
 //==============================================================================
-void InitBufferRefPybind(py::module_& m) {
-  using setu::planner::ir::ref::RegisterRef;
-
-  py::class_<RegisterRef>(m, "RegisterRef")
-      .def(py::init<std::uint32_t>(), py::arg("register_index"),
-           "Create a register reference with pool slot index")
-      .def_readonly("register_index", &RegisterRef::register_index,
-                    "Slot index in the device's pool")
-      .def("__str__", &RegisterRef::ToString)
-      .def("__repr__", &RegisterRef::ToString)
-      .def("__eq__", &RegisterRef::operator==);
-
-  py::class_<BufferRef>(m, "BufferRef")
-      .def(py::init<ShardRef>(), py::arg("shard_ref"),
-           "Create a buffer reference from a shard reference")
-      .def(py::init<RegisterRef>(), py::arg("register_ref"),
-           "Create a buffer reference from a register reference")
-      .def("is_shard", &BufferRef::IsShard,
-           "Check if this references a shard")
-      .def("is_register", &BufferRef::IsRegister,
-           "Check if this references a register")
-      .def("__str__", &BufferRef::ToString)
-      .def("__repr__", &BufferRef::ToString)
-      .def("__eq__", &BufferRef::operator==);
-}
-//==============================================================================
 void InitCopyInstructionPybind(py::module_& m) {
   py::class_<Copy>(m, "Copy")
-      .def(py::init<BufferRef, std::size_t, BufferRef, std::size_t, std::size_t,
+      .def(py::init<ShardRef, std::size_t, ShardRef, std::size_t, std::size_t,
                     torch::Dtype>(),
-           py::arg("src_ref"), py::arg("src_offset_bytes"),
-           py::arg("dst_ref"), py::arg("dst_offset_bytes"), py::arg("count"),
+           py::arg("src_shard"), py::arg("src_offset_bytes"),
+           py::arg("dst_shard"), py::arg("dst_offset_bytes"), py::arg("count"),
            py::arg("dtype"),
            "Create a copy instruction for GPU memory transfer")
-      .def_readonly("src_ref", &Copy::src_ref, "Source buffer reference")
+      .def_readonly("src_shard", &Copy::src_shard, "Source shard reference")
       .def_readonly("src_offset_bytes", &Copy::src_offset_bytes,
                     "Byte offset in source memory")
-      .def_readonly("dst_ref", &Copy::dst_ref,
-                    "Destination buffer reference")
+      .def_readonly("dst_shard", &Copy::dst_shard,
+                    "Destination shard reference")
       .def_readonly("dst_offset_bytes", &Copy::dst_offset_bytes,
                     "Byte offset in destination memory")
       .def_readonly("count", &Copy::count, "Number of elements to copy")
@@ -113,14 +82,14 @@ void InitCopyInstructionPybind(py::module_& m) {
 //==============================================================================
 void InitSendInstructionPybind(py::module_& m) {
   py::class_<Send>(m, "Send")
-      .def(py::init<BufferRef, std::size_t, std::size_t, torch::Dtype,
+      .def(py::init<ShardRef, std::size_t, std::size_t, torch::Dtype,
                     DeviceRank>(),
-           py::arg("src_ref"), py::arg("offset"), py::arg("count"),
+           py::arg("src_shard"), py::arg("offset"), py::arg("count"),
            py::arg("dtype"), py::arg("peer_rank"),
            "Create a send instruction for NCCL point-to-point communication")
       .def_readonly("peer_rank", &Send::peer_rank,
                     "Destination device rank in the communicator")
-      .def_readonly("src_ref", &Send::src_ref, "Source buffer reference")
+      .def_readonly("src_shard", &Send::src_shard, "Source shard reference")
       .def_readonly("offset_bytes", &Send::offset_bytes,
                     "Byte offset in source memory")
       .def_readonly("count", &Send::count, "Number of elements to send")
@@ -131,17 +100,17 @@ void InitSendInstructionPybind(py::module_& m) {
 //==============================================================================
 void InitReceiveInstructionPybind(py::module_& m) {
   py::class_<Receive>(m, "Receive")
-      .def(py::init<BufferRef, std::size_t, std::size_t, torch::Dtype,
+      .def(py::init<ShardRef, std::size_t, std::size_t, torch::Dtype,
                     DeviceRank>(),
-           py::arg("dst_ref"), py::arg("offset_bytes"), py::arg("count"),
+           py::arg("dst_shard"), py::arg("offset_bytes"), py::arg("count"),
            py::arg("dtype"), py::arg("peer_rank"),
            "Create a receive instruction for NCCL point-to-point communication")
       .def_readonly("peer_rank", &Receive::peer_rank,
                     "Source device rank in the communicator")
-      .def_readonly("dst_ref", &Receive::dst_ref,
-                    "Destination buffer reference")
+      .def_readonly("dst_shard", &Receive::dst_shard,
+                    "Destination shard reference")
       .def_readonly("offset_bytes", &Receive::offset_bytes,
-                    "Byte offset in destination buffer")
+                    "Byte offset in destination shard")
       .def_readonly("count", &Receive::count, "Number of elements to receive")
       .def_readonly("dtype", &Receive::dtype, "Data type of elements")
       .def("__str__", &Receive::ToString)
@@ -227,9 +196,6 @@ void InitLLCPybind(py::module_& m) {
 
   // Register ShardRef type (needed by instruction types)
   InitShardRefPybind(m);
-
-  // Register BufferRef type (needed by instruction types)
-  InitBufferRefPybind(m);
 
   // Utility function to generate NCCL unique IDs
   m.def("generate_nccl_id", &GenerateNcclUniqueId,

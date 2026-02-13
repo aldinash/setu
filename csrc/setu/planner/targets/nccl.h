@@ -18,15 +18,15 @@
 //==============================================================================
 #include <nccl.h>
 //==============================================================================
-#include "planner/targets/backend.h"
 #include "planner/Planner.h"
 #include "planner/ir/cir/Program.h"
+#include "planner/targets/backend.h"
 //==============================================================================
 namespace setu::planner::targets {
 //==============================================================================
 
-using setu::planner::targets::Backend;
 using setu::commons::DeviceRank;
+using setu::planner::targets::Backend;
 namespace cir = setu::planner::ir::cir;
 
 /// CIR → LLC lowering pass (NCCL flavor).
