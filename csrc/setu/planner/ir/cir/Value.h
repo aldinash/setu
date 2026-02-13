@@ -65,6 +65,11 @@ struct ValueInfo {
                        device.ToString(), size_elements, torch::toString(dtype),
                        def_op_index);
   }
+
+  [[nodiscard]] std::size_t NumBytes() const {
+    auto element_size = torch::elementSize(dtype);
+    return size_elements * element_size;
+  }
 };
 
 //==============================================================================
