@@ -16,37 +16,41 @@
 //==============================================================================
 #include "planner/ir/llc/instructions/Send.h"
 //==============================================================================
+#include "commons/Logging.h"
+//==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
 
 std::string Send::ToString() const {
   return std::format(
-      "Send(peer_rank={}, shard={}, offset_bytes={}, count={}, dtype={}, "
+      "Send(peer_rank={}, src_ref={}, offset_bytes={}, count={}, dtype={}, "
       "src_device_ptr={})",
-      peer_rank, src_shard.ToString(), offset_bytes, count,
+      peer_rank, src_ref.ToString(), offset_bytes, count,
       static_cast<int>(dtype), src_ptr);
 }
 
 void Send::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
   const auto src_ptr_value = reinterpret_cast<std::uintptr_t>(src_ptr);
-  writer.WriteFields(peer_rank, src_shard, offset_bytes, count, dtype,
+  writer.WriteFields(peer_rank, src_ref, offset_bytes, count, dtype,
                      src_ptr_value);
 }
 
 Send Send::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [peer_rank, src_shard, offset_bytes, count, dtype, src_ptr_val] =
-      reader.ReadFields<DeviceRank, ShardRef, std::size_t, std::size_t,
+  auto [peer_rank, src_ref, offset_bytes, count, dtype, src_ptr_val] =
+      reader.ReadFields<DeviceRank, BufferRef, std::size_t, std::size_t,
                         torch::Dtype, std::uintptr_t>();
   auto src_ptr = reinterpret_cast<DevicePtr>(src_ptr_val);
-  return Send(std::move(src_shard), offset_bytes, count, dtype, peer_rank,
+  return Send(std::move(src_ref), offset_bytes, count, dtype, peer_rank,
               src_ptr);
 }
 
 void Send::Embellish(
     const std::function<DevicePtr(const ShardRef&)>& resolver) {
-  src_ptr = resolver(src_shard);
+  ASSERT_VALID_RUNTIME(src_ref.IsShard(),
+                       "Send::Embellish: src_ref must be a ShardRef");
+  src_ptr = resolver(src_ref.AsShard());
 }
 
 //==============================================================================

@@ -14,37 +14,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "planner/ir/ref/BufferRef.h"
 //==============================================================================
-#include "commons/StdCommon.h"
-#include "commons/TorchCommon.h"
+namespace setu::planner::ir::ref {
 //==============================================================================
-#include "planner/ir/cir/Slice.h"
-#include "planner/ir/cir/Value.h"
-#include "planner/ir/ref/ShardRef.h"
-//==============================================================================
-namespace setu::planner::ir::cir {
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-/// %out = view(@node:device, &shard_ref, [offset, size])
-///
-/// Constructs a CIR Value representing a contiguous region of a physical
-/// shard buffer. The slice is in element counts; byte conversion happens
-/// during backend lowering.
-struct ViewOp {
-  Value out;      ///< Result value
-  Device device;  ///< Physical device where the shard resides
-  setu::planner::ir::ref::ShardRef handle;  ///< Reference to the physical shard
-  Slice slice;         ///< Region within the shard (elements)
-  torch::Dtype dtype;  ///< Element data type
+std::string BufferRef::ToString() const {
+  return std::visit([](const auto& r) { return r.ToString(); }, ref);
+}
 
-  [[nodiscard]] std::string ToString() const {
-    return std::format("{} = view({}, &{}, {}, {})", out.ToString(),
-                       device.ToString(), handle.ToString(), slice.ToString(),
-                       torch::toString(dtype));
-  }
-};
+void BufferRef::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.Write(ref);
+}
+
+BufferRef BufferRef::Deserialize(const BinaryRange& range) {
+  BinaryReader reader(range);
+  BufferRef result;
+  result.ref = reader.Read<std::variant<ShardRef, RegisterRef>>();
+  return result;
+}
 
 //==============================================================================
-}  // namespace setu::planner::ir::cir
+}  // namespace setu::planner::ir::ref
 //==============================================================================

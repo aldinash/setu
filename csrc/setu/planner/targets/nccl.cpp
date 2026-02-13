@@ -24,13 +24,14 @@ namespace setu::planner::targets {
 //==============================================================================
 
 namespace llc = setu::planner::ir::llc;
+namespace ref = setu::planner::ir::ref;
 
 //==============================================================================
 
 /// Per-value metadata captured when lowering a ViewOp.
 struct ViewInfo {
   Participant participant;
-  llc::ShardRef shard_ref;
+  ref::ShardRef shard_ref;
   std::size_t offset_bytes;
   std::size_t count;
   torch::Dtype dtype;
@@ -39,11 +40,11 @@ struct ViewInfo {
 /// Intermediate copy between two views, collected before LLC emission.
 struct PendingCopy {
   Participant src_part;
-  llc::ShardRef src_ref;
+  ref::ShardRef src_ref;
   std::size_t src_offset_bytes;
 
   Participant dst_part;
-  llc::ShardRef dst_ref;
+  ref::ShardRef dst_ref;
   std::size_t dst_offset_bytes;
 
   std::size_t count;

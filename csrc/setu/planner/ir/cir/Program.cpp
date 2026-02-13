@@ -24,7 +24,7 @@ namespace setu::planner::ir::cir {
 // ========================= Program Builder =================================
 
 Value Program::EmitView(const Device& device,
-                        const setu::planner::ir::llc::ShardRef& handle,
+                        const setu::planner::ir::ref::ShardRef& handle,
                         Slice slice, torch::Dtype dtype) {
   ASSERT_VALID_ARGUMENTS(slice.size > 0, "View slice size must be positive");
 

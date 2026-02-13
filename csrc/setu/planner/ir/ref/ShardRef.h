@@ -20,7 +20,7 @@
 #include "commons/Types.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
-namespace setu::planner::ir::llc {
+namespace setu::planner::ir::ref {
 //==============================================================================
 using setu::commons::NodeId;
 using setu::commons::ShardId;
@@ -80,4 +80,4 @@ inline std::size_t hash_value(const ShardRef& ref) {
   return seed;
 }
 //==============================================================================
-}  // namespace setu::planner::ir::llc
+}  // namespace setu::planner::ir::ref

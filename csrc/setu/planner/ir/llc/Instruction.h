@@ -19,7 +19,7 @@
 #include "commons/StdCommon.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
-#include "planner/ir/llc/ShardRef.h"
+#include "planner/ir/ref/ShardRef.h"
 #include "planner/ir/llc/instructions/Copy.h"
 #include "planner/ir/llc/instructions/InitComm.h"
 #include "planner/ir/llc/instructions/Receive.h"
@@ -42,6 +42,7 @@
 ///   Receive   — NCCL point-to-point receive from a peer rank
 namespace setu::planner::ir::llc {
 //==============================================================================
+using setu::planner::ir::ref::ShardRef;
 using setu::commons::DevicePtr;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;

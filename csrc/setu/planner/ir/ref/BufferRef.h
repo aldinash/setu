@@ -17,68 +17,68 @@
 #pragma once
 //==============================================================================
 #include "commons/StdCommon.h"
-#include "commons/Types.h"
-#include "commons/enums/Enums.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
-#include "planner/ir/ref/BufferRef.h"
+#include "planner/ir/ref/RegisterRef.h"
 #include "planner/ir/ref/ShardRef.h"
 //==============================================================================
-namespace setu::planner::ir::llc {
+namespace setu::planner::ir::ref {
 //==============================================================================
-using setu::planner::ir::ref::BufferRef;
-using setu::planner::ir::ref::ShardRef;
-using setu::commons::DevicePtr;
-using setu::commons::DeviceRank;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-/// NCCL point-to-point send to a peer rank within the active communicator.
+/// A buffer reference that can point to either a physical tensor shard
+/// (ShardRef) or a physical register pool slot (RegisterRef).
 ///
-/// Sends `count` elements of type `dtype` starting at `offset_bytes` in
-/// `src_ref` to the device identified by `peer_rank`.  The communicator
-/// must have been established by a preceding InitComm/UseComm instruction.
-struct Send {
-  Send(BufferRef src_ref_param, std::size_t offset_bytes_param,
-       std::size_t count_param, torch::Dtype dtype_param,
-       DeviceRank peer_rank_param, DevicePtr src_ptr_param = nullptr)
-      : src_ref(std::move(src_ref_param)),
-        offset_bytes(offset_bytes_param),
-        count(count_param),
-        dtype(dtype_param),
-        peer_rank(peer_rank_param),
-        src_ptr(src_ptr_param) {}
+/// LLC instructions use BufferRef as their source/destination operand type,
+/// allowing uniform handling of both shard data and temporary register buffers.
+struct BufferRef {
+  BufferRef() = default;
 
-  ~Send() = default;
-  Send(const Send&) = default;
-  Send& operator=(const Send&) = default;
-  Send(Send&&) = default;
-  Send& operator=(Send&&) = default;
+  BufferRef(ShardRef shard_ref)  // NOLINT(implicit)
+      : ref(std::move(shard_ref)) {}
+
+  BufferRef(RegisterRef register_ref)  // NOLINT(implicit)
+      : ref(std::move(register_ref)) {}
+
+  [[nodiscard]] bool IsShard() const {
+    return std::holds_alternative<ShardRef>(ref);
+  }
+
+  [[nodiscard]] bool IsRegister() const {
+    return std::holds_alternative<RegisterRef>(ref);
+  }
+
+  [[nodiscard]] const ShardRef& AsShard() const {
+    return std::get<ShardRef>(ref);
+  }
+
+  [[nodiscard]] const RegisterRef& AsRegister() const {
+    return std::get<RegisterRef>(ref);
+  }
 
   [[nodiscard]] std::string ToString() const;
 
   void Serialize(BinaryBuffer& buffer) const;
 
-  static Send Deserialize(const BinaryRange& range);
+  static BufferRef Deserialize(const BinaryRange& range);
 
-  /**
-   * @brief Populates the device pointers by looking up the base address.
-   */
-  void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
+  [[nodiscard]] bool operator==(const BufferRef& other) const {
+    return ref == other.ref;
+  }
 
-  BufferRef src_ref;
-  std::size_t offset_bytes;
-  std::size_t count;
-  torch::Dtype dtype;
-  DeviceRank peer_rank;
+  [[nodiscard]] bool operator!=(const BufferRef& other) const {
+    return !(*this == other);
+  }
 
-  // Embellished pointers
-  DevicePtr src_ptr;
+  std::variant<ShardRef, RegisterRef> ref;
 };
 
 //==============================================================================
-}  // namespace setu::planner::ir::llc
+inline std::size_t hash_value(const BufferRef& buf) {
+  return std::visit([](const auto& r) { return hash_value(r); }, buf.ref);
+}
+//==============================================================================
+}  // namespace setu::planner::ir::ref
 //==============================================================================

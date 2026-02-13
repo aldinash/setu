@@ -149,8 +149,8 @@ void NCCLWorker::ExecuteCopy(const Copy& inst) {
                       static_cast<char*>(inst.src_ptr) + inst.src_offset_bytes,
                       bytes, cudaMemcpyDeviceToDevice, stream_));
 
-  LOG_DEBUG("Copy: {} bytes from {} to {}", bytes, inst.src_shard.ToString(),
-            inst.dst_shard.ToString());
+  LOG_DEBUG("Copy: {} bytes from {} to {}", bytes, inst.src_ref.ToString(),
+            inst.dst_ref.ToString());
 }
 
 void NCCLWorker::ExecuteSend(const Send& inst) {
@@ -161,7 +161,7 @@ void NCCLWorker::ExecuteSend(const Send& inst) {
                       entry.nccl_comm, stream_));
 
   LOG_DEBUG("Send: {} elements from {} to device rank: {}", inst.count,
-            inst.src_shard.ToString(), inst.peer_rank);
+            inst.src_ref.ToString(), inst.peer_rank);
 }
 
 void NCCLWorker::ExecuteReceive(const Receive& inst) {
@@ -172,7 +172,7 @@ void NCCLWorker::ExecuteReceive(const Receive& inst) {
                       entry.nccl_comm, stream_));
 
   LOG_DEBUG("Receive: {} elements to {} from device rank: {}", inst.count,
-            inst.dst_shard.ToString(), inst.peer_rank);
+            inst.dst_ref.ToString(), inst.peer_rank);
 }
 
 //==============================================================================
