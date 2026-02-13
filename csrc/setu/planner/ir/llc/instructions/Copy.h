@@ -26,13 +26,13 @@
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
-using setu::planner::ir::ref::BufferRef;
-using setu::planner::ir::ref::ShardRef;
 using setu::commons::DevicePtr;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
+using setu::planner::ir::ref::BufferRef;
+using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 
 /// Local (same-device) memory copy between two buffer regions.

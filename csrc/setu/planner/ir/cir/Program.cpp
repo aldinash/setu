@@ -58,10 +58,9 @@ Value Program::EmitAllocTmp(const Device& device, std::size_t size_elements,
 Value Program::EmitSlice(Value src, Slice slice) {
   const auto& src_info = GetValueInfo(src);
   ASSERT_VALID_ARGUMENTS(slice.size > 0, "Slice size must be positive");
-  ASSERT_VALID_ARGUMENTS(
-      slice.End() <= src_info.size_elements,
-      "Slice [offset={}, size={}] exceeds source size ({})", slice.offset,
-      slice.size, src_info.size_elements);
+  ASSERT_VALID_ARGUMENTS(slice.End() <= src_info.size_elements,
+                         "Slice [offset={}, size={}] exceeds source size ({})",
+                         slice.offset, slice.size, src_info.size_elements);
 
   auto op_index = static_cast<std::uint32_t>(ops_.size());
   auto out =

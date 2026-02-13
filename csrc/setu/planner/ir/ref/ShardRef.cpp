@@ -48,5 +48,5 @@ ShardRef ShardRef::Deserialize(const BinaryRange& range) {
 }
 
 //==============================================================================
-}  // namespace setu::planner::ir::llc
+}  // namespace setu::planner::ir::ref
 //==============================================================================
