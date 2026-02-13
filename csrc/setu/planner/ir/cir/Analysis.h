@@ -18,6 +18,7 @@
 //==============================================================================
 #include "commons/StdCommon.h"
 //==============================================================================
+#include "planner/RegisterSet.h"
 #include "planner/ir/cir/Program.h"
 #include "planner/ir/cir/Value.h"
 //==============================================================================
@@ -95,10 +96,11 @@ struct RegisterAllocation {
   ///
   /// @param program The CIR program
   /// @param liveness Pre-computed liveness info
-  /// @param pool_sizes Number of physical register slots available per device
+  /// @param register_sets Per-device register set specifying available slots
   [[nodiscard]] static RegisterAllocation Build(
       const Program& program /*[in]*/, const LivenessInfo& liveness /*[in]*/,
-      const std::unordered_map<Device, std::uint32_t>& pool_sizes /*[in]*/);
+      const std::unordered_map<Device, setu::planner::RegisterSet>&
+          register_sets /*[in]*/);
 };
 
 //==============================================================================
