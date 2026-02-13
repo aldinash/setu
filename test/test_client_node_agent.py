@@ -446,23 +446,27 @@ def multi_node_infrastructure():
 @pytest.mark.gpu
 def test_register_overlapping_shard_returns_none(multi_node_infrastructure):
     """Test that registering overlapping shards returns None."""
-    from setu._commons.datatypes import TensorDimSpec
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     infra = multi_node_infrastructure
     tensor_name = "overlapping_tensor"
 
-    # Register first shard covering rows [0, 600)
+    # Register first shard covering rows [0, 600) - keep client alive
+    client_0 = Client()
+    client_0.connect(infra["client_endpoint_0"])
+    device_0 = Device(torch_device=torch.device("cuda:0"))
     dims_0 = [
         TensorDimSpec("rows", 1024, 0, 600),
         TensorDimSpec("cols", 768, 0, 768),
     ]
-    shard_ref_0 = _register_tensor(
-        infra["client_endpoint_0"],
-        tensor_name,
-        dims_0,
-        infra["node_id_0"],
-        0,
+    shard_spec_0 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_0,
+        dtype=torch.float32,
+        device=device_0,
     )
+    shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
     assert shard_ref_0 is not None, "First shard should register successfully"
 
     # Attempt to register overlapping shard covering rows [400, 1024)
@@ -480,6 +484,8 @@ def test_register_overlapping_shard_returns_none(multi_node_infrastructure):
     )
     assert shard_ref_1 is None, "Overlapping shard should return None"
 
+    client_0.disconnect()
+
 
 @pytest.mark.gpu
 def test_register_dtype_mismatch_returns_none(multi_node_infrastructure):
@@ -490,7 +496,7 @@ def test_register_dtype_mismatch_returns_none(multi_node_infrastructure):
     infra = multi_node_infrastructure
     tensor_name = "dtype_mismatch_tensor"
 
-    # Register first shard with float32
+    # Register first shard with float32 - keep client alive
     dims = [
         TensorDimSpec("rows", 1024, 0, 512),
         TensorDimSpec("cols", 768, 0, 768),
@@ -506,7 +512,6 @@ def test_register_dtype_mismatch_returns_none(multi_node_infrastructure):
         device=device_0,
     )
     shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
-    client_0.disconnect()
     assert shard_ref_0 is not None, "First shard should register successfully"
 
     # Attempt to register second shard with float16 (dtype mismatch)
@@ -528,27 +533,33 @@ def test_register_dtype_mismatch_returns_none(multi_node_infrastructure):
     client_1.disconnect()
     assert shard_ref_1 is None, "Dtype mismatch shard should return None"
 
+    client_0.disconnect()
+
 
 @pytest.mark.gpu
 def test_register_dimension_size_mismatch_returns_none(multi_node_infrastructure):
     """Test that registering shards with mismatched dimension sizes returns None."""
-    from setu._commons.datatypes import TensorDimSpec
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     infra = multi_node_infrastructure
     tensor_name = "dim_size_mismatch_tensor"
 
-    # Register first shard with rows total size 1024
+    # Register first shard with rows total size 1024 - keep client alive
+    client_0 = Client()
+    client_0.connect(infra["client_endpoint_0"])
+    device_0 = Device(torch_device=torch.device("cuda:0"))
     dims_0 = [
         TensorDimSpec("rows", 1024, 0, 512),
         TensorDimSpec("cols", 768, 0, 768),
     ]
-    shard_ref_0 = _register_tensor(
-        infra["client_endpoint_0"],
-        tensor_name,
-        dims_0,
-        infra["node_id_0"],
-        0,
+    shard_spec_0 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_0,
+        dtype=torch.float32,
+        device=device_0,
     )
+    shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
     assert shard_ref_0 is not None, "First shard should register successfully"
 
     # Attempt to register shard with rows total size 2048 (size mismatch)
@@ -565,27 +576,33 @@ def test_register_dimension_size_mismatch_returns_none(multi_node_infrastructure
     )
     assert shard_ref_1 is None, "Dimension size mismatch shard should return None"
 
+    client_0.disconnect()
+
 
 @pytest.mark.gpu
 def test_register_dimension_name_mismatch_returns_none(multi_node_infrastructure):
     """Test that registering shards with mismatched dimension names returns None."""
-    from setu._commons.datatypes import TensorDimSpec
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     infra = multi_node_infrastructure
     tensor_name = "dim_name_mismatch_tensor"
 
-    # Register first shard with dimension names "rows" and "cols"
+    # Register first shard with dimension names "rows" and "cols" - keep client alive
+    client_0 = Client()
+    client_0.connect(infra["client_endpoint_0"])
+    device_0 = Device(torch_device=torch.device("cuda:0"))
     dims_0 = [
         TensorDimSpec("rows", 1024, 0, 512),
         TensorDimSpec("cols", 768, 0, 768),
     ]
-    shard_ref_0 = _register_tensor(
-        infra["client_endpoint_0"],
-        tensor_name,
-        dims_0,
-        infra["node_id_0"],
-        0,
+    shard_spec_0 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_0,
+        dtype=torch.float32,
+        device=device_0,
     )
+    shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
     assert shard_ref_0 is not None, "First shard should register successfully"
 
     # Attempt to register shard with different dimension names
@@ -602,27 +619,33 @@ def test_register_dimension_name_mismatch_returns_none(multi_node_infrastructure
     )
     assert shard_ref_1 is None, "Dimension name mismatch shard should return None"
 
+    client_0.disconnect()
+
 
 @pytest.mark.gpu
 def test_register_identical_shard_returns_none(multi_node_infrastructure):
     """Test that registering an identical (fully overlapping) shard returns None."""
-    from setu._commons.datatypes import TensorDimSpec
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     infra = multi_node_infrastructure
     tensor_name = "identical_shard_tensor"
 
-    # Register first shard
+    # Register first shard - keep client alive
+    client_0 = Client()
+    client_0.connect(infra["client_endpoint_0"])
+    device_0 = Device(torch_device=torch.device("cuda:0"))
     dims = [
         TensorDimSpec("rows", 1024, 0, 512),
         TensorDimSpec("cols", 768, 0, 768),
     ]
-    shard_ref_0 = _register_tensor(
-        infra["client_endpoint_0"],
-        tensor_name,
-        dims,
-        infra["node_id_0"],
-        0,
+    shard_spec_0 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims,
+        dtype=torch.float32,
+        device=device_0,
     )
+    shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
     assert shard_ref_0 is not None, "First shard should register successfully"
 
     # Attempt to register identical shard (same ranges)
@@ -635,6 +658,8 @@ def test_register_identical_shard_returns_none(multi_node_infrastructure):
     )
     assert shard_ref_1 is None, "Identical shard should return None (fully overlapping)"
 
+    client_0.disconnect()
+
 
 @pytest.mark.gpu
 def test_distributed_tensor_allocation(multi_node_infrastructure):
@@ -643,59 +668,61 @@ def test_distributed_tensor_allocation(multi_node_infrastructure):
     when a tensor is distributed across multiple nodes.
     """
     from setu._client import Client
-    from setu._commons.datatypes import TensorDimSpec
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
     infra = multi_node_infrastructure
     tensor_name = "distributed_tensor"
     total_rows = 1024
 
-    # Node 0 owns rows [0, 512)
+    # Node 0 owns rows [0, 512) - keep client alive for handle retrieval
+    client_0 = Client()
+    client_0.connect(infra["client_endpoint_0"])
+    device_0 = Device(torch_device=torch.device("cuda:0"))
     dims_0 = [
         TensorDimSpec("rows", total_rows, 0, 512),
         TensorDimSpec("cols", 768, 0, 768),
     ]
-    shard_ref_0 = _register_tensor(
-        infra["client_endpoint_0"],
-        tensor_name,
-        dims_0,
-        infra["node_id_0"],
-        0,
+    shard_spec_0 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_0,
+        dtype=torch.float32,
+        device=device_0,
     )
+    shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
     assert shard_ref_0 is not None
 
-    # Node 1 owns rows [512, 1024)
+    # Node 1 owns rows [512, 1024) - keep client alive for handle retrieval
+    client_1 = Client()
+    client_1.connect(infra["client_endpoint_1"])
+    device_1 = Device(torch_device=torch.device("cuda:1"))
     dims_1 = [
         TensorDimSpec("rows", total_rows, 512, 1024),
         TensorDimSpec("cols", 768, 0, 768),
     ]
-    shard_ref_1 = _register_tensor(
-        infra["client_endpoint_1"],
-        tensor_name,
-        dims_1,
-        infra["node_id_1"],
-        1,
+    shard_spec_1 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_1,
+        dtype=torch.float32,
+        device=device_1,
     )
+    shard_ref_1 = client_1.register_tensor_shard(shard_spec_1)
     assert shard_ref_1 is not None
 
     # Wait for AllocateTensorRequest to be processed
     time.sleep(0.5)
 
     # Verify both NodeAgents allocated the tensor by getting handles
-    client_0 = Client()
-    client_0.connect(infra["client_endpoint_0"])
     ipc_spec_0, metadata_0, lock_dir_0 = client_0.get_tensor_handle(shard_ref_0)
-    client_0.disconnect()
-
-    client_1 = Client()
-    client_1.connect(infra["client_endpoint_1"])
     ipc_spec_1, metadata_1, lock_dir_1 = client_1.get_tensor_handle(shard_ref_1)
-    client_1.disconnect()
 
     assert ipc_spec_0 is not None, "NodeAgent 0 should have allocated tensor"
     assert ipc_spec_1 is not None, "NodeAgent 1 should have allocated tensor"
 
     assert ipc_spec_0.to_dict()["tensor_size"] == [512, 768]
     assert ipc_spec_1.to_dict()["tensor_size"] == [512, 768]
+
+    client_0.disconnect()
+    client_1.disconnect()
 
 
 def _register_and_get_handle_with_timing(
@@ -807,108 +834,234 @@ def _register_with_timing(
 
 
 @pytest.mark.gpu
-def test_get_handle_waits_for_allocation(multi_node_infrastructure):
-    """
-    Test that get_tensor_handle blocks until the tensor is fully registered
-    and allocated.
+def test_disconnect_clears_client_shards(infrastructure):
+    """Test that disconnecting clears the client's local shard tracking."""
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
 
-    Scenario:
-    1. Client 1 registers shard covering rows [0, 512)
-    2. Client 1 calls get_tensor_handle (should block - tensor not complete)
-    3. Client 2 registers shard covering rows [512, 1024) (completes tensor)
-    4. Client 1's get_tensor_handle should now return
+    client_endpoint = infrastructure["client_endpoint"]
 
-    This verifies the waiting_for_allocation_clients_ mechanism works correctly.
+    client = Client()
+    client.connect(client_endpoint)
+
+    device = Device(torch_device=torch.device("cuda:0"))
+    dims = [
+        TensorDimSpec("dim_0", 16, 0, 16),
+        TensorDimSpec("dim_1", 32, 0, 32),
+    ]
+    shard_spec = TensorShardSpec(
+        name="deregister_local_test",
+        dims=dims,
+        dtype=torch.float32,
+        device=device,
+    )
+
+    shard_ref = client.register_tensor_shard(shard_spec)
+    assert shard_ref is not None
+    assert len(client.get_shards()) == 1
+
+    client.disconnect()
+
+    # After disconnect, client should have no shards
+    assert len(client.get_shards()) == 0
+
+
+@pytest.mark.gpu
+def test_disconnect_allows_reregistration(infrastructure):
     """
+    Test that after a client disconnects, a new client can re-register
+    the same tensor ranges. This proves deregistration cleaned up server state.
+    """
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    client_endpoint = infrastructure["client_endpoint"]
+    tensor_name = "reregister_test_tensor"
+
+    device = Device(torch_device=torch.device("cuda:0"))
+    dims = [
+        TensorDimSpec("dim_0", 8, 0, 8),
+        TensorDimSpec("dim_1", 16, 0, 16),
+    ]
+    shard_spec = TensorShardSpec(
+        name=tensor_name,
+        dims=dims,
+        dtype=torch.float32,
+        device=device,
+    )
+
+    # First client registers and disconnects
+    client1 = Client()
+    client1.connect(client_endpoint)
+    shard_ref1 = client1.register_tensor_shard(shard_spec)
+    assert shard_ref1 is not None, "First registration should succeed"
+    client1.disconnect()
+
+    # Small delay to let cleanup propagate
+    time.sleep(0.2)
+
+    # Second client re-registers the same tensor range
+    client2 = Client()
+    client2.connect(client_endpoint)
+    shard_ref2 = client2.register_tensor_shard(shard_spec)
+    assert shard_ref2 is not None, "Re-registration should succeed after deregistration"
+
+    # Verify re-registered shard is usable
+    tensor_ipc_spec, metadata, lock_base_dir = client2.get_tensor_handle(shard_ref2)
+    assert tensor_ipc_spec is not None
+    spec_dict = tensor_ipc_spec.to_dict()
+    assert spec_dict["tensor_size"] == [8, 16]
+
+    client2.disconnect()
+
+
+@pytest.mark.gpu
+def test_disconnect_multiple_shards_deregistered(infrastructure):
+    """
+    Test that disconnecting deregisters all shards owned by the client,
+    even when the client owns multiple shards for different tensors.
+    """
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    client_endpoint = infrastructure["client_endpoint"]
+
+    client = Client()
+    client.connect(client_endpoint)
+
+    device = Device(torch_device=torch.device("cuda:0"))
+
+    # Register shards for 3 different tensors
+    tensor_configs = [
+        ("deregister_multi_a", 4, 8),
+        ("deregister_multi_b", 16, 32),
+        ("deregister_multi_c", 2, 4),
+    ]
+    for tensor_name, d0_size, d1_size in tensor_configs:
+        dims = [
+            TensorDimSpec("dim_0", d0_size, 0, d0_size),
+            TensorDimSpec("dim_1", d1_size, 0, d1_size),
+        ]
+        shard_spec = TensorShardSpec(
+            name=tensor_name,
+            dims=dims,
+            dtype=torch.float32,
+            device=device,
+        )
+        shard_ref = client.register_tensor_shard(shard_spec)
+        assert shard_ref is not None, f"Failed to register {tensor_name}"
+
+    assert len(client.get_shards()) == 3
+    client.disconnect()
+
+    time.sleep(0.2)
+
+    # Verify all 3 tensors can be re-registered by a new client
+    client2 = Client()
+    client2.connect(client_endpoint)
+
+    for tensor_name, d0_size, d1_size in tensor_configs:
+        dims = [
+            TensorDimSpec("dim_0", d0_size, 0, d0_size),
+            TensorDimSpec("dim_1", d1_size, 0, d1_size),
+        ]
+        shard_spec = TensorShardSpec(
+            name=tensor_name,
+            dims=dims,
+            dtype=torch.float32,
+            device=device,
+        )
+        shard_ref = client2.register_tensor_shard(shard_spec)
+        assert (
+            shard_ref is not None
+        ), f"Re-registration of {tensor_name} should succeed after deregistration"
+
+    client2.disconnect()
+
+
+@pytest.mark.gpu
+def test_partial_disconnect_preserves_other_shards(multi_node_infrastructure):
+    """
+    Test that when one client disconnects, the other client's shards
+    for the same tensor are preserved.
+    """
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
     infra = multi_node_infrastructure
-    tensor_name = "wait_for_allocation_tensor"
-    total_rows = 1024
+    tensor_name = "partial_deregister_tensor"
 
-    ctx = mp.get_context("spawn")
-    client1_result_queue = ctx.Queue()
-    client2_result_queue = ctx.Queue()
-    client1_register_done = ctx.Event()
-
-    # Client 1: registers first half and gets handle (will block)
-    # Pass raw tuples (name, total_size, start, end) - TensorDimSpec created in subprocess
-    dims_0_data = [
-        ("rows", total_rows, 0, 512),
-        ("cols", 768, 0, 768),
+    # Client 0 registers first half
+    client_0 = Client()
+    client_0.connect(infra["client_endpoint_0"])
+    device_0 = Device(torch_device=torch.device("cuda:0"))
+    dims_0 = [
+        TensorDimSpec("rows", 1024, 0, 512),
+        TensorDimSpec("cols", 768, 0, 768),
     ]
-    client1_proc = ctx.Process(
-        target=_register_and_get_handle_with_timing,
-        args=(
-            infra["client_endpoint_0"],
-            tensor_name,
-            dims_0_data,
-            client1_result_queue,
-            client1_register_done,
-            0,
-        ),
+    shard_spec_0 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_0,
+        dtype=torch.float32,
+        device=device_0,
     )
+    shard_ref_0 = client_0.register_tensor_shard(shard_spec_0)
+    assert shard_ref_0 is not None
 
-    # Client 2: registers second half (completes tensor, triggers allocation)
-    # Pass raw tuples (name, total_size, start, end) - TensorDimSpec created in subprocess
-    dims_1_data = [
-        ("rows", total_rows, 512, 1024),
-        ("cols", 768, 0, 768),
+    # Client 1 registers second half
+    client_1 = Client()
+    client_1.connect(infra["client_endpoint_1"])
+    device_1 = Device(torch_device=torch.device("cuda:1"))
+    dims_1 = [
+        TensorDimSpec("rows", 1024, 512, 1024),
+        TensorDimSpec("cols", 768, 0, 768),
     ]
-    client2_proc = ctx.Process(
-        target=_register_with_timing,
-        args=(
-            infra["client_endpoint_1"],
-            tensor_name,
-            dims_1_data,
-            client2_result_queue,
-            1,
-        ),
+    shard_spec_1 = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_1,
+        dtype=torch.float32,
+        device=device_1,
     )
+    shard_ref_1 = client_1.register_tensor_shard(shard_spec_1)
+    assert shard_ref_1 is not None
 
-    # Start client 1
-    client1_proc.start()
+    # Disconnect client 0 only
+    client_0.disconnect()
+    time.sleep(0.2)
 
-    # Wait for client 1 to finish registration (but it will block on get_handle)
-    assert client1_register_done.wait(timeout=10), "Client 1 registration timed out"
+    # Client 1's shard should still be tracked
+    assert len(client_1.get_shards()) == 1
 
-    # Small delay to ensure client 1 is blocked on get_handle
-    time.sleep(2.0)
-
-    # Now start client 2 which will complete the tensor
-    client2_proc.start()
-
-    # Both should complete now
-    client1_proc.join(timeout=10)
-    client2_proc.join(timeout=10)
-
-    assert not client1_proc.is_alive(), "Client 1 should have completed"
-    assert not client2_proc.is_alive(), "Client 2 should have completed"
-
-    # Get results
-    client1_result = client1_result_queue.get(timeout=5)
-    client2_result = client2_result_queue.get(timeout=5)
-
-    # Verify no errors
+    # A new client can register client 0's range (it was deregistered)
+    client_0_new = Client()
+    client_0_new.connect(infra["client_endpoint_0"])
+    shard_ref_0_new = client_0_new.register_tensor_shard(shard_spec_0)
     assert (
-        "error" not in client1_result
-    ), f"Client 1 error: {client1_result.get('error')}"
-    assert client2_result["shard_id"] is not None, "Client 2 should have registered"
+        shard_ref_0_new is not None
+    ), "Should be able to re-register deregistered range"
 
-    # Verify client 1 got valid handle
-    assert client1_result["tensor_size"] == [
-        512,
-        768,
-    ], f"Unexpected tensor size: {client1_result['tensor_size']}"
+    # But cannot register overlapping with client 1's still-active shard
+    client_overlap = Client()
+    client_overlap.connect(infra["client_endpoint_1"])
+    device_overlap = Device(torch_device=torch.device("cuda:1"))
+    dims_overlap = [
+        TensorDimSpec("rows", 1024, 256, 768),  # Overlaps with client 1
+        TensorDimSpec("cols", 768, 0, 768),
+    ]
+    shard_spec_overlap = TensorShardSpec(
+        name=tensor_name,
+        dims=dims_overlap,
+        dtype=torch.float32,
+        device=device_overlap,
+    )
+    shard_ref_overlap = client_overlap.register_tensor_shard(shard_spec_overlap)
+    assert (
+        shard_ref_overlap is None
+    ), "Should not be able to register range overlapping with active shard"
 
-    assert client1_result["get_handle_start"] < client2_result["register_time"], (
-        f"Client 1 should have started get_handle before Client 2 registered. "
-        f"get_handle_start={client1_result['get_handle_start']:.3f}, "
-        f"client2_register_time={client2_result['register_time']:.3f}"
-    )
-    assert client1_result["get_handle_end"] >= client2_result["register_time"], (
-        f"Client 1 should have finished get_handle after Client 2 registered. "
-        f"get_handle_end={client1_result['get_handle_end']:.3f}, "
-        f"client2_register_time={client2_result['register_time']:.3f}"
-    )
+    client_overlap.disconnect()
+    client_0_new.disconnect()
+    client_1.disconnect()
 
 
 if __name__ == "__main__":

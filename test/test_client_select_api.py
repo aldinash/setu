@@ -405,8 +405,10 @@ def test_select_where_multiple_dims(infrastructure):
     )
     client.register_tensor_shard(spec)
 
-    narrowed = client.select("where_multi_dim").where("rows", [0, 1, 2]).where(
-        "cols", [10, 20, 30]
+    narrowed = (
+        client.select("where_multi_dim")
+        .where("rows", [0, 1, 2])
+        .where("cols", [10, 20, 30])
     )
 
     expected = (
