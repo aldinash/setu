@@ -73,6 +73,8 @@ class Client {
   [[nodiscard]] std::vector<TensorShardRefPtr> GetShards() const;
 
  private:
+  void DeregisterShards();
+
   // Zmq context and sockets
   ZmqContextPtr zmq_context_;
   ZmqSocketPtr request_socket_;

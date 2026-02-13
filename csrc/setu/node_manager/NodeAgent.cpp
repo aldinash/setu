@@ -42,6 +42,8 @@ using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::ClientRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
+using setu::commons::messages::DeregisterShardsRequest;
+using setu::commons::messages::DeregisterShardsResponse;
 using setu::commons::messages::ExecuteProgramRequest;
 using setu::commons::messages::ExecuteProgramResponse;
 using setu::commons::messages::ExecuteRequest;
@@ -236,6 +238,8 @@ void NodeAgent::Handler::HandleClientMessage(const Identity& client_identity,
           HandleWaitForShardAllocationRequest(client_identity, msg);
         } else if constexpr (std::is_same_v<T, GetTensorSelectionRequest>) {
           HandleGetTensorSelectionRequest(client_identity, msg);
+        } else if constexpr (std::is_same_v<T, DeregisterShardsRequest>) {
+          HandleDeregisterShardsRequest(client_identity, msg);
         }
       },
       request);
@@ -428,8 +432,8 @@ void NodeAgent::Handler::HandleGetTensorSelectionRequest(
   auto it = tensor_spec_cache_.find(request.tensor_name);
   if (it != tensor_spec_cache_.end()) {
     auto selection = TensorSelection(it->second.name, it->second.dims);
-    GetTensorSelectionResponse response(request.request_id,
-                                        ErrorCode::kSuccess, selection);
+    GetTensorSelectionResponse response(request.request_id, ErrorCode::kSuccess,
+                                        selection);
     Comm::Send<GetTensorSelectionResponse>(client_socket_, client_identity,
                                            response);
     return;
@@ -536,6 +540,33 @@ void NodeAgent::Handler::AllocateTensor(
 
   LOG_DEBUG("Successfully allocated shard {} with shape {} on device {}",
             shard_metadata.id, shape, spec.device.torch_device.str());
+}
+
+void NodeAgent::Handler::HandleDeregisterShardsRequest(
+    const Identity& client_identity, const DeregisterShardsRequest& request) {
+  LOG_INFO("NodeAgent received DeregisterShardsRequest from client {}",
+           client_identity);
+
+  // Clean up local state for each shard
+  for (const auto& [tensor_name, shard_ids] : request.shards_by_tensor) {
+    for (const auto& shard_id : shard_ids) {
+      shard_id_to_tensor_.erase(shard_id);
+      tensor_shard_metadata_map_.erase(shard_id);
+
+      LOG_DEBUG("Cleaned up shard {} from tensor '{}'", shard_id, tensor_name);
+    }
+  }
+
+  // Forward to coordinator via sync REQ socket
+  Comm::Send<NodeAgentRequest>(sync_socket_, request);
+  auto coordinator_response = Comm::Recv<CoordinatorMessage>(sync_socket_);
+
+  const auto& resp = std::get<DeregisterShardsResponse>(coordinator_response);
+
+  // Send response to client
+  DeregisterShardsResponse client_response(resp.request_id, resp.error_code);
+  Comm::Send<DeregisterShardsResponse>(client_socket_, client_identity,
+                                       client_response);
 }
 
 //==============================================================================

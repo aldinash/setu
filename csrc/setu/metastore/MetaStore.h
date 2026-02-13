@@ -108,6 +108,19 @@ class MetaStore {
   [[nodiscard]] const TensorSpec* GetTensorSpec(
       const TensorName& tensor_name /*[in]*/) const;
 
+  /**
+   * @brief Deregisters tensor shards from the metadata store
+   *
+   * Removes the specified shards from each tensor's registration data,
+   * updates registered sizes, and invalidates caches. If all shards for
+   * a tensor are removed, the entire tensor entry is cleaned up.
+   *
+   * @param shards_by_tensor Map of tensor name to shard IDs to deregister
+   */
+  void DeregisterShards(
+      const std::unordered_map<TensorName, std::vector<ShardId>>&
+          shards_by_tensor /*[in]*/);
+
  private:
   /// Registered shard data: expected size, registered size, and shard metadata
   struct RegisteredShardsData {

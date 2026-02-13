@@ -31,6 +31,8 @@ using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
+using setu::commons::messages::DeregisterShardsRequest;
+using setu::commons::messages::DeregisterShardsResponse;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::ExecuteResponse;
 using setu::commons::messages::GetTensorSpecRequest;
@@ -231,6 +233,8 @@ void Coordinator::Handler::Loop() {
               HandleExecuteResponse(inbox_msg.node_agent_identity, msg);
             } else if constexpr (std::is_same_v<T, GetTensorSpecRequest>) {
               HandleGetTensorSpecRequest(inbox_msg.node_agent_identity, msg);
+            } else if constexpr (std::is_same_v<T, DeregisterShardsRequest>) {
+              HandleDeregisterShardsRequest(inbox_msg.node_agent_identity, msg);
             } else {
               LOG_WARNING("Handler: Unknown message type (index={})",
                           inbox_msg.request.index());
@@ -441,6 +445,18 @@ void Coordinator::Handler::HandleGetTensorSpecRequest(
 
   GetTensorSpecResponse response(request.request_id, ErrorCode::kSuccess,
                                  *tensor_spec);
+  outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+}
+
+void Coordinator::Handler::HandleDeregisterShardsRequest(
+    const Identity& node_agent_identity,
+    const DeregisterShardsRequest& request) {
+  LOG_INFO("Coordinator received DeregisterShardsRequest from {}",
+           node_agent_identity);
+
+  metastore_.DeregisterShards(request.shards_by_tensor);
+
+  DeregisterShardsResponse response(request.request_id, ErrorCode::kSuccess);
   outbox_queue_.push(OutboxMessage{node_agent_identity, response});
 }
 

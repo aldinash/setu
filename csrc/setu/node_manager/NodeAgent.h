@@ -57,6 +57,8 @@ using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::ClientRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
+using setu::commons::messages::DeregisterShardsRequest;
+using setu::commons::messages::DeregisterShardsResponse;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::GetTensorHandleRequest;
 using setu::commons::messages::GetTensorHandleResponse;
@@ -146,6 +148,8 @@ class NodeAgent {
     void HandleGetTensorSelectionRequest(
         const Identity& client_identity,
         const GetTensorSelectionRequest& request);
+    void HandleDeregisterShardsRequest(const Identity& client_identity,
+                                       const DeregisterShardsRequest& request);
 
     // Async coordinator message handlers (received on DEALER socket)
     void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
