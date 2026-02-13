@@ -147,16 +147,16 @@ Plan NCCL::Run(const cir::Program& program) {
 
   for (const auto& c : pending_copies) {
     if (c.src_part == c.dst_part) {
-      programs[c.src_part].emplace_back(llc::Copy(
-          c.src_ref, c.src_offset_bytes, c.dst_ref, c.dst_offset_bytes,
-          c.count, c.dtype));
+      programs[c.src_part].emplace_back(llc::Copy(c.src_ref, c.src_offset_bytes,
+                                                  c.dst_ref, c.dst_offset_bytes,
+                                                  c.count, c.dtype));
     } else {
-      programs[c.src_part].emplace_back(llc::Send(
-          c.src_ref, c.src_offset_bytes, c.count, c.dtype,
-          entry.ranks.at(c.dst_part)));
-      programs[c.dst_part].emplace_back(llc::Receive(
-          c.dst_ref, c.dst_offset_bytes, c.count, c.dtype,
-          entry.ranks.at(c.src_part)));
+      programs[c.src_part].emplace_back(llc::Send(c.src_ref, c.src_offset_bytes,
+                                                  c.count, c.dtype,
+                                                  entry.ranks.at(c.dst_part)));
+      programs[c.dst_part].emplace_back(
+          llc::Receive(c.dst_ref, c.dst_offset_bytes, c.count, c.dtype,
+                       entry.ranks.at(c.src_part)));
     }
   }
 
