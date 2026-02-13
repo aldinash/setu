@@ -41,10 +41,9 @@ Copy Copy::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
   auto [src_ref, src_offset_bytes, dst_ref, dst_offset_bytes, count, dtype,
         src_ptr_val, dst_ptr_val] =
-      reader
-          .ReadFields<BufferRef, std::size_t, BufferRef, std::size_t,
-                      std::size_t, torch::Dtype, std::uintptr_t,
-                      std::uintptr_t>();
+      reader.ReadFields<BufferRef, std::size_t, BufferRef, std::size_t,
+                        std::size_t, torch::Dtype, std::uintptr_t,
+                        std::uintptr_t>();
 
   auto src_ptr = reinterpret_cast<DevicePtr>(src_ptr_val);
   auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_val);
@@ -53,13 +52,9 @@ Copy Copy::Deserialize(const BinaryRange& range) {
 }
 
 void Copy::Embellish(
-    const std::function<DevicePtr(const ShardRef&)>& resolver) {
-  ASSERT_VALID_RUNTIME(src_ref.IsShard(),
-                       "Copy::Embellish: src_ref must be a ShardRef");
-  ASSERT_VALID_RUNTIME(dst_ref.IsShard(),
-                       "Copy::Embellish: dst_ref must be a ShardRef");
-  src_ptr = resolver(src_ref.AsShard());
-  dst_ptr = resolver(dst_ref.AsShard());
+    const std::function<DevicePtr(const BufferRef&)>& resolver) {
+  src_ptr = resolver(src_ref);
+  dst_ptr = resolver(dst_ref);
 }
 
 //==============================================================================

@@ -14,39 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/ir/ref/ShardRef.h"
+#pragma once
 //==============================================================================
-namespace setu::planner::ir::ref {
+#include "commons/StdCommon.h"
 //==============================================================================
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
+namespace setu::planner {
 //==============================================================================
 
-std::string ShardRef::ToString() const {
-  std::string name_str =
-      tensor_name.has_value() ? tensor_name.value() : "<none>";
-  std::string node_str =
-      node_id.has_value() ? boost::uuids::to_string(node_id.value()) : "<none>";
-  return std::format("ShardRef(shard_id={}, tensor_name={}, node_id={})",
-                     boost::uuids::to_string(shard_id), name_str, node_str);
-}
-
-void ShardRef::Serialize(BinaryBuffer& buffer) const {
-  BinaryWriter writer(buffer);
-  writer.WriteFields(shard_id, node_id, tensor_name);
-}
-
-ShardRef ShardRef::Deserialize(const BinaryRange& range) {
-  BinaryReader reader(range);
-  auto [shard_id, node_id, tensor_name] =
-      reader.ReadFields<ShardId, std::optional<NodeId>,
-                        std::optional<TensorName>>();
-
-  ShardRef ref(std::move(shard_id), std::move(tensor_name));
-  ref.node_id = std::move(node_id);
-  return ref;
-}
+/// Size in bytes of each temporary register buffer.
+constexpr std::size_t kRegisterSize = 1024 * 1024;  // 1 MiB
 
 //==============================================================================
-}  // namespace setu::planner::ir::ref
+}  // namespace setu::planner
 //==============================================================================

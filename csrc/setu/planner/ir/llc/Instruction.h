@@ -19,12 +19,12 @@
 #include "commons/StdCommon.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
-#include "planner/ir/ref/ShardRef.h"
 #include "planner/ir/llc/instructions/Copy.h"
 #include "planner/ir/llc/instructions/InitComm.h"
 #include "planner/ir/llc/instructions/Receive.h"
 #include "planner/ir/llc/instructions/Send.h"
 #include "planner/ir/llc/instructions/UseComm.h"
+#include "planner/ir/ref/ShardRef.h"
 //==============================================================================
 /// Low-Level Copy (LLC) IR — the target IR for backend code generation.
 ///
@@ -42,12 +42,13 @@
 ///   Receive   — NCCL point-to-point receive from a peer rank
 namespace setu::planner::ir::llc {
 //==============================================================================
-using setu::planner::ir::ref::ShardRef;
 using setu::commons::DevicePtr;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
+using setu::planner::ir::ref::BufferRef;
+using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 
 enum class InstructionType : std::uint8_t {
@@ -81,7 +82,7 @@ struct Instruction {
 
   static Instruction Deserialize(const BinaryRange& range);
 
-  void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
+  void Embellish(const std::function<DevicePtr(const BufferRef&)>& resolver);
 
   InstructionVariant instr;
 };

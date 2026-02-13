@@ -47,10 +47,8 @@ Send Send::Deserialize(const BinaryRange& range) {
 }
 
 void Send::Embellish(
-    const std::function<DevicePtr(const ShardRef&)>& resolver) {
-  ASSERT_VALID_RUNTIME(src_ref.IsShard(),
-                       "Send::Embellish: src_ref must be a ShardRef");
-  src_ptr = resolver(src_ref.AsShard());
+    const std::function<DevicePtr(const BufferRef&)>& resolver) {
+  src_ptr = resolver(src_ref);
 }
 
 //==============================================================================

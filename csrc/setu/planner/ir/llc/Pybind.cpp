@@ -64,15 +64,13 @@ void InitCopyInstructionPybind(py::module_& m) {
   py::class_<Copy>(m, "Copy")
       .def(py::init<BufferRef, std::size_t, BufferRef, std::size_t, std::size_t,
                     torch::Dtype>(),
-           py::arg("src_ref"), py::arg("src_offset_bytes"),
-           py::arg("dst_ref"), py::arg("dst_offset_bytes"), py::arg("count"),
-           py::arg("dtype"),
+           py::arg("src_ref"), py::arg("src_offset_bytes"), py::arg("dst_ref"),
+           py::arg("dst_offset_bytes"), py::arg("count"), py::arg("dtype"),
            "Create a copy instruction for GPU memory transfer")
       .def_readonly("src_ref", &Copy::src_ref, "Source buffer reference")
       .def_readonly("src_offset_bytes", &Copy::src_offset_bytes,
                     "Byte offset in source memory")
-      .def_readonly("dst_ref", &Copy::dst_ref,
-                    "Destination buffer reference")
+      .def_readonly("dst_ref", &Copy::dst_ref, "Destination buffer reference")
       .def_readonly("dst_offset_bytes", &Copy::dst_offset_bytes,
                     "Byte offset in destination memory")
       .def_readonly("count", &Copy::count, "Number of elements to copy")
@@ -155,10 +153,13 @@ void InitInstructionPybind(py::module_& m) {
       .def(
           "embellish",
           [](Instruction& self, py::function py_resolver) {
-            self.Embellish([&py_resolver](const ShardRef& ref) {
+            self.Embellish([&py_resolver](const BufferRef& ref) {
+              ASSERT_VALID_RUNTIME(ref.IsShard(),
+                                   "Python embellish only supports ShardRef");
+              const auto& shard = ref.AsShard();
               py::object result =
-                  py_resolver(py::cast(boost::uuids::to_string(ref.shard_id)),
-                              py::cast(ref.tensor_name));
+                  py_resolver(py::cast(boost::uuids::to_string(shard.shard_id)),
+                              py::cast(shard.tensor_name));
               auto ptr = reinterpret_cast<DevicePtr>(result.cast<intptr_t>());
               return ptr;
             });

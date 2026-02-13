@@ -51,8 +51,10 @@ using setu::planner::Participant;
 // NCCLWorker
 //==============================================================================
 
-NCCLWorker::NCCLWorker(NodeId node_id, Device device)
-    : Worker(node_id, device), stream_(nullptr) {}
+NCCLWorker::NCCLWorker(NodeId node_id, Device device, RegisterSet register_set)
+    : Worker(node_id, device),
+      stream_(nullptr),
+      register_file_(std::move(register_set)) {}
 
 NCCLWorker::~NCCLWorker() {
   if (stream_) {
@@ -66,6 +68,13 @@ NCCLWorker::~NCCLWorker() {
 void NCCLWorker::Setup() {
   CUDA_CHECK(cudaSetDevice(device_.LocalDeviceIndex()));
   CUDA_CHECK(cudaStreamCreate(&stream_));
+
+  if (!register_file_.Empty()) {
+    register_file_.Allocate();
+    LOG_DEBUG("Allocated {} registers on device {}",
+              register_file_.NumRegisters(), device_);
+  }
+
   LOG_DEBUG("NCCLWorker setup complete for device {}", device_);
 }
 
@@ -173,6 +182,10 @@ void NCCLWorker::ExecuteReceive(const Receive& inst) {
 
   LOG_DEBUG("Receive: {} elements to {} from device rank: {}", inst.count,
             inst.dst_ref.ToString(), inst.peer_rank);
+}
+
+DevicePtr NCCLWorker::ResolveRegister(const RegisterRef& ref) const {
+  return register_file_.GetPtr(ref.register_index);
 }
 
 //==============================================================================

@@ -26,14 +26,14 @@
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
-using setu::planner::ir::ref::BufferRef;
-using setu::planner::ir::ref::ShardRef;
 using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
+using setu::planner::ir::ref::BufferRef;
+using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 
 /// NCCL point-to-point receive from a peer rank within the active communicator.
@@ -68,7 +68,7 @@ struct Receive {
   /**
    * @brief Populates the device pointers by looking up the base address.
    */
-  void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
+  void Embellish(const std::function<DevicePtr(const BufferRef&)>& resolver);
 
   BufferRef dst_ref;
   std::size_t offset_bytes;

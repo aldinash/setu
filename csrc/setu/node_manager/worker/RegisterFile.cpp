@@ -14,43 +14,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/ir/llc/instructions/Receive.h"
+#include "node_manager/worker/RegisterFile.h"
+//==============================================================================
+#include <cuda_runtime.h>
 //==============================================================================
 #include "commons/Logging.h"
 //==============================================================================
-namespace setu::planner::ir::llc {
+namespace setu::node_manager::worker {
 //==============================================================================
 
-std::string Receive::ToString() const {
-  return std::format(
-      "Receive(peer_rank={}, dst_ref={}, offset_bytes={}, count={}, dtype={}, "
-      "dst_device_ptr={})",
-      peer_rank, dst_ref.ToString(), offset_bytes, count,
-      static_cast<int>(dtype), dst_ptr);
+#define CUDA_CHECK(call)                                                \
+  do {                                                                  \
+    cudaError_t err = (call);                                           \
+    ASSERT_VALID_RUNTIME(err == cudaSuccess, "CUDA error: {} at {}:{}", \
+                         cudaGetErrorString(err), __FILE__, __LINE__);  \
+  } while (0)
+
+void RegisterFile::Allocate() {
+  for (std::uint32_t i = 0; i < spec_.NumRegisters(); ++i) {
+    ASSERT_VALID_RUNTIME(ptrs_[i] == nullptr, "Register {} already allocated",
+                         i);
+    void* ptr = nullptr;
+    CUDA_CHECK(cudaMalloc(&ptr, spec_.SizeBytes(i)));
+    ptrs_[i] = ptr;
+  }
+
+  LOG_DEBUG("Allocated {} registers", spec_.NumRegisters());
 }
 
-void Receive::Serialize(BinaryBuffer& buffer) const {
-  BinaryWriter writer(buffer);
-  const auto dst_ptr_value = reinterpret_cast<std::uintptr_t>(dst_ptr);
-  writer.WriteFields(peer_rank, dst_ref, offset_bytes, count, dtype,
-                     dst_ptr_value);
+void RegisterFile::Free() {
+  for (auto& ptr : ptrs_) {
+    if (ptr != nullptr) {
+      cudaFree(ptr);
+      ptr = nullptr;
+    }
+  }
 }
 
-Receive Receive::Deserialize(const BinaryRange& range) {
-  BinaryReader reader(range);
-  auto [peer_rank, dst_ref, offset_bytes, count, dtype, dst_ptr_value] =
-      reader.ReadFields<DeviceRank, BufferRef, std::size_t, std::size_t,
-                        torch::Dtype, std::uintptr_t>();
-  const auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_value);
-  return Receive(std::move(dst_ref), offset_bytes, count, dtype, peer_rank,
-                 dst_ptr);
-}
-
-void Receive::Embellish(
-    const std::function<DevicePtr(const BufferRef&)>& resolver) {
-  dst_ptr = resolver(dst_ref);
-}
+#undef CUDA_CHECK
 
 //==============================================================================
-}  // namespace setu::planner::ir::llc
+}  // namespace setu::node_manager::worker
 //==============================================================================
