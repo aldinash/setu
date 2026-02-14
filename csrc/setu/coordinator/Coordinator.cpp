@@ -384,6 +384,10 @@ void Coordinator::Handler::HandleShardSubmission(
   // Store the shared state (will be accessed by HandleExecuteResponse)
   copy_operations_.emplace(copy_op_id, state);
 
+  // Update reverse index for O(1) lookup during deregistration
+  tensor_to_copy_ops_[copy_spec.src_name].insert(copy_op_id);
+  tensor_to_copy_ops_[copy_spec.dst_name].insert(copy_op_id);
+
   // Add to planner queue with copy_op_id and shared state
   planner_queue_.push(PlannerTask{copy_op_id, result->payload, state});
 
@@ -427,7 +431,47 @@ void Coordinator::Handler::HandleExecuteResponse(
       outbox_queue_.push(OutboxMessage{submitter_identity, finish_req});
     }
 
+    // Clean up reverse index
+    auto RemoveFromIndex = [&](const TensorName& name) {
+      auto idx_it = tensor_to_copy_ops_.find(name);
+      if (idx_it != tensor_to_copy_ops_.end()) {
+        idx_it->second.erase(response.copy_op_id);
+        if (idx_it->second.empty()) {
+          tensor_to_copy_ops_.erase(idx_it);
+        }
+      }
+    };
+    RemoveFromIndex(state->spec.src_name);
+    RemoveFromIndex(state->spec.dst_name);
+
     copy_operations_.erase(it);
+
+    // Check if any deferred deregistrations are now unblocked
+    ProcessPendingDeregistrations(response.copy_op_id);
+  }
+}
+
+void Coordinator::Handler::ProcessPendingDeregistrations(
+    CopyOperationId completed_copy_op_id) {
+  auto it = pending_deregistrations_.begin();
+  while (it != pending_deregistrations_.end()) {
+    it->blocking_copy_ops.erase(completed_copy_op_id);
+
+    if (it->blocking_copy_ops.empty()) {
+      LOG_INFO(
+          "All blocking copies completed for deregistration from {} — "
+          "proceeding with deregistration",
+          it->node_agent_identity);
+
+      metastore_.DeregisterShards(it->shards_by_tensor);
+
+      DeregisterShardsResponse response(it->request_id, ErrorCode::kSuccess);
+      outbox_queue_.push(OutboxMessage{it->node_agent_identity, response});
+
+      it = pending_deregistrations_.erase(it);
+    } else {
+      ++it;
+    }
   }
 }
 
@@ -454,10 +498,57 @@ void Coordinator::Handler::HandleDeregisterShardsRequest(
   LOG_INFO("Coordinator received DeregisterShardsRequest from {}",
            node_agent_identity);
 
-  metastore_.DeregisterShards(request.shards_by_tensor);
+  // Collect tensor names being deregistered
+  std::set<TensorName> tensor_names;
+  for (const auto& [name, _] : request.shards_by_tensor) {
+    tensor_names.insert(name);
+  }
 
-  DeregisterShardsResponse response(request.request_id, ErrorCode::kSuccess);
-  outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+  // Cancel partial entries in the shard aggregator for these tensors.
+  // This cleans up groups that will never complete because the shards are
+  // going away.
+  auto cancelled_participants =
+      shard_aggregator_.CancelIf([&tensor_names](const CopyKey& key) {
+        return tensor_names.contains(key.src_name) ||
+               tensor_names.contains(key.dst_name);
+      });
+
+  // Send error responses to cancelled participants
+  for (const auto& participant : cancelled_participants) {
+    LOG_INFO(
+        "Cancelling pending copy submission for participant {} due to tensor "
+        "deregistration",
+        participant.identity);
+    SubmitCopyResponse error_response(participant.request_id, CopyOperationId{},
+                                      ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{participant.identity, error_response});
+  }
+
+  // Find all in-flight copy operations that involve any of the tensors
+  // being deregistered, using the reverse index for O(k) lookup
+  std::set<CopyOperationId> blocking_ops;
+  for (const auto& name : tensor_names) {
+    auto idx_it = tensor_to_copy_ops_.find(name);
+    if (idx_it != tensor_to_copy_ops_.end()) {
+      blocking_ops.insert(idx_it->second.begin(), idx_it->second.end());
+    }
+  }
+
+  if (blocking_ops.empty()) {
+    // No pending copies — deregister immediately
+    metastore_.DeregisterShards(request.shards_by_tensor);
+    DeregisterShardsResponse response(request.request_id, ErrorCode::kSuccess);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+  } else {
+    // Defer until all blocking copies complete
+    LOG_INFO(
+        "Deferring deregistration for {} tensors from {} — {} blocking copy "
+        "operations",
+        tensor_names.size(), node_agent_identity, blocking_ops.size());
+    pending_deregistrations_.push_back(PendingDeregistration{
+        node_agent_identity, request.request_id, request.shards_by_tensor,
+        std::move(blocking_ops)});
+  }
 }
 
 //==============================================================================

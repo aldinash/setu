@@ -89,6 +89,15 @@ struct PlannerTask {
   CopyOperationStatePtr state;  // Shared with Handler's copy_operations_ map
 };
 
+/// @brief Tracks a deregistration request that is deferred until all blocking
+/// copy operations complete.
+struct PendingDeregistration {
+  Identity node_agent_identity;
+  RequestId request_id;
+  std::unordered_map<TensorName, std::vector<ShardId>> shards_by_tensor;
+  std::set<CopyOperationId> blocking_copy_ops;
+};
+
 //==============================================================================
 class Coordinator {
  public:
@@ -211,6 +220,10 @@ class Coordinator {
                                const CopySpec& copy_spec,
                                std::size_t expected_shards);
 
+    /// @brief Check if any pending deregistrations are unblocked after a copy
+    /// operation completes, and execute them.
+    void ProcessPendingDeregistrations(CopyOperationId completed_copy_op_id);
+
     /// Key for tracking copy operations by (src, dst) tensor pair
     struct CopyKey {
       TensorName src_name;
@@ -236,6 +249,15 @@ class Coordinator {
     /// Maps CopyOperationId to shared CopyOperationState (includes submitters
     /// and completion tracking)
     std::map<CopyOperationId, CopyOperationStatePtr> copy_operations_;
+
+    /// Reverse index: TensorName → active CopyOperationIds involving that
+    /// tensor (as src or dst). Maintained alongside copy_operations_ for O(1)
+    /// lookup of blocking copies during deregistration.
+    std::unordered_map<TensorName, std::set<CopyOperationId>>
+        tensor_to_copy_ops_;
+
+    /// Deregistration requests deferred until blocking copy operations complete
+    std::vector<PendingDeregistration> pending_deregistrations_;
 
     std::thread thread_;
     std::atomic<bool> running_{false};

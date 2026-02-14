@@ -153,6 +153,8 @@ class NodeAgent {
 
     // Async coordinator message handlers (received on DEALER socket)
     void HandleAllocateTensorRequest(const AllocateTensorRequest& request);
+    void HandleDeregisterShardsResponse(
+        const DeregisterShardsResponse& response);
     void HandleCopyOperationFinishedRequest(
         const CopyOperationFinishedRequest& request);
     void HandleExecuteRequest(const ExecuteRequest& request);
@@ -187,6 +189,12 @@ class NodeAgent {
     TensorSpecMap tensor_spec_cache_;
     TensorShardsConcurrentMap& shard_id_to_tensor_;
     std::string lock_base_dir_;  ///< Directory for file-based locks (IPC)
+
+    /// Tracks shards per deregistration request_id, so we can clean up local
+    /// state when the async response arrives from the Coordinator
+    std::unordered_map<RequestId,
+                       std::unordered_map<TensorName, std::vector<ShardId>>>
+        pending_deregistration_shards_;
   };
 
   //============================================================================

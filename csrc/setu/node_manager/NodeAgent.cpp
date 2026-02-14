@@ -258,6 +258,8 @@ void NodeAgent::Handler::HandleAsyncCoordinatorMessage(
           HandleExecuteRequest(msg);
         } else if constexpr (std::is_same_v<T, SubmitCopyResponse>) {
           HandleSubmitCopyResponse(msg);
+        } else if constexpr (std::is_same_v<T, DeregisterShardsResponse>) {
+          HandleDeregisterShardsResponse(msg);
         }
       },
       message);
@@ -547,26 +549,47 @@ void NodeAgent::Handler::HandleDeregisterShardsRequest(
   LOG_INFO("NodeAgent received DeregisterShardsRequest from client {}",
            client_identity);
 
-  // Clean up local state for each shard
-  for (const auto& [tensor_name, shard_ids] : request.shards_by_tensor) {
-    for (const auto& shard_id : shard_ids) {
-      shard_id_to_tensor_.erase(shard_id);
-      tensor_shard_metadata_map_.erase(shard_id);
+  // Track client identity so we can route the async response back
+  request_router_.TrackRequest(request.request_id, client_identity);
 
-      LOG_DEBUG("Cleaned up shard {} from tensor '{}'", shard_id, tensor_name);
+  // Store the shards for later cleanup when the Coordinator responds
+  pending_deregistration_shards_.emplace(request.request_id,
+                                         request.shards_by_tensor);
+
+  Comm::Send<NodeAgentRequest>(async_socket_, request);
+}
+
+void NodeAgent::Handler::HandleDeregisterShardsResponse(
+    const DeregisterShardsResponse& response) {
+  // Clean up local state now that the Coordinator has confirmed all pending
+  // copies are complete and the shards are deregistered
+  auto it = pending_deregistration_shards_.find(response.request_id);
+  if (it != pending_deregistration_shards_.end()) {
+    for (const auto& [tensor_name, shard_ids] : it->second) {
+      for (const auto& shard_id : shard_ids) {
+        shard_id_to_tensor_.erase(shard_id);
+        tensor_shard_metadata_map_.erase(shard_id);
+
+        LOG_DEBUG("Cleaned up shard {} from tensor '{}'", shard_id,
+                  tensor_name);
+      }
     }
+    pending_deregistration_shards_.erase(it);
   }
 
-  // Forward to coordinator via sync REQ socket
-  Comm::Send<NodeAgentRequest>(sync_socket_, request);
-  auto coordinator_response = Comm::Recv<CoordinatorMessage>(sync_socket_);
-
-  const auto& resp = std::get<DeregisterShardsResponse>(coordinator_response);
-
-  // Send response to client
-  DeregisterShardsResponse client_response(resp.request_id, resp.error_code);
-  Comm::Send<DeregisterShardsResponse>(client_socket_, client_identity,
-                                       client_response);
+  // Route response back to the client that initiated the deregistration
+  auto client_identity = request_router_.ClaimIdentity(response.request_id);
+  if (client_identity.has_value()) {
+    DeregisterShardsResponse client_response(response.request_id,
+                                             response.error_code);
+    Comm::Send<DeregisterShardsResponse>(client_socket_, *client_identity,
+                                         client_response);
+  } else {
+    LOG_WARNING(
+        "Received DeregisterShardsResponse for unknown request_id: {}, "
+        "ignoring",
+        response.request_id);
+  }
 }
 
 //==============================================================================
