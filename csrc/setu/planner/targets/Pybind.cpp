@@ -1,6 +1,6 @@
 //==============================================================================
-// Copyright 2025 Vajra Team; Georgia Institute of Technology; Microsoft
-// Corporation
+// Copyright (c) 2025 Vajra Team; Georgia Institute of Technology; Microsoft
+// Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,34 +14,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "metastore/datatypes/Pybind.h"
-
+#include "planner/targets/Pybind.h"
+//==============================================================================
 #include "commons/Logging.h"
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
-#include "coordinator/Coordinator.h"
-#include "planner/Pybind.h"
 //==============================================================================
-namespace setu::coordinator {
+#include "planner/targets/backend.h"
+#include "planner/targets/nccl.h"
 //==============================================================================
-using setu::planner::PlannerPtr;
+namespace setu::planner::targets {
 //==============================================================================
-void InitCoordinatorPybindClass(py::module_& m) {
-  py::class_<Coordinator, std::shared_ptr<Coordinator>>(m, "Coordinator")
-      .def(py::init<std::size_t, PlannerPtr>(), py::arg("port"),
-           py::arg("planner"),
-           "Create a Coordinator with specified port and planner")
-      .def("start", &Coordinator::Start, "Start the Coordinator loops")
-      .def("stop", &Coordinator::Stop, "Stop the Coordinator loops");
-}
-//==============================================================================
-}  // namespace setu::coordinator
-//==============================================================================
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  setu::commons::Logger::InitializeLogLevel();
+void InitTargetsPybind(py::module_& m) {
+  py::class_<Backend, std::shared_ptr<Backend>>(m, "Backend");
 
-  setu::metastore::datatypes::InitDatatypesPybindSubmodule(m);
-  setu::planner::InitPlannerPybind(m);
-  setu::coordinator::InitCoordinatorPybindClass(m);
+  py::class_<NCCL, Backend, std::shared_ptr<NCCL>>(m, "NCCLBackend")
+      .def(py::init<>(), "Create an NCCL backend");
 }
+//==============================================================================
+}  // namespace setu::planner::targets
 //==============================================================================

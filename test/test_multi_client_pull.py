@@ -22,9 +22,10 @@ os.environ["SETU_LOG_LEVEL"] = "DEBUG"
 def _run_coordinator(port: int, ready_event, stop_event):
     """Run the Coordinator in a separate process."""
     print(f"[Coordinator] Starting on port {port}...", flush=True)
-    from setu._coordinator import Coordinator
+    from setu._coordinator import Coordinator, NCCLBackend, Planner
 
-    coordinator = Coordinator(port)
+    planner = Planner(NCCLBackend())
+    coordinator = Coordinator(port, planner)
     coordinator.start()
     print(f"[Coordinator] Started successfully", flush=True)
     ready_event.set()

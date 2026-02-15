@@ -19,9 +19,10 @@ def _run_coordinator(
     stop_event,
 ):
     """Run the Coordinator in a separate process."""
-    from setu._coordinator import Coordinator
+    from setu._coordinator import Coordinator, NCCLBackend, Planner
 
-    coordinator = Coordinator(port)
+    planner = Planner(NCCLBackend())
+    coordinator = Coordinator(port, planner)
     coordinator.start()
     ready_event.set()
 

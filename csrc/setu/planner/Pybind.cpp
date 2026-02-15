@@ -21,7 +21,9 @@
 #include "commons/TorchCommon.h"
 #include "commons/utils/Pybind.h"
 //==============================================================================
+#include "planner/Planner.h"
 #include "planner/ir/llc/Pybind.h"
+#include "planner/targets/Pybind.h"
 #include "setu/planner/Participant.h"
 //==============================================================================
 namespace setu::planner {
@@ -47,7 +49,17 @@ void InitParticipantPybind(py::module_& m) {
       });
 }
 //==============================================================================
-void InitPlannerPybind(py::module_& m) { InitParticipantPybind(m); }
+void InitPlannerClassPybind(py::module_& m) {
+  py::class_<Planner, PlannerPtr>(m, "Planner")
+      .def(py::init<std::shared_ptr<targets::Backend>>(), py::arg("backend"),
+           "Create a Planner with the given backend");
+}
+//==============================================================================
+void InitPlannerPybind(py::module_& m) {
+  InitParticipantPybind(m);
+  targets::InitTargetsPybind(m);
+  InitPlannerClassPybind(m);
+}
 //==============================================================================
 }  // namespace setu::planner
 //==============================================================================

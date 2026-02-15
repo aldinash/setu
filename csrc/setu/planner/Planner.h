@@ -31,12 +31,14 @@ using setu::metastore::MetaStore;
 
 class Planner {
  public:
-  explicit Planner(std::unique_ptr<targets::Backend> backend);
+  explicit Planner(std::shared_ptr<targets::Backend> backend);
   [[nodiscard]] Plan Compile(CopySpec& spec, MetaStore& metastore);
 
  private:
-  std::unique_ptr<targets::Backend> backend_;
+  std::shared_ptr<targets::Backend> backend_;
 };
+
+using PlannerPtr = std::shared_ptr<Planner>;
 
 //==============================================================================
 }  // namespace setu::planner

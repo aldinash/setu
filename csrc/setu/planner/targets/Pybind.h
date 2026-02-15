@@ -14,23 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/Planner.h"
+#pragma once
 //==============================================================================
-#include "commons/Logging.h"
-#include "planner/passes/CopySpecToCIR.h"
+#include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 //==============================================================================
-namespace setu::planner {
+namespace setu::planner::targets {
 //==============================================================================
-Planner::Planner(std::shared_ptr<targets::Backend> backend)
-    : backend_(std::move(backend)) {
-  ASSERT_VALID_POINTER_ARGUMENT(backend_);
-}
+void InitTargetsPybind(py::module_& m);
 //==============================================================================
-Plan Planner::Compile(CopySpec& spec, MetaStore& metastore) {
-  auto cir = planner::passes::CopySpecToCIR::Run(spec, metastore);
-  auto plan = backend_->Run(cir);
-  return plan;
-}
-//==============================================================================
-}  // namespace setu::planner
+}  // namespace setu::planner::targets
 //==============================================================================
