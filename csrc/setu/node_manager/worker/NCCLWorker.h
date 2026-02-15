@@ -45,6 +45,7 @@ using setu::planner::ir::llc::Instruction;
 using setu::planner::ir::llc::Program;
 using setu::planner::ir::llc::Receive;
 using setu::planner::ir::llc::Send;
+using setu::planner::ir::llc::Barrier;
 using setu::planner::ir::llc::UseComm;
 //==============================================================================
 
