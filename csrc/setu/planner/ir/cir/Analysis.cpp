@@ -190,6 +190,59 @@ RegisterAllocation RegisterAllocation::Build(
   return result;
 }
 
+// ========================= CopyDepthAnalysis ================================
+
+CopyDepthAnalysis CopyDepthAnalysis::Build(const Program& program) {
+  CopyDepthAnalysis result;
+  result.depth.resize(program.NumOperations());
+  result.max_depth = 0;
+
+  for (std::uint32_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
+    const auto& op = program.Operations()[op_idx];
+    if (op.Type() != OpType::kCopy) {
+      continue;
+    }
+
+    const auto& copy_op = std::get<CopyOp>(op.op);
+
+    // Trace the src operand back through SliceOp/ConsumeOp chains to find
+    // the root defining operation.
+    Value current = copy_op.src;
+    while (true) {
+      const auto& def_op = program.GetDefiningOp(current);
+      if (def_op.Type() == OpType::kSlice) {
+        current = std::get<SliceOp>(def_op.op).src;
+      } else if (def_op.Type() == OpType::kConsume) {
+        current = std::get<ConsumeOp>(def_op.op).src;
+      } else {
+        break;
+      }
+    }
+
+    // current now points to a value defined by the root op.
+    // Check if the root is a CopyOp (meaning this is a relay chain).
+    const auto& root_op = program.GetDefiningOp(current);
+    const auto& root_info = program.GetValueInfo(current);
+    auto root_op_idx = root_info.def_op_index;
+
+    if (root_op.Type() == OpType::kCopy) {
+      ASSERT_VALID_RUNTIME(
+          result.depth[root_op_idx].has_value(),
+          "CopyOp at index {} depends on CopyOp at index {} which has no "
+          "depth (topological order violation?)",
+          op_idx, root_op_idx);
+      result.depth[op_idx] = result.depth[root_op_idx].value() + 1;
+    } else {
+      result.depth[op_idx] = 0;
+    }
+
+    result.max_depth =
+        std::max(result.max_depth, result.depth[op_idx].value());
+  }
+
+  return result;
+}
+
 //==============================================================================
 }  // namespace setu::planner::ir::cir
 //==============================================================================
