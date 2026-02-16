@@ -81,6 +81,11 @@ void Instruction::Embellish(
       instr);
 }
 
+ShardAccessMap Instruction::GetShardAccess() const {
+  return std::visit([](const auto& inst) { return inst.GetShardAccess(); },
+                    instr);
+}
+
 //==============================================================================
 }  // namespace setu::ir
 //==============================================================================

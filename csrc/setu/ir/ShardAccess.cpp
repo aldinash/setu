@@ -14,37 +14,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "setu/ir/instructions/InitComm.h"
-//==============================================================================
-#include "setu/planner/Planner.h"
+#include "ir/ShardAccess.h"
 //==============================================================================
 namespace setu::ir {
 //==============================================================================
 
-std::string InitComm::ToString() const {
-  std::string hex;
-  for (std::size_t i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
-    hex +=
-        std::format("{:02x}", static_cast<std::uint8_t>(comm_id.internal[i]));
+ShardAccessMap GetShardAccess(const Program& program) {
+  ShardAccessMap access_map;
+
+  for (const auto& instruction : program) {
+    for (const auto& [shard_id, mode] : instruction.GetShardAccess()) {
+      if (mode == ShardAccessMode::kWrite) {
+        // Write always wins (override any existing read)
+        access_map[shard_id] = ShardAccessMode::kWrite;
+      } else {
+        // Read: only insert if not already present (don't downgrade write)
+        access_map.try_emplace(shard_id, ShardAccessMode::kRead);
+      }
+    }
   }
-  return std::format("InitComm(comm_id={}, participant_to_rank={})", hex,
-                     participant_to_rank);
-}
 
-void InitComm::Serialize(BinaryBuffer& buffer) const {
-  BinaryWriter writer(buffer);
-  writer.WriteFields(comm_id, participant_to_rank);
+  return access_map;
 }
-
-InitComm InitComm::Deserialize(const BinaryRange& range) {
-  BinaryReader reader(range);
-  auto [comm_id, participant_to_rank] =
-      reader.ReadFields<ncclUniqueId,
-                        std::unordered_map<Participant, DeviceRank>>();
-  return InitComm(comm_id, participant_to_rank);
-}
-
-ShardAccessMap InitComm::GetShardAccess() const { return {}; }
 
 //==============================================================================
 }  // namespace setu::ir

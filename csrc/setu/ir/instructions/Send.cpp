@@ -49,6 +49,12 @@ void Send::Embellish(
   src_ptr = resolver(src_shard);
 }
 
+ShardAccessMap Send::GetShardAccess() const {
+  ShardAccessMap access_map;
+  access_map.try_emplace(src_shard.shard_id, ShardAccessMode::kRead);
+  return access_map;
+}
+
 //==============================================================================
 }  // namespace setu::ir
 //==============================================================================

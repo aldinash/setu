@@ -14,37 +14,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "setu/ir/instructions/InitComm.h"
+#pragma once
 //==============================================================================
-#include "setu/planner/Planner.h"
+#include "ir/Instruction.h"
 //==============================================================================
 namespace setu::ir {
 //==============================================================================
 
-std::string InitComm::ToString() const {
-  std::string hex;
-  for (std::size_t i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
-    hex +=
-        std::format("{:02x}", static_cast<std::uint8_t>(comm_id.internal[i]));
-  }
-  return std::format("InitComm(comm_id={}, participant_to_rank={})", hex,
-                     participant_to_rank);
-}
-
-void InitComm::Serialize(BinaryBuffer& buffer) const {
-  BinaryWriter writer(buffer);
-  writer.WriteFields(comm_id, participant_to_rank);
-}
-
-InitComm InitComm::Deserialize(const BinaryRange& range) {
-  BinaryReader reader(range);
-  auto [comm_id, participant_to_rank] =
-      reader.ReadFields<ncclUniqueId,
-                        std::unordered_map<Participant, DeviceRank>>();
-  return InitComm(comm_id, participant_to_rank);
-}
-
-ShardAccessMap InitComm::GetShardAccess() const { return {}; }
+/**
+ * @brief Extract merged, sorted shard access requirements for an entire
+ * program.
+ *
+ * Scans all instructions via Instruction::GetShardAccess(), merges access
+ * modes per shard (write takes precedence over read for the same shard),
+ * and returns results sorted by ShardId for consistent lock ordering.
+ *
+ * @param program The IR program to analyze
+ * @return Sorted map of shard IDs to access modes, deduplicated
+ */
+[[nodiscard]] ShardAccessMap GetShardAccess(const Program& program);
 
 //==============================================================================
 }  // namespace setu::ir

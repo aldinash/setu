@@ -55,6 +55,14 @@ void Copy::Embellish(
   dst_ptr = resolver(dst_shard);
 }
 
+ShardAccessMap Copy::GetShardAccess() const {
+  ShardAccessMap access_map;
+  // Write on dst always wins; read on src only if not already written
+  access_map[dst_shard.shard_id] = ShardAccessMode::kWrite;
+  access_map.try_emplace(src_shard.shard_id, ShardAccessMode::kRead);
+  return access_map;
+}
+
 //==============================================================================
 }  // namespace setu::ir
 //==============================================================================

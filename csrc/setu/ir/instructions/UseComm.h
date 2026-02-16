@@ -21,6 +21,7 @@
 #include "setu/commons/StdCommon.h"
 #include "setu/commons/Types.h"
 #include "setu/commons/utils/Serialization.h"
+#include "setu/ir/ShardAccessTypes.h"
 //==============================================================================
 namespace setu::ir {
 //==============================================================================
@@ -44,6 +45,9 @@ struct UseComm {
   void Serialize(BinaryBuffer& buffer) const;
 
   static UseComm Deserialize(const BinaryRange& range);
+
+  /// @brief Extract shard access requirements for this instruction.
+  [[nodiscard]] ShardAccessMap GetShardAccess() const;
 
   ncclUniqueId comm_id;
 };

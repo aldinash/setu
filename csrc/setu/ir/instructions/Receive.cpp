@@ -49,6 +49,12 @@ void Receive::Embellish(
   dst_ptr = resolver(dst_shard);
 }
 
+ShardAccessMap Receive::GetShardAccess() const {
+  ShardAccessMap access_map;
+  access_map[dst_shard.shard_id] = ShardAccessMode::kWrite;
+  return access_map;
+}
+
 //==============================================================================
 }  // namespace setu::ir
 //==============================================================================

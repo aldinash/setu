@@ -65,6 +65,10 @@ struct Instruction {
 
   void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
 
+  /// @brief Extract shard access requirements for this instruction.
+  /// @return Map of shard IDs to access modes (empty for InitComm/UseComm)
+  [[nodiscard]] ShardAccessMap GetShardAccess() const;
+
   InstructionVariant instr;
 };
 
