@@ -174,11 +174,11 @@ RegisterAllocation RegisterAllocation::Build(
       break;
     }
 
-    ASSERT_VALID_RUNTIME(
-        assigned_slot.has_value(),
-        "Register allocation failed for {} on device {}: "
-        "pool exhausted ({} registers)",
-        val.ToString(), device.ToString(), set_it->second.NumRegisters());
+    ASSERT_VALID_RUNTIME(assigned_slot.has_value(),
+                         "Register allocation failed for {} on device {}: "
+                         "pool exhausted ({} registers)",
+                         val.ToString(), device.ToString(),
+                         set_it->second.NumRegisters());
 
     result.allocation[val.id].emplace(
         PhysicalRegister{.device = device, .register_index = *assigned_slot});
