@@ -136,8 +136,8 @@ class Coordinator {
     CoordinatorMessage message;
   };
 
-  /// @brief Task for the planner containing CopyOperationId, CopySpec, and shared
-  /// state
+  /// @brief Task for the planner containing CopyOperationId, CopySpec, and
+  /// shared state
   struct PlannerTask {
     CopyOperationId copy_op_id;
     CopySpec copy_spec;
@@ -240,8 +240,7 @@ class Coordinator {
   //============================================================================
   struct Executor {
     Executor(Queue<PlannerTask>& planner_queue,
-             Queue<OutboxMessage>& outbox_queue,
-             MetaStore& metastore,
+             Queue<OutboxMessage>& outbox_queue, MetaStore& metastore,
              Planner& planner);
 
     void Start();

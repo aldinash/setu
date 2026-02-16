@@ -25,11 +25,11 @@
 namespace setu::planner::topo {
 //==============================================================================
 void InitTopoPybind(py::module_& m) {
-  py::class_<Link>(m, "Link")
-      .def(py::init<float, float, std::optional<std::string>>(),
-           py::arg("latency_us"), py::arg("bandwidth_gbps"),
-           py::arg("tag") = std::nullopt,
-           "Create a link with latency and bandwidth");
+  py::class_<Link>(m, "Link").def(
+      py::init<float, float, std::optional<std::string>>(),
+      py::arg("latency_us"), py::arg("bandwidth_gbps"),
+      py::arg("tag") = std::nullopt,
+      "Create a link with latency and bandwidth");
 
   py::class_<Topology, TopologyPtr>(m, "Topology")
       .def(py::init<>(), "Create an empty topology")

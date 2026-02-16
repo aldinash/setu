@@ -41,10 +41,9 @@ cir::Program ShortestPathRouting::Run(const cir::Program& program) {
             auto dt = src_val_info.dtype;
             auto element_size = torch::elementSize(dt);
             auto tmp_buf_size_elements = kRegisterSize / element_size;
-            ASSERT_VALID_RUNTIME(
-                tmp_buf_size_elements > 0,
-                "Element size {} exceeds register size {}", element_size,
-                kRegisterSize);
+            ASSERT_VALID_RUNTIME(tmp_buf_size_elements > 0,
+                                 "Element size {} exceeds register size {}",
+                                 element_size, kRegisterSize);
 
             // Allocate fixed-size temporary registers at intermediate hops
             std::vector<cir::Value> tmps;
@@ -64,8 +63,8 @@ cir::Program ShortestPathRouting::Run(const cir::Program& program) {
               auto chunk_size =
                   std::min(tmp_buf_size_elements, num_elements - pp_start);
 
-              auto src_chunk = rw.Target().EmitSlice(
-                  src, cir::Slice{pp_start, chunk_size});
+              auto src_chunk =
+                  rw.Target().EmitSlice(src, cir::Slice{pp_start, chunk_size});
               auto dst_chunk = rw.Target().EmitSlice(
                   dst_in, cir::Slice{pp_start, chunk_size});
 
@@ -73,11 +72,10 @@ cir::Program ShortestPathRouting::Run(const cir::Program& program) {
               for (std::size_t j = 0; j < tmps.size(); ++j) {
                 // Slice tmp to match chunk size when payload doesn't fill
                 // the full register
-                auto tmp_dst =
-                    (chunk_size < tmp_buf_size_elements)
-                        ? rw.Target().EmitSlice(
-                              tmps[j], cir::Slice{0, chunk_size})
-                        : tmps[j];
+                auto tmp_dst = (chunk_size < tmp_buf_size_elements)
+                                   ? rw.Target().EmitSlice(
+                                         tmps[j], cir::Slice{0, chunk_size})
+                                   : tmps[j];
                 auto tmp_out = rw.Target().EmitCopy(prev, tmp_dst);
                 prev = tmp_out;
               }
@@ -86,7 +84,7 @@ cir::Program ShortestPathRouting::Run(const cir::Program& program) {
 
             auto new_dst_out = rw.Target().EmitConsume(dst_in);
             rw.MapValue(concrete.dst_out, new_dst_out);
-            
+
             return;
           }
 
