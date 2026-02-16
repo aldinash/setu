@@ -6,6 +6,14 @@ import uuid
 
 import torch
 
+from setu._commons.datatypes import (
+    CopySpec,
+    Device,
+    TensorDim,
+    TensorDimSpec,
+    TensorSelection,
+    TensorShardSpec,
+)
 from setu._coordinator import (
     Link,
     MetaStore,
@@ -16,14 +24,6 @@ from setu._coordinator import (
     RegisterSet,
     ShortestPathRouting,
     Topology,
-)
-from setu._commons.datatypes import (
-    CopySpec,
-    Device,
-    TensorDim,
-    TensorDimSpec,
-    TensorSelection,
-    TensorShardSpec,
 )
 
 
@@ -117,9 +117,7 @@ def test_nccl_planner_shortest_path_routing():
     src_selection = TensorSelection("tensor_src", dim_map)
     dst_selection = TensorSelection("tensor_dst", dim_map)
 
-    copy_spec = CopySpec(
-        "tensor_src", "tensor_dst", src_selection, dst_selection
-    )
+    copy_spec = CopySpec("tensor_src", "tensor_dst", src_selection, dst_selection)
 
     plan = planner.compile(copy_spec, metastore)
 

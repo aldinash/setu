@@ -40,9 +40,8 @@ enum class OpType : std::uint8_t {
   kConsume = 7,
 };
 
-using OperationVariant =
-    std::variant<ViewOp, AllocTmpOp, CopyOp, PackOp, UnpackOp, SliceOp,
-                 ConsumeOp>;
+using OperationVariant = std::variant<ViewOp, AllocTmpOp, CopyOp, PackOp,
+                                      UnpackOp, SliceOp, ConsumeOp>;
 
 /// Wrapper around OperationVariant, providing uniform access to defs/uses
 /// and string representation. Follows the same variant+wrapper pattern

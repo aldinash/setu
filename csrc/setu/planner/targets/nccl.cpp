@@ -141,8 +141,8 @@ Plan NCCL::Run(const cir::Program& program) {
             ViewInfo info{
                 .participant = src_info.participant,
                 .buffer_ref = src_info.buffer_ref,
-                .offset_bytes =
-                    src_info.offset_bytes + concrete.slice.offset * element_size,
+                .offset_bytes = src_info.offset_bytes +
+                                concrete.slice.offset * element_size,
                 .count = concrete.slice.size,
                 .dtype = src_info.dtype,
             };
@@ -245,13 +245,13 @@ Plan NCCL::Run(const cir::Program& program) {
     }
 
     if (c.src_part == c.dst_part) {
-      programs[c.src_part].emplace_back(
-          llc::Copy(c.src_ref, c.src_offset_bytes, c.dst_ref,
-                    c.dst_offset_bytes, c.count, c.dtype));
+      programs[c.src_part].emplace_back(llc::Copy(c.src_ref, c.src_offset_bytes,
+                                                  c.dst_ref, c.dst_offset_bytes,
+                                                  c.count, c.dtype));
     } else {
-      programs[c.src_part].emplace_back(llc::Send(
-          c.src_ref, c.src_offset_bytes, c.count, c.dtype,
-          entry.ranks.at(c.dst_part)));
+      programs[c.src_part].emplace_back(llc::Send(c.src_ref, c.src_offset_bytes,
+                                                  c.count, c.dtype,
+                                                  entry.ranks.at(c.dst_part)));
       programs[c.dst_part].emplace_back(
           llc::Receive(c.dst_ref, c.dst_offset_bytes, c.count, c.dtype,
                        entry.ranks.at(c.src_part)));

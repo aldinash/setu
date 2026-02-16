@@ -227,8 +227,7 @@ def _run_dest_client(
         client.wait_for_shard_allocation(shard_ref.shard_id)
 
         dim_map = {
-            name: TensorDim(name, global_size)
-            for name, global_size, _, _ in dims_data
+            name: TensorDim(name, global_size) for name, global_size, _, _ in dims_data
         }
         src_selection = TensorSelection(src_tensor_name, dim_map)
         dst_selection = TensorSelection(dst_tensor_name, dim_map)
@@ -379,8 +378,12 @@ def test_shortest_path_optim_e2e():
         node0_proc = ctx.Process(
             target=_run_node_agent,
             args=(
-                n0_id, node0_port, coordinator_endpoint,
-                n0_device_indices, node0_ready, stop_event,
+                n0_id,
+                node0_port,
+                coordinator_endpoint,
+                n0_device_indices,
+                node0_ready,
+                stop_event,
             ),
         )
         node0_proc.start()
@@ -389,8 +392,12 @@ def test_shortest_path_optim_e2e():
         node1_proc = ctx.Process(
             target=_run_node_agent,
             args=(
-                n1_id, node1_port, coordinator_endpoint,
-                n1_device_indices, node1_ready, stop_event,
+                n1_id,
+                node1_port,
+                coordinator_endpoint,
+                n1_device_indices,
+                node1_ready,
+                stop_event,
             ),
         )
         node1_proc.start()

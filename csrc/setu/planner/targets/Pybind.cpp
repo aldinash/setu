@@ -32,17 +32,15 @@ void InitTargetsPybind(py::module_& m) {
 
   py::class_<RegisterSet>(m, "RegisterSet")
       .def(py::init<>(), "Create an empty RegisterSet")
-      .def_static("uniform", &RegisterSet::Uniform,
-                  py::arg("num_registers"), py::arg("size_bytes"),
+      .def_static("uniform", &RegisterSet::Uniform, py::arg("num_registers"),
+                  py::arg("size_bytes"),
                   "Create a uniform RegisterSet where all registers share the "
                   "same size")
-      .def("add_register", &RegisterSet::AddRegister,
-           py::arg("size_bytes"),
+      .def("add_register", &RegisterSet::AddRegister, py::arg("size_bytes"),
            "Add a register with the given size; returns the assigned index")
       .def("num_registers", &RegisterSet::NumRegisters,
            "Number of registers in the set")
-      .def("empty", &RegisterSet::Empty,
-           "Whether this register set is empty");
+      .def("empty", &RegisterSet::Empty, "Whether this register set is empty");
 
   py::class_<Backend, std::shared_ptr<Backend>>(m, "Backend");
 

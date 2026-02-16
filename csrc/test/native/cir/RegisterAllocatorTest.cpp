@@ -289,9 +289,8 @@ TEST(CIRRegisterAllocatorTest, PoolExhausted_Asserts) {
   std::unordered_map<Device, RegisterSet> register_sets = {
       {dev, RegisterSet::Uniform(1, 1024)}};
 
-  EXPECT_THROW(
-      RegisterAllocation::Build(program, liveness, register_sets),
-      std::runtime_error)
+  EXPECT_THROW(RegisterAllocation::Build(program, liveness, register_sets),
+               std::runtime_error)
       << "Should throw when pool cannot satisfy simultaneous live registers";
 }
 

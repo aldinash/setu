@@ -46,9 +46,8 @@ namespace cir = setu::planner::ir::cir;
 ///
 /// Unsupported (will assert): pack, unpack
 struct NCCL : public Backend {
-  explicit NCCL(
-      std::unordered_map<cir::Device, setu::planner::RegisterSet>
-          register_sets = {});
+  explicit NCCL(std::unordered_map<cir::Device, setu::planner::RegisterSet>
+                    register_sets = {});
 
   [[nodiscard]] Plan Run(const cir::Program& program /*[in]*/) override;
 

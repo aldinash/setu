@@ -48,13 +48,15 @@ constexpr std::int32_t kPollTimeoutMs = 100;
 // Coordinator Implementation
 //==============================================================================
 Coordinator::Coordinator(std::size_t port, PlannerPtr planner)
-    : port_(port), zmq_context_(std::make_shared<zmq::context_t>()), planner_(planner) {
+    : port_(port),
+      zmq_context_(std::make_shared<zmq::context_t>()),
+      planner_(planner) {
   gateway_ = std::make_unique<Gateway>(zmq_context_, port_, inbox_queue_,
                                        outbox_queue_);
   handler_ = std::make_unique<Handler>(inbox_queue_, outbox_queue_, metastore_,
                                        planner_queue_);
-  executor_ =
-      std::make_unique<Executor>(planner_queue_, outbox_queue_, metastore_, *planner_);
+  executor_ = std::make_unique<Executor>(planner_queue_, outbox_queue_,
+                                         metastore_, *planner_);
 }
 
 Coordinator::~Coordinator() {
@@ -430,8 +432,7 @@ void Coordinator::Handler::HandleExecuteResponse(
 //==============================================================================
 Coordinator::Executor::Executor(Queue<PlannerTask>& planner_queue,
                                 Queue<OutboxMessage>& outbox_queue,
-                                MetaStore& metastore,
-                                Planner& planner)
+                                MetaStore& metastore, Planner& planner)
     : planner_queue_(planner_queue),
       outbox_queue_(outbox_queue),
       metastore_(metastore),
@@ -478,7 +479,8 @@ void Coordinator::Executor::Loop() {
       }
 
       // Set expected responses
-      // memory order release so Handler thread can pick it up (using memory order aqcuire)
+      // memory order release so Handler thread can pick it up (using memory
+      // order aqcuire)
       task.state->expected_responses.store(fragments.size(),
                                            std::memory_order_release);
       LOG_DEBUG("Executor: Set expected_responses={} for copy_op_id={}",
