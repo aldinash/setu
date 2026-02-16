@@ -27,7 +27,11 @@
 //==============================================================================
 #include "planner/ir/llc/Instruction.h"
 #include "planner/ir/llc/ShardRef.h"
+<<<<<<< HEAD
 #include "planner/Participant.h"
+=======
+#include "setu/planner/Planner.h"
+>>>>>>> users/elton/cir_refactor
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
