@@ -23,8 +23,7 @@ namespace setu::planner {
 //==============================================================================
 Planner::Planner(targets::BackendPtr backend,
                  passes::PassManagerPtr pass_manager)
-    : backend_(std::move(backend)),
-      pass_manager_(std::move(pass_manager)) {
+    : backend_(std::move(backend)), pass_manager_(std::move(pass_manager)) {
   ASSERT_VALID_POINTER_ARGUMENT(backend_);
 }
 //==============================================================================

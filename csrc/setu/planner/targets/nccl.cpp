@@ -138,8 +138,8 @@ Plan NCCL::Run(const cir::Program& program) {
             ViewInfo info{
                 .participant = src_info.participant,
                 .buffer_ref = src_info.buffer_ref,
-                .offset_bytes =
-                    src_info.offset_bytes + concrete.slice.offset * element_size,
+                .offset_bytes = src_info.offset_bytes +
+                                concrete.slice.offset * element_size,
                 .count = concrete.slice.size,
                 .dtype = src_info.dtype,
             };

@@ -21,9 +21,9 @@
 #include "commons/TorchCommon.h"
 #include "commons/utils/Pybind.h"
 //==============================================================================
+#include "planner/Participant.h"
 #include "planner/Plan.h"
 #include "planner/Planner.h"
-#include "planner/Participant.h"
 #include "planner/ir/llc/Pybind.h"
 #include "planner/passes/Pybind.h"
 #include "planner/targets/Pybind.h"
