@@ -6,12 +6,6 @@ import uuid
 
 import torch
 
-from setu._coordinator import (
-    NCCLBackend,
-    PassManager,
-    Planner,
-    MetaStore,
-)
 from setu._commons.datatypes import (
     CopySpec,
     Device,
@@ -19,6 +13,12 @@ from setu._commons.datatypes import (
     TensorDimSpec,
     TensorSelection,
     TensorShardSpec,
+)
+from setu._coordinator import (
+    MetaStore,
+    NCCLBackend,
+    PassManager,
+    Planner,
 )
 
 

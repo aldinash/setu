@@ -25,9 +25,7 @@ void Barrier::Serialize(BinaryBuffer& /*buffer*/) const {
   // No fields to serialize — the type tag is written by Instruction::Serialize
 }
 
-Barrier Barrier::Deserialize(const BinaryRange& /*range*/) {
-  return Barrier();
-}
+Barrier Barrier::Deserialize(const BinaryRange& /*range*/) { return Barrier(); }
 
 //==============================================================================
 }  // namespace setu::planner::ir::llc

@@ -32,8 +32,7 @@ using setu::metastore::MetaStore;
 
 class Planner {
  public:
-  Planner(targets::BackendPtr backend,
-          passes::PassManagerPtr pass_manager);
+  Planner(targets::BackendPtr backend, passes::PassManagerPtr pass_manager);
   [[nodiscard]] Plan Compile(CopySpec& spec, MetaStore& metastore);
 
  private:
