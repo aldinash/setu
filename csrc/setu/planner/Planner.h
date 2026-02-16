@@ -19,27 +19,15 @@
 #include "commons/StdCommon.h"
 //==============================================================================
 #include "commons/datatypes/CopySpec.h"
-<<<<<<< HEAD
 #include "metastore/MetaStore.h"
 #include "planner/Plan.h"
 #include "planner/passes/PassManager.h"
 #include "planner/targets/backend.h"
-=======
-#include "commons/utils/Serialization.h"
-#include "metastore/MetaStore.h"
-#include "planner/Participant.h"
-#include "planner/ir/llc/Instruction.h"
->>>>>>> users/elton/cir_refactor
 //==============================================================================
 namespace setu::planner {
 //==============================================================================
 
 using setu::commons::datatypes::CopySpec;
-<<<<<<< HEAD
-=======
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
->>>>>>> users/elton/cir_refactor
 using setu::metastore::MetaStore;
 using setu::planner::ir::llc::Program;
 
