@@ -94,8 +94,8 @@ target_sources(_kernels_common PRIVATE $<TARGET_OBJECTS:setu_kernels_cuda_object
                                        $<TARGET_OBJECTS:setu_common_objects>)
 setu_target_config(_kernels_common FALSE)
 
-# Define specific targets using object libraries
-# We expose _commons, _client, _node_agent, and _coordinator as Python extensions
+# Define specific targets using object libraries We expose _commons, _client, _node_agent, and
+# _coordinator as Python extensions
 
 file(GLOB_RECURSE KERNELS_SRC "csrc/setu/kernels/*.cpp")
 define_setu_extension(_kernels "${KERNELS_SRC}" "setu_common_objects" "_kernels_common")
@@ -108,7 +108,8 @@ file(GLOB_RECURSE METASTORE_SRC "csrc/setu/metastore/*.cpp")
 define_setu_static(_metastore_static "${METASTORE_SRC}" "setu_common_objects" "")
 
 file(GLOB_RECURSE PLANNER_SRC "csrc/setu/planner/*.cpp")
-define_setu_static(_planner_static "${PLANNER_SRC}" "setu_common_objects" "${NCCL_LIBRARY};_metastore_static")
+define_setu_static(_planner_static "${PLANNER_SRC}" "setu_common_objects"
+                   "${NCCL_LIBRARY};_metastore_static")
 
 file(GLOB_RECURSE MESSAGES_SRC "csrc/setu/messaging/*.cpp")
 define_setu_static(_messaging_static "${MESSAGES_SRC}" "setu_common_objects" "_planner_static")
