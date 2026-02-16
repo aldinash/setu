@@ -103,13 +103,6 @@ RegisterAllocation RegisterAllocation::Build(
   RegisterAllocation result;
   result.allocation.resize(program.NumValues());
 
-  // Per-device state: track which physical registers are free and when
-  // they become available (sorted by end time)
-  struct SlotState {
-    std::uint32_t register_index;
-    std::uint32_t available_after;  // op index after which slot is free
-  };
-
   // Per-device: priority queue of (available_after, register_index), min-heap
   using SlotQueue =
       std::priority_queue<std::pair<std::uint32_t, std::uint32_t>,
