@@ -19,42 +19,28 @@
 #include "commons/StdCommon.h"
 //==============================================================================
 #include "commons/datatypes/CopySpec.h"
-<<<<<<< HEAD
 #include "metastore/MetaStore.h"
-#include "planner/Plan.h"
-#include "planner/passes/PassManager.h"
-#include "planner/targets/backend.h"
-=======
-#include "commons/utils/Serialization.h"
-#include "metastore/MetaStore.h"
-#include "planner/Participant.h"
-#include "planner/ir/llc/Instruction.h"
->>>>>>> users/elton/cir_refactor
+#include "planner/ir/cir/Program.h"
 //==============================================================================
-namespace setu::planner {
+namespace setu::planner::ir::cir {
 //==============================================================================
 
 using setu::commons::datatypes::CopySpec;
-<<<<<<< HEAD
-=======
-using setu::commons::utils::BinaryReader;
-using setu::commons::utils::BinaryWriter;
->>>>>>> users/elton/cir_refactor
 using setu::metastore::MetaStore;
-using setu::planner::ir::llc::Program;
 
-class Planner {
+/// Lowers a CopySpec into a CIR Program.
+///
+/// Uses a two-pointer walk over source and destination selections to match
+/// buffer regions. For each matched region, emits:
+///   - view() for the src shard slice (element offsets)
+///   - view() for the dst shard slice (element offsets)
+///   - copy() from src view to dst view
+class CIRLowering {
  public:
-  Planner(targets::BackendPtr backend, passes::PassManagerPtr pass_manager);
-  [[nodiscard]] Plan Compile(CopySpec& spec, MetaStore& metastore);
-
- private:
-  targets::BackendPtr backend_;
-  passes::PassManagerPtr pass_manager_;
+  [[nodiscard]] static Program Lower(CopySpec& copy_spec /*[in]*/,
+                                     MetaStore& metastore /*[in]*/);
 };
 
-using PlannerPtr = std::shared_ptr<Planner>;
-
 //==============================================================================
-}  // namespace setu::planner
+}  // namespace setu::planner::ir::cir
 //==============================================================================
