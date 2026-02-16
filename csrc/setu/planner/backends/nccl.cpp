@@ -16,15 +16,20 @@
 //==============================================================================
 #include "planner/backends/nccl.h"
 
-#include "ir/Instruction.h"
 #include "planner/TensorShardRangeView.h"
+#include "planner/ir/llc/Instruction.h"
 //==============================================================================
 #include "commons/Logging.h"
 //==============================================================================
 namespace setu::planner::backends::nccl {
 using setu::commons::DeviceRank;
-using setu::ir::ShardRef;
 using setu::planner::TensorShardRangeView;
+using setu::planner::ir::llc::Copy;
+using setu::planner::ir::llc::InitComm;
+using setu::planner::ir::llc::Receive;
+using setu::planner::ir::llc::Send;
+using setu::planner::ir::llc::ShardRef;
+using setu::planner::ir::llc::UseComm;
 //==============================================================================
 
 // Helper struct to keep track of buffer consumption
@@ -118,11 +123,11 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
     parts.insert(dst_part);
 
     auto src_shard_ref =
-        ir::ShardRef(src.buf.metadata->id, src.buf.metadata->spec.name,
-                     src.buf.metadata->owner);
+        ShardRef(src.buf.metadata->id, src.buf.metadata->spec.name,
+                 src.buf.metadata->owner);
     auto dst_shard_ref =
-        ir::ShardRef(dst.buf.metadata->id, dst.buf.metadata->spec.name,
-                     dst.buf.metadata->owner);
+        ShardRef(dst.buf.metadata->id, dst.buf.metadata->spec.name,
+                 dst.buf.metadata->owner);
     auto dtype = src.buf.metadata->spec.dtype;
 
     copy_ops.emplace_back(CopyOp{.src_part = src_part,
@@ -164,9 +169,9 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
   // Add init/use comm instruction to each participant's program
   for (const auto& part : parts) {
     if (new_comm) {
-      program[part].emplace_back(ir::InitComm(entry.id, entry.ranks));
+      program[part].emplace_back(InitComm(entry.id, entry.ranks));
     } else {
-      program[part].emplace_back(ir::UseComm(entry.id));
+      program[part].emplace_back(UseComm(entry.id));
     }
   }
 
@@ -174,14 +179,13 @@ Plan NCCLPlanner::Compile(CopySpec& copy_spec, MetaStore& metastore) {
     auto [src_part, src_ref, src_offset_bytes, dst_part, dst_ref,
           dst_offset_bytes, to_copy, dtype] = op;
     if (src_part == dst_part) {
-      program[src_part].emplace_back(ir::Copy(src_ref, src_offset_bytes,
-                                              dst_ref, dst_offset_bytes,
-                                              to_copy, dtype));
+      program[src_part].emplace_back(Copy(src_ref, src_offset_bytes, dst_ref,
+                                          dst_offset_bytes, to_copy, dtype));
     } else {
-      program[src_part].emplace_back(ir::Send(
-          src_ref, src_offset_bytes, to_copy, dtype, entry.ranks[dst_part]));
-      program[dst_part].emplace_back(ir::Receive(
-          dst_ref, dst_offset_bytes, to_copy, dtype, entry.ranks[src_part]));
+      program[src_part].emplace_back(Send(src_ref, src_offset_bytes, to_copy,
+                                          dtype, entry.ranks[dst_part]));
+      program[dst_part].emplace_back(Receive(dst_ref, dst_offset_bytes, to_copy,
+                                             dtype, entry.ranks[src_part]));
     }
   }
 

@@ -19,17 +19,17 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 //==============================================================================
-#include "cir/Analysis.h"
-#include "cir/Program.h"
+#include "planner/ir/cir/Analysis.h"
+#include "planner/ir/cir/Program.h"
 //==============================================================================
 namespace setu::test::native {
 //==============================================================================
-using setu::cir::Device;
-using setu::cir::LivenessInfo;
-using setu::cir::Program;
-using setu::cir::RegisterAllocation;
-using setu::cir::Slice;
-using setu::cir::Value;
+using setu::planner::ir::cir::Device;
+using setu::planner::ir::cir::LivenessInfo;
+using setu::planner::ir::cir::Program;
+using setu::planner::ir::cir::RegisterAllocation;
+using setu::planner::ir::cir::Slice;
+using setu::planner::ir::cir::Value;
 //==============================================================================
 namespace {
 //==============================================================================
@@ -48,8 +48,8 @@ Device MakeDevice(boost::uuids::uuid node_id, std::int16_t gpu_index = 0) {
 }
 
 /// Helper to create a ShardRef for view ops
-setu::ir::ShardRef MakeShardRef() {
-  return setu::ir::ShardRef(boost::uuids::nil_uuid());
+setu::planner::ir::llc::ShardRef MakeShardRef() {
+  return setu::planner::ir::llc::ShardRef(boost::uuids::nil_uuid());
 }
 
 //==============================================================================
