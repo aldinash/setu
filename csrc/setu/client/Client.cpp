@@ -104,6 +104,14 @@ void Client::DeregisterShards() {
   ClientRequest request = DeregisterShardsRequest(std::move(shards_by_tensor));
   Comm::Send(request_socket_, request);
 
+  auto ready = Comm::PollForRead({request_socket_}, kDeregisterTimeoutMs);
+  if (ready.empty()) {
+    LOG_WARNING(
+        "Deregister shards timed out after {}ms, proceeding with disconnect",
+        kDeregisterTimeoutMs);
+    return;
+  }
+
   auto response = Comm::Recv<DeregisterShardsResponse>(request_socket_);
 
   LOG_DEBUG("Deregister shards completed with error code: {}",
