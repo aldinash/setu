@@ -132,8 +132,7 @@ void InitTensorDimSpecPybind(py::module_& m) {
 }
 //==============================================================================
 void InitTensorSelectionPybind(py::module_& m) {
-  py::class_<TensorSelection, TensorSelectionPtr>(m, "TensorSelection",
-                                                  py::module_local())
+  py::class_<TensorSelection, TensorSelectionPtr>(m, "TensorSelection")
       .def(py::init<TensorName, TensorDimMap>(), py::arg("name"),
            py::arg("dims"))
       .def(py::init<TensorName, TensorIndicesMap>(), py::arg("name"),
@@ -157,6 +156,10 @@ void InitTensorSelectionPybind(py::module_& m) {
                &TensorSelection::Where, py::const_),
            py::arg("dim_name"), py::arg("slice"),
            "Create new selection with specified slice for a dimension")
+      .def("__eq__", &TensorSelection::operator==, py::arg("other"),
+           "Check equality with another TensorSelection")
+      .def("__ne__", &TensorSelection::operator!=, py::arg("other"),
+           "Check inequality with another TensorSelection")
       .def("__str__", &TensorSelection::ToString)
       .def("__repr__", &TensorSelection::ToString);
 }
