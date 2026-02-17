@@ -26,7 +26,7 @@ Planner::Planner(std::unique_ptr<targets::Backend> backend)
   ASSERT_VALID_POINTER_ARGUMENT(backend_);
 }
 //==============================================================================
-Plan Planner::Compile(CopySpec& spec, MetaStore& metastore) {
+Plan Planner::Compile(const CopySpec& spec, MetaStore& metastore) {
   auto cir = planner::passes::CopySpecToCIR::Run(spec, metastore);
   auto plan = backend_->Run(cir);
   return plan;
