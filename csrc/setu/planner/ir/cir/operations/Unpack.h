@@ -17,55 +17,38 @@
 #pragma once
 //==============================================================================
 #include "commons/StdCommon.h"
-#include "commons/Types.h"
-#include "commons/datatypes/Device.h"
-#include "commons/enums/Enums.h"
-#include "commons/utils/ZmqHelper.h"
-#include "planner/ir/llc/Instruction.h"
 //==============================================================================
-namespace setu::node_manager::worker {
+#include "planner/ir/cir/Value.h"
 //==============================================================================
-using setu::commons::NodeId;
-using setu::commons::datatypes::Device;
-using setu::commons::enums::ErrorCode;
-using setu::commons::utils::ZmqContextPtr;
-using setu::commons::utils::ZmqSocketPtr;
-using setu::planner::ir::llc::Program;
+namespace setu::planner::ir::cir {
 //==============================================================================
-class Worker {
- public:
-  Worker(NodeId node_id, Device device);
-  ~Worker();
 
-  void Connect(ZmqContextPtr zmq_context, std::string endpoint);
+/// (%dst0_out, ..., %dstN_out) = unpack(%src, (%dst0_in, ..., %dstN_in))
+///
+/// Splits a source buffer into multiple destination buffers.
+/// The source size must equal the total size of all destinations. Destinations
+/// are filled in order.
+struct UnpackOp {
+  std::vector<Value> dst_outs;  ///< New versions of destinations after unpack
+  Value src;                    ///< Source value (read)
+  std::vector<Value> dst_ins;   ///< Destination values before unpack (consumed)
 
-  void Start();
-  void Stop();
-
-  [[nodiscard]] bool IsRunning() const { return worker_running_.load(); }
-  [[nodiscard]] const Device& GetDevice() const { return device_; }
-  [[nodiscard]] const std::string& GetEndpoint() const { return endpoint_; }
-
-  virtual void Execute(const Program& program) = 0;
-  virtual void Setup() = 0;
-
- protected:
-  void InitZmqSockets();
-  void CloseZmqSockets();
-
-  void WorkerLoop();
-
-  NodeId node_id_;
-  Device device_;
-
-  std::string endpoint_;
-  ZmqContextPtr zmq_context_;
-  ZmqSocketPtr socket_;
-
-  std::atomic<bool> worker_running_;
-
-  std::thread worker_thread_;
+  [[nodiscard]] std::string ToString() const {
+    std::string outs_str;
+    for (std::size_t i = 0; i < dst_outs.size(); ++i) {
+      if (i > 0) outs_str += ", ";
+      outs_str += dst_outs[i].ToString();
+    }
+    std::string ins_str;
+    for (std::size_t i = 0; i < dst_ins.size(); ++i) {
+      if (i > 0) ins_str += ", ";
+      ins_str += dst_ins[i].ToString();
+    }
+    return std::format("({}) = unpack({}, ({}))", outs_str, src.ToString(),
+                       ins_str);
+  }
 };
+
 //==============================================================================
-}  // namespace setu::node_manager::worker
+}  // namespace setu::planner::ir::cir
 //==============================================================================
