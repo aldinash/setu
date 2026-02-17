@@ -19,7 +19,7 @@ struct Link {
 
   [[nodiscard]] std::string ToString() const {
     return std::format("Link(latency={}us, bandwidth={}GB/s, tag={})",
-                       bandwidth_gbps, latency_us, tag);
+                       latency_us, bandwidth_gbps, tag);
   }
 
   float latency_us;
