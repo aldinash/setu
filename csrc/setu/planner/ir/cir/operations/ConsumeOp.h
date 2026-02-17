@@ -18,6 +18,7 @@
 //==============================================================================
 #include "commons/StdCommon.h"
 //==============================================================================
+<<<<<<<< HEAD:csrc/setu/planner/ir/cir/operations/ConsumeOp.h
 #include "planner/ir/cir/Value.h"
 //==============================================================================
 namespace setu::planner::ir::cir {
@@ -36,7 +37,14 @@ struct ConsumeOp {
     return std::format("{} = consume({})", out.ToString(), src.ToString());
   }
 };
+========
+namespace setu::planner {
+//==============================================================================
+
+/// Size in bytes of each temporary register buffer.
+constexpr std::size_t kRegisterSize = 1024 * 1024;  // 1 MiB
+>>>>>>>> main:csrc/setu/planner/Constants.h
 
 //==============================================================================
-}  // namespace setu::planner::ir::cir
+}  // namespace setu::planner
 //==============================================================================
