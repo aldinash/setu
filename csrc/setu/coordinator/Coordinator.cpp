@@ -313,6 +313,18 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
            request.copy_spec.src_name, request.copy_spec.dst_name,
            request.shard_id);
 
+  if (metastore_.IsTensorDeregistered(request.copy_spec.src_name) ||
+      metastore_.IsTensorDeregistered(request.copy_spec.dst_name)) {
+    LOG_WARNING(
+        "Rejecting SubmitCopyRequest: tensor '{}' or '{}' has deregistered "
+        "shards",
+        request.copy_spec.src_name, request.copy_spec.dst_name);
+    SubmitCopyResponse response(request.request_id, CopyOperationId{},
+                                ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
+
   // Expected = all src shards + all dst shards
   std::size_t expected_shards =
       metastore_.GetNumShardsForTensor(request.copy_spec.src_name) +
@@ -327,6 +339,18 @@ void Coordinator::Handler::HandleSubmitPullRequest(
   LOG_INFO("Coordinator received SubmitPullRequest from {} to {} for shard {}",
            request.copy_spec.src_name, request.copy_spec.dst_name,
            request.shard_id);
+
+  if (metastore_.IsTensorDeregistered(request.copy_spec.src_name) ||
+      metastore_.IsTensorDeregistered(request.copy_spec.dst_name)) {
+    LOG_WARNING(
+        "Rejecting SubmitPullRequest: tensor '{}' or '{}' has deregistered "
+        "shards",
+        request.copy_spec.src_name, request.copy_spec.dst_name);
+    SubmitCopyResponse response(request.request_id, CopyOperationId{},
+                                ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
 
   // For Pull: expected shards = number of DESTINATION shards only (one-sided)
   std::size_t expected_shards =
@@ -480,6 +504,16 @@ void Coordinator::Handler::HandleGetTensorSpecRequest(
     const Identity& node_agent_identity, const GetTensorSpecRequest& request) {
   LOG_DEBUG("Coordinator received GetTensorSpecRequest for tensor: {}",
             request.tensor_name);
+
+  if (metastore_.IsTensorDeregistered(request.tensor_name)) {
+    LOG_WARNING(
+        "Rejecting GetTensorSpecRequest: tensor '{}' has deregistered shards",
+        request.tensor_name);
+    GetTensorSpecResponse response(request.request_id,
+                                   ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
 
   const auto* tensor_spec = metastore_.GetTensorSpec(request.tensor_name);
   ASSERT_VALID_RUNTIME(

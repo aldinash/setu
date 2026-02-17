@@ -462,9 +462,16 @@ void NodeAgent::Handler::HandleGetTensorSelectionRequest(
   const auto& spec_response =
       std::get<GetTensorSpecResponse>(coordinator_response);
 
-  ASSERT_VALID_RUNTIME(spec_response.error_code == ErrorCode::kSuccess,
-                       "Failed to get TensorSpec for tensor {}",
-                       request.tensor_name);
+  if (spec_response.error_code != ErrorCode::kSuccess) {
+    LOG_WARNING("GetTensorSpec failed for tensor '{}': {}", request.tensor_name,
+                spec_response.error_code);
+    GetTensorSelectionResponse error_response(request.request_id,
+                                              spec_response.error_code);
+    Comm::Send<GetTensorSelectionResponse>(client_socket_, client_identity,
+                                           error_response);
+    return;
+  }
+
   ASSERT_VALID_RUNTIME(spec_response.tensor_spec.has_value(),
                        "TensorSpec missing in response for tensor {}",
                        request.tensor_name);
@@ -586,6 +593,7 @@ void NodeAgent::Handler::HandleDeregisterShardsResponse(
         LOG_DEBUG("Cleaned up shard {} from tensor '{}'", shard_id,
                   tensor_name);
       }
+      tensor_spec_cache_.erase(tensor_name);
     }
     pending_deregistration_shards_.erase(it);
   }

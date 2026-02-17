@@ -109,6 +109,18 @@ class MetaStore {
       const TensorName& tensor_name /*[in]*/) const;
 
   /**
+   * @brief Checks if any shards of a tensor have been deregistered
+   *
+   * Returns true if DeregisterShards has been called for this tensor,
+   * indicating the tensor is partially freed.
+   *
+   * @param tensor_name The name of the tensor to check
+   * @return true if any shards have been deregistered, false otherwise
+   */
+  [[nodiscard]] bool IsTensorDeregistered(
+      const TensorName& tensor_name /*[in]*/) const;
+
+  /**
    * @brief Deregisters tensor shards from the metadata store
    *
    * Removes the specified shards from each tensor's registration data,
@@ -127,6 +139,7 @@ class MetaStore {
     std::size_t expected_size{0};
     std::size_t registered_size{0};
     TensorShardMetadataMap shards;
+    bool has_deregistered_shards{false};
   };
 
   /**
