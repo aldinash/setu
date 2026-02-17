@@ -48,8 +48,8 @@ Device MakeDevice(boost::uuids::uuid node_id, std::int16_t gpu_index = 0) {
 }
 
 /// Helper to create a ShardRef for view ops
-setu::planner::ir::llc::ShardRef MakeShardRef() {
-  return setu::planner::ir::llc::ShardRef(boost::uuids::nil_uuid());
+setu::planner::ir::ref::ShardRef MakeShardRef() {
+  return setu::planner::ir::ref::ShardRef(boost::uuids::nil_uuid());
 }
 
 //==============================================================================

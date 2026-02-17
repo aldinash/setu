@@ -23,7 +23,7 @@
 #include "planner/ir/cir/Operation.h"
 #include "planner/ir/cir/Slice.h"
 #include "planner/ir/cir/Value.h"
-#include "planner/ir/llc/ShardRef.h"
+#include "planner/ir/ref/ShardRef.h"
 //==============================================================================
 namespace setu::planner::ir::cir {
 //==============================================================================
@@ -48,7 +48,7 @@ class Program : public setu::commons::NonCopyable {
   /// %out = view(device, handle, slice, dtype)
   [[nodiscard]] Value EmitView(
       const Device& device /*[in]*/,
-      const setu::planner::ir::llc::ShardRef& handle /*[in]*/,
+      const setu::planner::ir::ref::ShardRef& handle /*[in]*/,
       Slice slice /*[in]*/, torch::Dtype dtype /*[in]*/);
 
   /// %out = alloc_tmp(device, size_elements, dtype)

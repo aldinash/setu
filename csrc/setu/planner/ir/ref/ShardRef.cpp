@@ -14,37 +14,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
-//==============================================================================
-#include "commons/StdCommon.h"
-#include "commons/TorchCommon.h"
-//==============================================================================
-#include "planner/ir/cir/Slice.h"
-#include "planner/ir/cir/Value.h"
 #include "planner/ir/ref/ShardRef.h"
 //==============================================================================
-namespace setu::planner::ir::cir {
+namespace setu::planner::ir::ref {
+//==============================================================================
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-/// %out = view(@node:device, &shard_ref, [offset, size])
-///
-/// Constructs a CIR Value representing a contiguous region of a physical
-/// shard buffer. The slice is in element counts; byte conversion happens
-/// during backend lowering.
-struct ViewOp {
-  Value out;      ///< Result value
-  Device device;  ///< Physical device where the shard resides
-  setu::planner::ir::ref::ShardRef handle;  ///< Reference to the physical shard
-  Slice slice;         ///< Region within the shard (elements)
-  torch::Dtype dtype;  ///< Element data type
+std::string ShardRef::ToString() const {
+  std::string name_str =
+      tensor_name.has_value() ? tensor_name.value() : "<none>";
+  std::string node_str =
+      node_id.has_value() ? boost::uuids::to_string(node_id.value()) : "<none>";
+  return std::format("ShardRef(shard_id={}, tensor_name={}, node_id={})",
+                     boost::uuids::to_string(shard_id), name_str, node_str);
+}
 
-  [[nodiscard]] std::string ToString() const {
-    return std::format("{} = view({}, &{}, {}, {})", out.ToString(),
-                       device.ToString(), handle.ToString(), slice.ToString(),
-                       torch::toString(dtype));
-  }
-};
+void ShardRef::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(shard_id, node_id, tensor_name);
+}
+
+ShardRef ShardRef::Deserialize(const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [shard_id, node_id, tensor_name] =
+      reader.ReadFields<ShardId, std::optional<NodeId>,
+                        std::optional<TensorName>>();
+
+  ShardRef ref(std::move(shard_id), std::move(tensor_name));
+  ref.node_id = std::move(node_id);
+  return ref;
+}
 
 //==============================================================================
-}  // namespace setu::planner::ir::cir
+}  // namespace setu::planner::ir::ref
 //==============================================================================

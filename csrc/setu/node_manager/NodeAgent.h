@@ -72,7 +72,7 @@ using setu::commons::utils::ZmqSocketPtr;
 using setu::node_manager::worker::Worker;
 using setu::planner::Plan;
 using setu::planner::ir::llc::Program;
-using setu::planner::ir::llc::ShardRef;
+using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 class NodeAgent {
  public:

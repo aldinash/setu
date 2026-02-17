@@ -14,39 +14,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/ir/llc/ShardRef.h"
+#include "planner/ir/ref/RegisterRef.h"
 //==============================================================================
-namespace setu::planner::ir::llc {
+namespace setu::planner::ir::ref {
 //==============================================================================
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-std::string ShardRef::ToString() const {
-  std::string name_str =
-      tensor_name.has_value() ? tensor_name.value() : "<none>";
-  std::string node_str =
-      node_id.has_value() ? boost::uuids::to_string(node_id.value()) : "<none>";
-  return std::format("ShardRef(shard_id={}, tensor_name={}, node_id={})",
-                     boost::uuids::to_string(shard_id), name_str, node_str);
+std::string RegisterRef::ToString() const {
+  std::string part_str =
+      participant.has_value() ? participant->ToString() : "<none>";
+  return std::format("RegisterRef(#{}, participant={})", register_index,
+                     part_str);
 }
 
-void ShardRef::Serialize(BinaryBuffer& buffer) const {
+void RegisterRef::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
-  writer.WriteFields(shard_id, node_id, tensor_name);
+  writer.WriteFields(register_index, participant);
 }
 
-ShardRef ShardRef::Deserialize(const BinaryRange& range) {
+RegisterRef RegisterRef::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [shard_id, node_id, tensor_name] =
-      reader.ReadFields<ShardId, std::optional<NodeId>,
-                        std::optional<TensorName>>();
-
-  ShardRef ref(std::move(shard_id), std::move(tensor_name));
-  ref.node_id = std::move(node_id);
-  return ref;
+  auto [register_index, participant] =
+      reader.ReadFields<std::uint32_t, std::optional<Participant>>();
+  return RegisterRef(register_index, std::move(participant));
 }
 
 //==============================================================================
-}  // namespace setu::planner::ir::llc
+}  // namespace setu::planner::ir::ref
 //==============================================================================

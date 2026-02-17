@@ -16,14 +16,16 @@
 //==============================================================================
 #include "planner/ir/llc/instructions/Copy.h"
 //==============================================================================
+#include "commons/Logging.h"
+//==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
 
 std::string Copy::ToString() const {
   return std::format(
-      "Copy(src_shard={}, src_offset_bytes={}, dst_shard={}, "
+      "Copy(src_ref={}, src_offset_bytes={}, dst_ref={}, "
       "dst_offset_bytes={}, count={}, dtype={}, src_ptr={}, dst_ptr={})",
-      src_shard.ToString(), src_offset_bytes, dst_shard.ToString(),
+      src_ref.ToString(), src_offset_bytes, dst_ref.ToString(),
       dst_offset_bytes, count, static_cast<int>(dtype), src_ptr, dst_ptr);
 }
 
@@ -31,28 +33,32 @@ void Copy::Serialize(BinaryBuffer& buffer) const {
   BinaryWriter writer(buffer);
   const auto src_ptr_value = reinterpret_cast<std::uintptr_t>(src_ptr);
   const auto dst_ptr_value = reinterpret_cast<std::uintptr_t>(dst_ptr);
-  writer.WriteFields(src_shard, src_offset_bytes, dst_shard, dst_offset_bytes,
+  writer.WriteFields(src_ref, src_offset_bytes, dst_ref, dst_offset_bytes,
                      count, dtype, src_ptr_value, dst_ptr_value);
 }
 
 Copy Copy::Deserialize(const BinaryRange& range) {
   BinaryReader reader(range);
-  auto [src_shard, src_offset_bytes, dst_shard, dst_offset_bytes, count, dtype,
+  auto [src_ref, src_offset_bytes, dst_ref, dst_offset_bytes, count, dtype,
         src_ptr_val, dst_ptr_val] =
-      reader
-          .ReadFields<ShardRef, std::size_t, ShardRef, std::size_t, std::size_t,
-                      torch::Dtype, std::uintptr_t, std::uintptr_t>();
+      reader.ReadFields<BufferRef, std::size_t, BufferRef, std::size_t,
+                        std::size_t, torch::Dtype, std::uintptr_t,
+                        std::uintptr_t>();
 
   auto src_ptr = reinterpret_cast<DevicePtr>(src_ptr_val);
   auto dst_ptr = reinterpret_cast<DevicePtr>(dst_ptr_val);
-  return Copy(std::move(src_shard), src_offset_bytes, std::move(dst_shard),
+  return Copy(std::move(src_ref), src_offset_bytes, std::move(dst_ref),
               dst_offset_bytes, count, dtype, src_ptr, dst_ptr);
 }
 
 void Copy::Embellish(
     const std::function<DevicePtr(const ShardRef&)>& resolver) {
-  src_ptr = resolver(src_shard);
-  dst_ptr = resolver(dst_shard);
+  ASSERT_VALID_RUNTIME(src_ref.IsShard(),
+                       "Copy::Embellish: src_ref must be a ShardRef");
+  ASSERT_VALID_RUNTIME(dst_ref.IsShard(),
+                       "Copy::Embellish: dst_ref must be a ShardRef");
+  src_ptr = resolver(src_ref.AsShard());
+  dst_ptr = resolver(dst_ref.AsShard());
 }
 
 //==============================================================================

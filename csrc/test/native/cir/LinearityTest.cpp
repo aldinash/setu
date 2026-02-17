@@ -39,8 +39,8 @@ Device MakeDevice(std::int16_t gpu_index = 0) {
                              torch::kCUDA, static_cast<int8_t>(gpu_index))));
 }
 
-setu::planner::ir::llc::ShardRef MakeShardRef() {
-  return setu::planner::ir::llc::ShardRef(boost::uuids::nil_uuid());
+setu::planner::ir::ref::ShardRef MakeShardRef() {
+  return setu::planner::ir::ref::ShardRef(boost::uuids::nil_uuid());
 }
 
 //==============================================================================

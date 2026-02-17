@@ -19,12 +19,12 @@
 #include "commons/StdCommon.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
-#include "planner/ir/llc/ShardRef.h"
 #include "planner/ir/llc/instructions/Copy.h"
 #include "planner/ir/llc/instructions/InitComm.h"
 #include "planner/ir/llc/instructions/Receive.h"
 #include "planner/ir/llc/instructions/Send.h"
 #include "planner/ir/llc/instructions/UseComm.h"
+#include "planner/ir/ref/ShardRef.h"
 //==============================================================================
 /// Low-Level Copy (LLC) IR — the target IR for backend code generation.
 ///
@@ -47,6 +47,7 @@ using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
+using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 
 enum class InstructionType : std::uint8_t {

@@ -21,7 +21,8 @@
 #include "commons/enums/Enums.h"
 #include "commons/utils/Serialization.h"
 //==============================================================================
-#include "planner/ir/llc/ShardRef.h"
+#include "planner/ir/ref/BufferRef.h"
+#include "planner/ir/ref/ShardRef.h"
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
@@ -31,19 +32,21 @@ using setu::commons::utils::BinaryBuffer;
 using setu::commons::utils::BinaryRange;
 using setu::commons::utils::BinaryReader;
 using setu::commons::utils::BinaryWriter;
+using setu::planner::ir::ref::BufferRef;
+using setu::planner::ir::ref::ShardRef;
 //==============================================================================
 
 /// NCCL point-to-point receive from a peer rank within the active communicator.
 ///
-/// Receives `count` elements of type `dtype` into `dst_shard` at
+/// Receives `count` elements of type `dtype` into `dst_ref` at
 /// `offset_bytes` from the device identified by `peer_rank`.  The
 /// communicator must have been established by a preceding InitComm/UseComm
 /// instruction.
 struct Receive {
-  Receive(ShardRef dst_shard_param, std::size_t offset_bytes_param,
+  Receive(BufferRef dst_ref_param, std::size_t offset_bytes_param,
           std::size_t count_param, torch::Dtype dtype_param,
           DeviceRank peer_rank_param, DevicePtr dst_ptr_param = nullptr)
-      : dst_shard(std::move(dst_shard_param)),
+      : dst_ref(std::move(dst_ref_param)),
         offset_bytes(offset_bytes_param),
         count(count_param),
         dtype(dtype_param),
@@ -67,7 +70,7 @@ struct Receive {
    */
   void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
 
-  ShardRef dst_shard;
+  BufferRef dst_ref;
   std::size_t offset_bytes;
   std::size_t count;
   torch::Dtype dtype;
