@@ -81,7 +81,7 @@ struct Instruction {
 
   static Instruction Deserialize(const BinaryRange& range);
 
-  void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
+  void Embellish(const std::function<DevicePtr(const BufferRef&)>& resolver);
 
   InstructionVariant instr;
 };

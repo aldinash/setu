@@ -70,7 +70,7 @@ struct Copy {
   /**
    * @brief Populates the device pointers by looking up the base address.
    */
-  void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
+  void Embellish(const std::function<DevicePtr(const BufferRef&)>& resolver);
 
   BufferRef src_ref;
   std::size_t src_offset_bytes;

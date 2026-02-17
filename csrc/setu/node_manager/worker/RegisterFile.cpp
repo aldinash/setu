@@ -14,33 +14,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "node_manager/worker/RegisterFile.h"
 //==============================================================================
-#include "commons/StdCommon.h"
+#include <cuda_runtime.h>
 //==============================================================================
-#include "commons/datatypes/CopySpec.h"
-#include "metastore/MetaStore.h"
-#include "planner/ir/cir/Program.h"
+#include "commons/Logging.h"
 //==============================================================================
-namespace setu::planner::ir::cir {
+namespace setu::node_manager::worker {
 //==============================================================================
 
-using setu::commons::datatypes::CopySpec;
-using setu::metastore::MetaStore;
+#define CUDA_CHECK(call)                                                \
+  do {                                                                  \
+    cudaError_t err = (call);                                           \
+    ASSERT_VALID_RUNTIME(err == cudaSuccess, "CUDA error: {} at {}:{}", \
+                         cudaGetErrorString(err), __FILE__, __LINE__);  \
+  } while (0)
 
-/// Lowers a CopySpec into a CIR Program.
-///
-/// Uses a two-pointer walk over source and destination selections to match
-/// buffer regions. For each matched region, emits:
-///   - view() for the src shard slice (element offsets)
-///   - view() for the dst shard slice (element offsets)
-///   - copy() from src view to dst view
-class CIRLowering {
- public:
-  [[nodiscard]] static Program Lower(CopySpec& copy_spec /*[in]*/,
-                                     MetaStore& metastore /*[in]*/);
-};
+void RegisterFile::Allocate() {
+  for (std::uint32_t i = 0; i < spec_.NumRegisters(); ++i) {
+    ASSERT_VALID_RUNTIME(ptrs_[i] == nullptr, "Register {} already allocated",
+                         i);
+    void* ptr = nullptr;
+    CUDA_CHECK(cudaMalloc(&ptr, spec_.SizeBytes(i)));
+    ptrs_[i] = ptr;
+  }
+
+  LOG_DEBUG("Allocated {} registers", spec_.NumRegisters());
+}
+
+void RegisterFile::Free() {
+  for (auto& ptr : ptrs_) {
+    if (ptr != nullptr) {
+      cudaFree(ptr);
+      ptr = nullptr;
+    }
+  }
+}
+
+#undef CUDA_CHECK
 
 //==============================================================================
-}  // namespace setu::planner::ir::cir
+}  // namespace setu::node_manager::worker
 //==============================================================================

@@ -153,10 +153,13 @@ void InitInstructionPybind(py::module_& m) {
       .def(
           "embellish",
           [](Instruction& self, py::function py_resolver) {
-            self.Embellish([&py_resolver](const ShardRef& ref) {
+            self.Embellish([&py_resolver](const BufferRef& ref) {
+              ASSERT_VALID_RUNTIME(ref.IsShard(),
+                                   "Python embellish only supports ShardRef");
+              const auto& shard = ref.AsShard();
               py::object result =
-                  py_resolver(py::cast(boost::uuids::to_string(ref.shard_id)),
-                              py::cast(ref.tensor_name));
+                  py_resolver(py::cast(boost::uuids::to_string(shard.shard_id)),
+                              py::cast(shard.tensor_name));
               auto ptr = reinterpret_cast<DevicePtr>(result.cast<intptr_t>());
               return ptr;
             });

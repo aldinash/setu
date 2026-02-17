@@ -52,13 +52,9 @@ Copy Copy::Deserialize(const BinaryRange& range) {
 }
 
 void Copy::Embellish(
-    const std::function<DevicePtr(const ShardRef&)>& resolver) {
-  ASSERT_VALID_RUNTIME(src_ref.IsShard(),
-                       "Copy::Embellish: src_ref must be a ShardRef");
-  ASSERT_VALID_RUNTIME(dst_ref.IsShard(),
-                       "Copy::Embellish: dst_ref must be a ShardRef");
-  src_ptr = resolver(src_ref.AsShard());
-  dst_ptr = resolver(dst_ref.AsShard());
+    const std::function<DevicePtr(const BufferRef&)>& resolver) {
+  src_ptr = resolver(src_ref);
+  dst_ptr = resolver(dst_ref);
 }
 
 //==============================================================================

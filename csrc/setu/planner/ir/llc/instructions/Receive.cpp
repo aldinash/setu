@@ -47,10 +47,8 @@ Receive Receive::Deserialize(const BinaryRange& range) {
 }
 
 void Receive::Embellish(
-    const std::function<DevicePtr(const ShardRef&)>& resolver) {
-  ASSERT_VALID_RUNTIME(dst_ref.IsShard(),
-                       "Receive::Embellish: dst_ref must be a ShardRef");
-  dst_ptr = resolver(dst_ref.AsShard());
+    const std::function<DevicePtr(const BufferRef&)>& resolver) {
+  dst_ptr = resolver(dst_ref);
 }
 
 //==============================================================================

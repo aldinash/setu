@@ -68,7 +68,7 @@ struct Receive {
   /**
    * @brief Populates the device pointers by looking up the base address.
    */
-  void Embellish(const std::function<DevicePtr(const ShardRef&)>& resolver);
+  void Embellish(const std::function<DevicePtr(const BufferRef&)>& resolver);
 
   BufferRef dst_ref;
   std::size_t offset_bytes;
