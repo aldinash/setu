@@ -27,7 +27,7 @@
 //==============================================================================
 #include "planner/ir/llc/Instruction.h"
 #include "planner/ir/llc/ShardRef.h"
-#include "setu/planner/Planner.h"
+#include "planner/Participant.h"
 //==============================================================================
 namespace setu::planner::ir::llc {
 //==============================================================================
