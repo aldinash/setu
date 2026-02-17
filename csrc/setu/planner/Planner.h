@@ -34,7 +34,7 @@ using setu::planner::ir::llc::Program;
 class Planner {
  public:
   Planner(targets::BackendPtr backend, passes::PassManagerPtr pass_manager);
-  [[nodiscard]] Plan Compile(CopySpec& spec, MetaStore& metastore);
+  [[nodiscard]] Plan Compile(const CopySpec& spec, MetaStore& metastore);
 
  private:
   targets::BackendPtr backend_;
