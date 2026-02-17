@@ -61,21 +61,9 @@ struct Plan {
     return result;
   }
 
-  void Serialize(BinaryBuffer& buffer) const {
-    BinaryWriter writer(buffer);
-    writer.WriteFields(participants, program);
-  }
+  void Serialize(BinaryBuffer& buffer) const;
 
-  static Plan Deserialize(const BinaryRange& range) {
-    BinaryReader reader(range);
-    auto [participants_val, program_val] =
-        reader.ReadFields<Participants,
-                          std::unordered_map<Participant, Program>>();
-    Plan plan;
-    plan.participants = std::move(participants_val);
-    plan.program = std::move(program_val);
-    return plan;
-  }
+  static Plan Deserialize(const BinaryRange& range);
 
   Participants participants;
   std::unordered_map<Participant, Program> program;
