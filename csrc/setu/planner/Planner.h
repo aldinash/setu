@@ -33,7 +33,7 @@ using setu::planner::ir::llc::Program;
 class Planner {
  public:
   explicit Planner(std::unique_ptr<targets::Backend> backend);
-  [[nodiscard]] Plan Compile(CopySpec& spec, MetaStore& metastore);
+  [[nodiscard]] Plan Compile(const CopySpec& spec, MetaStore& metastore);
 
  private:
   std::unique_ptr<targets::Backend> backend_;
