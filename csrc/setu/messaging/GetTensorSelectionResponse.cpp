@@ -14,35 +14,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "node_manager/worker/RegisterFile.h"
+#include "messaging/GetTensorSelectionResponse.h"
 //==============================================================================
-#include "commons/Logging.h"
-#include "commons/utils/CUDAUtils.h"
+namespace setu::commons::messages {
 //==============================================================================
-namespace setu::node_manager::worker {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-void RegisterFile::Allocate() {
-  for (std::uint32_t i = 0; i < spec_.NumRegisters(); ++i) {
-    ASSERT_VALID_RUNTIME(ptrs_[i] == nullptr, "Register {} already allocated",
-                         i);
-    void* ptr = nullptr;
-    CUDA_CHECK(cudaMalloc(&ptr, spec_.SizeBytes(i)));
-    ptrs_[i] = ptr;
-  }
-
-  LOG_DEBUG("Allocated {} registers", spec_.NumRegisters());
+void GetTensorSelectionResponse::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(request_id, error_code, selection);
 }
 
-void RegisterFile::Free() {
-  for (auto& ptr : ptrs_) {
-    if (ptr != nullptr) {
-      CUDA_CHECK(cudaFree(ptr));
-      ptr = nullptr;
-    }
-  }
+GetTensorSelectionResponse GetTensorSelectionResponse::Deserialize(
+    const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [request_id_val, error_code_val, selection_val] =
+      reader.ReadFields<RequestId, ErrorCode, std::optional<TensorSelection>>();
+  return GetTensorSelectionResponse(request_id_val, error_code_val,
+                                    std::move(selection_val));
 }
 
 //==============================================================================
-}  // namespace setu::node_manager::worker
+}  // namespace setu::commons::messages
 //==============================================================================
