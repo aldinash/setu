@@ -14,35 +14,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "node_manager/worker/RegisterFile.h"
+#include "messaging/GetTensorSpecRequest.h"
 //==============================================================================
-#include "commons/Logging.h"
-#include "commons/utils/CUDAUtils.h"
+namespace setu::commons::messages {
 //==============================================================================
-namespace setu::node_manager::worker {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-void RegisterFile::Allocate() {
-  for (std::uint32_t i = 0; i < spec_.NumRegisters(); ++i) {
-    ASSERT_VALID_RUNTIME(ptrs_[i] == nullptr, "Register {} already allocated",
-                         i);
-    void* ptr = nullptr;
-    CUDA_CHECK(cudaMalloc(&ptr, spec_.SizeBytes(i)));
-    ptrs_[i] = ptr;
-  }
-
-  LOG_DEBUG("Allocated {} registers", spec_.NumRegisters());
+void GetTensorSpecRequest::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(request_id, tensor_name);
 }
 
-void RegisterFile::Free() {
-  for (auto& ptr : ptrs_) {
-    if (ptr != nullptr) {
-      CUDA_CHECK(cudaFree(ptr));
-      ptr = nullptr;
-    }
-  }
+GetTensorSpecRequest GetTensorSpecRequest::Deserialize(
+    const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [request_id_val, tensor_name_val] =
+      reader.ReadFields<RequestId, TensorName>();
+  return GetTensorSpecRequest(request_id_val, std::move(tensor_name_val));
 }
 
 //==============================================================================
-}  // namespace setu::node_manager::worker
+}  // namespace setu::commons::messages
 //==============================================================================

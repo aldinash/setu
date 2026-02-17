@@ -14,35 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "node_manager/worker/RegisterFile.h"
+#include "commons/datatypes/TensorSpec.h"
 //==============================================================================
-#include "commons/Logging.h"
-#include "commons/utils/CUDAUtils.h"
+namespace setu::commons::datatypes {
 //==============================================================================
-namespace setu::node_manager::worker {
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
-
-void RegisterFile::Allocate() {
-  for (std::uint32_t i = 0; i < spec_.NumRegisters(); ++i) {
-    ASSERT_VALID_RUNTIME(ptrs_[i] == nullptr, "Register {} already allocated",
-                         i);
-    void* ptr = nullptr;
-    CUDA_CHECK(cudaMalloc(&ptr, spec_.SizeBytes(i)));
-    ptrs_[i] = ptr;
-  }
-
-  LOG_DEBUG("Allocated {} registers", spec_.NumRegisters());
+void TensorSpec::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(name, dims, dtype);
 }
 
-void RegisterFile::Free() {
-  for (auto& ptr : ptrs_) {
-    if (ptr != nullptr) {
-      CUDA_CHECK(cudaFree(ptr));
-      ptr = nullptr;
-    }
-  }
+TensorSpec TensorSpec::Deserialize(const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [name_val, dims_val, dtype_val] =
+      reader.ReadFields<TensorName, TensorDimMap, torch::Dtype>();
+  return TensorSpec(std::move(name_val), std::move(dims_val), dtype_val);
 }
-
 //==============================================================================
-}  // namespace setu::node_manager::worker
+}  // namespace setu::commons::datatypes
 //==============================================================================
