@@ -36,6 +36,7 @@
 namespace setu::node_manager {
 //==============================================================================
 using setu::commons::CopyOperationId;
+using setu::commons::DevicePtr;
 using setu::commons::DeviceRank;
 using setu::commons::Identity;
 using setu::commons::NodeId;
@@ -75,10 +76,14 @@ using setu::commons::messages::WaitForShardAllocationRequest;
 using setu::commons::messages::WaitForShardAllocationResponse;
 using setu::commons::utils::ZmqContextPtr;
 using setu::commons::utils::ZmqSocketPtr;
-using setu::ir::Program;
-using setu::ir::ShardRef;
 using setu::node_manager::worker::Worker;
 using setu::planner::Plan;
+using setu::planner::ir::llc::Program;
+using setu::planner::ir::ref::BufferRef;
+using setu::planner::ir::ref::RegisterRef;
+using setu::planner::ir::ref::ShardRef;
+
+using RegisterResolver = std::function<DevicePtr(const RegisterRef&)>;
 //==============================================================================
 class NodeAgent {
  public:
@@ -193,7 +198,8 @@ class NodeAgent {
              const std::string& coordinator_endpoint,
              const std::vector<Device>& devices,
              Queue<std::pair<CopyOperationId, Plan>>& executor_queue,
-             TensorShardsConcurrentMap const& shard_id_to_tensor);
+             TensorShardsConcurrentMap const& shard_id_to_tensor,
+             RegisterResolver register_resolver);
     ~Executor();
 
     void Start();
@@ -217,6 +223,7 @@ class NodeAgent {
     std::thread thread_;
     std::atomic<bool> running_{false};
     TensorShardsConcurrentMap const& shard_id_to_tensor_;
+    RegisterResolver register_resolver_;
   };
 
   NodeId node_id_;
