@@ -22,6 +22,7 @@
 #include "planner/ir/cir/operations/AllocTmp.h"
 #include "planner/ir/cir/operations/CopyOp.h"
 #include "planner/ir/cir/operations/Pack.h"
+#include "planner/ir/cir/operations/SliceOp.h"
 #include "planner/ir/cir/operations/Unpack.h"
 #include "planner/ir/cir/operations/View.h"
 //==============================================================================
@@ -34,10 +35,11 @@ enum class OpType : std::uint8_t {
   kCopy = 3,
   kPack = 4,
   kUnpack = 5,
+  kSlice = 6,
 };
 
 using OperationVariant =
-    std::variant<ViewOp, AllocTmpOp, CopyOp, PackOp, UnpackOp>;
+    std::variant<ViewOp, AllocTmpOp, CopyOp, PackOp, UnpackOp, SliceOp>;
 
 /// Wrapper around OperationVariant, providing uniform access to defs/uses
 /// and string representation. Follows the same variant+wrapper pattern

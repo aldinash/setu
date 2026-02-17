@@ -56,6 +56,10 @@ class Program : public setu::commons::NonCopyable {
                                    std::size_t size_elements /*[in]*/,
                                    torch::Dtype dtype /*[in]*/);
 
+  /// %out = slice(%src, slice)
+  /// Requires: slice.offset + slice.size <= src.size_elements
+  [[nodiscard]] Value EmitSlice(Value src /*[in]*/, Slice slice /*[in]*/);
+
   /// %dst_out = copy(%src, %dst_in)
   /// Requires: src.size_elements == dst_in.size_elements
   [[nodiscard]] Value EmitCopy(Value src /*[in]*/, Value dst_in /*[in]*/);

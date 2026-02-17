@@ -55,6 +55,22 @@ Value Program::EmitAllocTmp(const Device& device, std::size_t size_elements,
   return out;
 }
 
+Value Program::EmitSlice(Value src, Slice slice) {
+  const auto& src_info = GetValueInfo(src);
+  ASSERT_VALID_ARGUMENTS(slice.size > 0, "Slice size must be positive");
+  ASSERT_VALID_ARGUMENTS(slice.End() <= src_info.size_elements,
+                         "Slice [offset={}, size={}] exceeds source size ({})",
+                         slice.offset, slice.size, src_info.size_elements);
+
+  auto op_index = static_cast<std::uint32_t>(ops_.size());
+  auto out =
+      AllocateValue(src_info.device, slice.size, src_info.dtype, op_index);
+
+  ops_.emplace_back(SliceOp{.out = out, .src = src, .slice = slice});
+
+  return out;
+}
+
 Value Program::EmitCopy(Value src, Value dst_in) {
   const auto& src_info = GetValueInfo(src);
   const auto& dst_info = GetValueInfo(dst_in);
@@ -230,6 +246,11 @@ void ProgramRewriter::CloneOp(std::size_t op_index) {
           for (std::size_t i = 0; i < concrete_op.dst_outs.size(); ++i) {
             MapValue(concrete_op.dst_outs[i], new_vals[i]);
           }
+
+        } else if constexpr (std::is_same_v<T, SliceOp>) {
+          auto new_val =
+              target_.EmitSlice(Lookup(concrete_op.src), concrete_op.slice);
+          MapValue(concrete_op.out, new_val);
         }
       },
       op.op);
