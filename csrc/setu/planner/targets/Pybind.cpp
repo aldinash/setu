@@ -20,16 +20,35 @@
 #include "commons/StdCommon.h"
 #include "commons/TorchCommon.h"
 //==============================================================================
+#include "planner/RegisterSet.h"
 #include "planner/targets/backend.h"
 #include "planner/targets/nccl.h"
 //==============================================================================
 namespace setu::planner::targets {
 //==============================================================================
 void InitTargetsPybind(py::module_& m) {
+  using setu::planner::RegisterSet;
+  namespace cir = setu::planner::ir::cir;
+
+  py::class_<RegisterSet>(m, "RegisterSet")
+      .def(py::init<>(), "Create an empty RegisterSet")
+      .def_static("uniform", &RegisterSet::Uniform, py::arg("num_registers"),
+                  py::arg("size_bytes"),
+                  "Create a uniform RegisterSet where all registers share the "
+                  "same size")
+      .def("add_register", &RegisterSet::AddRegister, py::arg("size_bytes"),
+           "Add a register with the given size; returns the assigned index")
+      .def("num_registers", &RegisterSet::NumRegisters,
+           "Number of registers in the set")
+      .def("empty", &RegisterSet::Empty, "Whether this register set is empty");
+
   py::class_<Backend, std::shared_ptr<Backend>>(m, "Backend");
 
   py::class_<NCCL, Backend, std::shared_ptr<NCCL>>(m, "NCCLBackend")
-      .def(py::init<>(), "Create an NCCL backend");
+      .def(py::init<>(), "Create an NCCL backend with no register sets")
+      .def(py::init<std::unordered_map<cir::Device, RegisterSet>>(),
+           py::arg("register_sets"),
+           "Create an NCCL backend with per-device register sets");
 }
 //==============================================================================
 }  // namespace setu::planner::targets
