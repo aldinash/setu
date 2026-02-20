@@ -40,7 +40,19 @@ void InitTargetsPybind(py::module_& m) {
            "Add a register with the given size; returns the assigned index")
       .def("num_registers", &RegisterSet::NumRegisters,
            "Number of registers in the set")
-      .def("empty", &RegisterSet::Empty, "Whether this register set is empty");
+      .def("empty", &RegisterSet::Empty, "Whether this register set is empty")
+      // Pickle support for multiprocessing
+      .def(py::pickle(
+          [](const RegisterSet& rs) {  // __getstate__
+            return rs.sizes_;
+          },
+          [](std::vector<std::size_t> sizes) {  // __setstate__
+            RegisterSet rs;
+            for (auto sz : sizes) {
+              rs.AddRegister(sz);
+            }
+            return rs;
+          }));
 
   py::class_<Backend, std::shared_ptr<Backend>>(m, "Backend");
 

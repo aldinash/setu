@@ -45,11 +45,23 @@ void InitParticipantPybind(py::module_& m) {
       .def("__lt__", &Participant::operator<)
       .def("__hash__",
            [](const Participant& p) { return std::hash<Participant>{}(p); })
-      .def("__repr__", [](const Participant& p) {
-        return std::format("Participant(node_id={}, device={})",
-                           boost::uuids::to_string(p.node_id),
-                           p.device.ToString());
-      });
+      .def("__repr__",
+           [](const Participant& p) {
+             return std::format("Participant(node_id={}, device={})",
+                                boost::uuids::to_string(p.node_id),
+                                p.device.ToString());
+           })
+      // Pickle support for multiprocessing
+      .def(py::pickle(
+          [](const Participant& p) {  // __getstate__
+            return py::make_tuple(p.node_id, p.device);
+          },
+          [](py::tuple t) {  // __setstate__
+            if (t.size() != 2) {
+              throw std::runtime_error("Invalid state for Participant");
+            }
+            return Participant(t[0].cast<NodeId>(), t[1].cast<Device>());
+          }));
 }
 //==============================================================================
 void InitPlanPybind(py::module_& m) {
