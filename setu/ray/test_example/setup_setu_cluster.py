@@ -1,6 +1,8 @@
-import ray
-from setu.ray import ClusterInfo, NodeAgentInfo, SetuCluster
 import time
+
+import ray
+
+from setu.ray import SetuCluster
 
 # connect to ray cluster
 ray.init()
