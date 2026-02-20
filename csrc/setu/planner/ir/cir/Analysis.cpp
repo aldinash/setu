@@ -95,7 +95,11 @@ std::vector<Value> LivenessInfo::LiveAt(std::uint32_t op_index) const {
 
 RegisterAllocation RegisterAllocation::Build(
     const Program& program, const LivenessInfo& liveness,
-    const std::unordered_map<Device, std::uint32_t>& pool_sizes) {
+    const std::unordered_map<Device, setu::planner::RegisterSet>&
+        register_sets) {
+  // NOTE: We currently assume all registers within a RegisterSet have the
+  // same size (uniform pools).  The allocator treats registers as fungible
+  // slots and does not match AllocTmpOp sizes to individual register sizes.
   RegisterAllocation result;
   result.allocation.resize(program.NumValues());
 
@@ -108,13 +112,14 @@ RegisterAllocation RegisterAllocation::Build(
   std::unordered_map<Device, SlotQueue> free_slots;
   std::unordered_map<Device, std::uint32_t> next_slot_index;
 
-  // Initialize free slot pools
-  for (const auto& [device, count] : pool_sizes) {
+  // Initialize free slot pools from RegisterSets
+  for (const auto& [device, reg_set] : register_sets) {
+    auto num_regs = reg_set.NumRegisters();
     auto& queue = free_slots[device];
-    for (std::uint32_t i = 0; i < count; ++i) {
+    for (std::uint32_t i = 0; i < num_regs; ++i) {
       queue.emplace(0, i);  // all slots available from op 0
     }
-    next_slot_index[device] = count;
+    next_slot_index[device] = num_regs;
   }
 
   // Collect AllocTmpOp values sorted by their def op index (already in order)
@@ -134,9 +139,9 @@ RegisterAllocation RegisterAllocation::Build(
     const auto& live_range = liveness.ranges[val.id];
     const auto& device = val_info.device;
 
-    auto pool_it = pool_sizes.find(device);
-    ASSERT_VALID_RUNTIME(pool_it != pool_sizes.end(),
-                         "No register pool configured for device {}",
+    auto set_it = register_sets.find(device);
+    ASSERT_VALID_RUNTIME(set_it != register_sets.end(),
+                         "No register set configured for device {}",
                          device.ToString());
 
     auto& queue = free_slots[device];
@@ -164,8 +169,9 @@ RegisterAllocation RegisterAllocation::Build(
 
     ASSERT_VALID_RUNTIME(assigned_slot.has_value(),
                          "Register allocation failed for {} on device {}: "
-                         "pool exhausted ({} slots)",
-                         val.ToString(), device.ToString(), pool_it->second);
+                         "pool exhausted ({} registers)",
+                         val.ToString(), device.ToString(),
+                         set_it->second.NumRegisters());
 
     result.allocation[val.id].emplace(
         PhysicalRegister{.device = device, .register_index = *assigned_slot});

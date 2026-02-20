@@ -14,35 +14,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "node_manager/worker/RegisterFile.h"
+#pragma once
 //==============================================================================
-#include "commons/Logging.h"
-#include "commons/utils/CUDAUtils.h"
+#include "commons/StdCommon.h"
 //==============================================================================
-namespace setu::node_manager::worker {
+#include "planner/ir/cir/Value.h"
+//==============================================================================
+namespace setu::planner::ir::cir {
 //==============================================================================
 
-void RegisterFile::Allocate() {
-  for (std::uint32_t i = 0; i < spec_.NumRegisters(); ++i) {
-    ASSERT_VALID_RUNTIME(ptrs_[i] == nullptr, "Register {} already allocated",
-                         i);
-    void* ptr = nullptr;
-    CUDA_CHECK(cudaMalloc(&ptr, spec_.SizeBytes(i)));
-    ptrs_[i] = ptr;
+/// %out = consume(%src)
+///
+/// Marker operation that consumes a value, producing a new SSA value that
+/// is the canonical way to reference the underlying buffer going forward.
+/// Linearity checking treats src as consumed (dead after this op).
+struct ConsumeOp {
+  Value out;  ///< Result value (new reference to the consumed buffer)
+  Value src;  ///< Value to consume (ownership transferred, value becomes dead)
+
+  [[nodiscard]] std::string ToString() const {
+    return std::format("{} = consume({})", out.ToString(), src.ToString());
   }
-
-  LOG_DEBUG("Allocated {} registers", spec_.NumRegisters());
-}
-
-void RegisterFile::Free() {
-  for (auto& ptr : ptrs_) {
-    if (ptr != nullptr) {
-      CUDA_CHECK(cudaFree(ptr));
-      ptr = nullptr;
-    }
-  }
-}
+};
 
 //==============================================================================
-}  // namespace setu::node_manager::worker
+}  // namespace setu::planner::ir::cir
 //==============================================================================
