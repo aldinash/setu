@@ -105,6 +105,12 @@ void NCCLWorker::ExecuteInstruction(const Instruction& instruction,
             group_started = true;
           }
           ExecuteReceive(inst);
+        } else if constexpr (std::is_same_v<T, Barrier>) {
+          if (group_started) {
+            NCCL_CHECK(ncclGroupEnd());
+            CUDA_CHECK(cudaStreamSynchronize(stream_));
+            group_started = false;
+          }
         }
       },
       instruction.instr);

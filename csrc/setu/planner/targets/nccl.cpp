@@ -52,6 +52,8 @@ struct PendingCopy {
 
   std::size_t count;
   torch::Dtype dtype;
+
+  std::uint32_t cir_op_index;  ///< Index in the CIR program, for depth lookup
 };
 
 //==============================================================================
@@ -84,7 +86,8 @@ Plan NCCL::Run(const cir::Program& program) {
 
   // === Step 1: Walk CIR ops, collect view info and pending copies ===
 
-  for (const auto& op : program.Operations()) {
+  for (std::uint32_t op_idx = 0; op_idx < program.NumOperations(); ++op_idx) {
+    const auto& op = program.Operations()[op_idx];
     std::visit(
         [&](const auto& concrete) {
           using T = std::decay_t<decltype(concrete)>;
@@ -166,6 +169,7 @@ Plan NCCL::Run(const cir::Program& program) {
                 .dst_offset_bytes = dst.offset_bytes,
                 .count = src.count,
                 .dtype = src.dtype,
+                .cir_op_index = op_idx,
             });
 
             // dst_out inherits dst view info so downstream copies resolve.
@@ -217,9 +221,29 @@ Plan NCCL::Run(const cir::Program& program) {
     }
   }
 
-  // === Step 3: Emit Copy / Send+Receive for each pending copy ===
+  // === Step 3: Staged emission — emit Barrier between depth stages ===
 
+  auto copy_depth = cir::CopyDepthAnalysis::Build(program);
+
+  // Sort pending copies by depth so we can iterate once and insert barriers
+  // at stage boundaries. Order within a stage is irrelevant — all copies at
+  // the same depth are independent.
+  std::ranges::sort(pending_copies, [&](const PendingCopy& a,
+                                        const PendingCopy& b) {
+    return copy_depth.depth[a.cir_op_index] < copy_depth.depth[b.cir_op_index];
+  });
+
+  std::uint32_t prev_stage = 0;
   for (const auto& c : pending_copies) {
+    auto stage = copy_depth.depth[c.cir_op_index].value();
+
+    if (stage != prev_stage) {
+      for (const auto& part : parts) {
+        programs[part].emplace_back(llc::Barrier());
+      }
+      prev_stage = stage;
+    }
+
     if (c.src_part == c.dst_part) {
       programs[c.src_part].emplace_back(llc::Copy(c.src_ref, c.src_offset_bytes,
                                                   c.dst_ref, c.dst_offset_bytes,
