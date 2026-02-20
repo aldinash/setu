@@ -14,25 +14,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "planner/targets/Pybind.h"
 //==============================================================================
-#include "planner/Plan.h"
-#include "planner/ir/cir/Program.h"
+#include "commons/Logging.h"
+#include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
+//==============================================================================
+#include "planner/targets/backend.h"
+#include "planner/targets/nccl.h"
 //==============================================================================
 namespace setu::planner::targets {
 //==============================================================================
+void InitTargetsPybind(py::module_& m) {
+  py::class_<Backend, std::shared_ptr<Backend>>(m, "Backend");
 
-namespace cir = setu::planner::ir::cir;
-
-/// Abstract backend that lowers a CIR Program into a per-device LLC Plan.
-class Backend {
- public:
-  virtual ~Backend() = default;
-  [[nodiscard]] virtual Plan Run(const cir::Program& program /*[in]*/) = 0;
-};
-
-using BackendPtr = std::shared_ptr<Backend>;
-
+  py::class_<NCCL, Backend, std::shared_ptr<NCCL>>(m, "NCCLBackend")
+      .def(py::init<>(), "Create an NCCL backend");
+}
 //==============================================================================
 }  // namespace setu::planner::targets
 //==============================================================================
