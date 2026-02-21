@@ -22,9 +22,12 @@ import torch.multiprocessing as mp
 
 def _run_coordinator(port: int, ready_event, stop_event):
     """Run the Coordinator in a separate process."""
-    from setu._coordinator import Coordinator
+    from setu._coordinator import Coordinator, NCCLBackend, PassManager, Planner
 
-    coordinator = Coordinator(port)
+    pass_manager = PassManager()
+    backend = NCCLBackend()
+    planner = Planner(backend, pass_manager)
+    coordinator = Coordinator(port, planner)
     coordinator.start()
     ready_event.set()
 
