@@ -27,7 +27,14 @@ def _find_free_port() -> int:
 
 
 # "NCCL_DEBUG": "INFO", "NCCL_DEBUG_SUBSYS": "ALL"
-@ray.remote(runtime_env={"env_vars": {"SETU_LOG_LEVEL": "DEBUG", "NCCL_SOCKET_IFNAME": "^lo,docker0,enxbe3af2b6059f"}})
+@ray.remote(
+    runtime_env={
+        "env_vars": {
+            "SETU_LOG_LEVEL": "DEBUG",
+            "NCCL_SOCKET_IFNAME": "^lo,docker0,enxbe3af2b6059f",
+        }
+    }
+)
 class CoordinatorActor:
     """Ray actor wrapping the native Coordinator.
 
@@ -80,7 +87,14 @@ class CoordinatorActor:
 
 
 # "NCCL_DEBUG": "INFO", "NCCL_DEBUG_SUBSYS": "ALL"
-@ray.remote(runtime_env={"env_vars": {"SETU_LOG_LEVEL": "DEBUG", "NCCL_SOCKET_IFNAME": "^lo,docker0,enxbe3af2b6059f"}})
+@ray.remote(
+    runtime_env={
+        "env_vars": {
+            "SETU_LOG_LEVEL": "DEBUG",
+            "NCCL_SOCKET_IFNAME": "^lo,docker0,enxbe3af2b6059f",
+        }
+    }
+)
 class NodeAgentActor:
     """Ray actor wrapping the native NodeAgent.
 

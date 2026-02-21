@@ -949,9 +949,9 @@ def test_registration_rejected_on_partially_deregistered_tensor():
         # Tensor is now partially freed (Client B's shards still exist)
         client_a_disconnect.set()
         a_result = client_a_result.get(timeout=10)
-        assert a_result["success"], (
-            f"Client A disconnect failed: {a_result.get('error')}"
-        )
+        assert a_result[
+            "success"
+        ], f"Client A disconnect failed: {a_result.get('error')}"
 
         time.sleep(0.3)
 
@@ -972,8 +972,7 @@ def test_registration_rejected_on_partially_deregistered_tensor():
 
         result = registration_result.get(timeout=10)
         assert result["success"], (
-            f"Test failed: {result.get('error')}\n"
-            f"{result.get('traceback', '')}"
+            f"Test failed: {result.get('error')}\n" f"{result.get('traceback', '')}"
         )
         assert result["registration_rejected"], (
             "Registration should have been rejected on partially-deregistered "
@@ -983,9 +982,9 @@ def test_registration_rejected_on_partially_deregistered_tensor():
         # Clean up Client B
         client_b_disconnect.set()
         b_result = client_b_result.get(timeout=10)
-        assert b_result["success"], (
-            f"Client B disconnect failed: {b_result.get('error')}"
-        )
+        assert b_result[
+            "success"
+        ], f"Client B disconnect failed: {b_result.get('error')}"
 
     finally:
         stop_event.set()

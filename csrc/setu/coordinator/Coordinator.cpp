@@ -517,7 +517,7 @@ void Coordinator::Handler::ProcessPendingDeregistrations(
       metastore_.DeregisterShards(it->second.shards_by_tensor);
 
       DeregisterShardsResponse response(it->second.request_id,
-                                         ErrorCode::kSuccess);
+                                        ErrorCode::kSuccess);
       outbox_queue_.push(
           OutboxMessage{it->second.node_agent_identity, response});
 

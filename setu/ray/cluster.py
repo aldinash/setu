@@ -152,9 +152,7 @@ class SetuCluster:
             scheduling_strategy=coordinator_scheduling,
         ).remote()
 
-        coordinator_result = ray.get(
-            self._coordinator_actor.start.remote()
-        )
+        coordinator_result = ray.get(self._coordinator_actor.start.remote())
         coordinator_endpoint = coordinator_result["coordinator_endpoint"]
         logger.info("Coordinator started at %s", coordinator_endpoint)
 

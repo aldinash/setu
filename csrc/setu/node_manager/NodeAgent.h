@@ -197,8 +197,7 @@ class NodeAgent {
 
     /// Tracks deregistration requests: stores the request payload on
     /// submission, consumed when the Coordinator's async response arrives
-    setu::commons::utils::PendingOperations<RequestId,
-                                             DeregisterShardsRequest>
+    setu::commons::utils::PendingOperations<RequestId, DeregisterShardsRequest>
         pending_deregistrations_;
   };
 

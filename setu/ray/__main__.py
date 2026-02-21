@@ -42,9 +42,7 @@ def display_cluster_info(info: ClusterInfo) -> None:
 
     console.rule("Setu Cluster Info")
     console.print(f"  Coordinator: {info.coordinator_endpoint}")
-    console.print(
-        f"  Nodes: {info.num_nodes}  |  Total GPUs: {info.total_gpus}"
-    )
+    console.print(f"  Nodes: {info.num_nodes}  |  Total GPUs: {info.total_gpus}")
     console.print()
 
     table = Table(title="Node Agents")

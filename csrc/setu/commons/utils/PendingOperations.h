@@ -69,7 +69,7 @@ class PendingOperations {
   /// @param key [in] The operation key to register.
   /// @param payload [in] The payload to associate with this key.
   template <typename P = PayloadType>
-    requires (!std::is_void_v<P>)
+    requires(!std::is_void_v<P>)
   void RegisterOperation(const KeyType& key /*[in]*/, P payload /*[in]*/) {
     registration_count_[key]++;
     payloads_.erase(key);
@@ -82,9 +82,8 @@ class PendingOperations {
   /// @param key [in] The operation key whose payload to consume.
   /// @return The payload if present, std::nullopt otherwise.
   template <typename P = PayloadType>
-    requires (!std::is_void_v<P>)
-  [[nodiscard]] std::optional<P> ConsumePayload(
-      const KeyType& key /*[in]*/) {
+    requires(!std::is_void_v<P>)
+  [[nodiscard]] std::optional<P> ConsumePayload(const KeyType& key /*[in]*/) {
     auto it = payloads_.find(key);
     if (it == payloads_.end()) {
       return std::nullopt;
@@ -184,8 +183,7 @@ class PendingOperations {
 
   [[no_unique_address]] std::conditional_t<
       std::is_void_v<PayloadType>, std::monostate,
-      std::unordered_map<KeyType, PayloadType, Hash>>
-      payloads_;
+      std::unordered_map<KeyType, PayloadType, Hash>> payloads_;
 };
 
 //==============================================================================
