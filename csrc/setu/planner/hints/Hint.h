@@ -18,26 +18,32 @@
 //==============================================================================
 #include "commons/StdCommon.h"
 //==============================================================================
-#include "commons/ClassTraits.h"
-#include "planner/passes/Pass.h"
+#include "planner/Participant.h"
+#include "planner/topo/Topology.h"
 //==============================================================================
-namespace setu::planner::passes {
+namespace setu::planner::hints {
+//==============================================================================
+using setu::planner::Participant;
+using setu::planner::topo::Path;
 //==============================================================================
 
-class PassManager : public setu::commons::NonCopyable {
- public:
-  PassManager() = default;
-  void AddPass(PassPtr pass);
-  [[nodiscard]] cir::Program Run(cir::Program program,
-                                 const HintStore& hints) const;
-  [[nodiscard]] std::size_t NumPasses() const;
+struct RoutingHint {
+  Participant src;
+  Participant dst;
+  Path path;
 
- private:
-  std::vector<PassPtr> passes_;
+  RoutingHint(Participant src_param, Participant dst_param, Path path_param)
+      : src(std::move(src_param)),
+        dst(std::move(dst_param)),
+        path(std::move(path_param)) {}
+
+  [[nodiscard]] std::string ToString() const {
+    return std::format("RoutingHint(src={}, dst={}, path={})", src, dst, path);
+  }
 };
 
-using PassManagerPtr = std::shared_ptr<PassManager>;
+using CompilerHint = std::variant<RoutingHint>;
 
 //==============================================================================
-}  // namespace setu::planner::passes
+}  // namespace setu::planner::hints
 //==============================================================================
