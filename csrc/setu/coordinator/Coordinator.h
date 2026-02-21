@@ -55,6 +55,7 @@ using setu::coordinator::datatypes::CopyOperationPtr;
 using setu::metastore::MetaStore;
 using setu::planner::Plan;
 using setu::planner::Planner;
+using setu::planner::PlannerPtr;
 
 /// @brief Shared state for tracking a copy operation across Handler and
 /// Executor threads.
@@ -81,14 +82,6 @@ struct CopyOperationState {
 };
 using CopyOperationStatePtr = std::shared_ptr<CopyOperationState>;
 
-/// @brief Task for the planner containing CopyOperationId, CopySpec, and shared
-/// state
-struct PlannerTask {
-  CopyOperationId copy_op_id;
-  CopySpec copy_spec;
-  CopyOperationStatePtr state;  // Shared with Handler's copy_operations_ map
-};
-
 /// @brief Tracks a deregistration request that is deferred until all blocking
 /// copy operations complete.
 struct PendingDeregistration {
@@ -98,10 +91,11 @@ struct PendingDeregistration {
   std::set<CopyOperationId> blocking_copy_ops;
 };
 
+
 //==============================================================================
 class Coordinator {
  public:
-  Coordinator(std::size_t port);
+  Coordinator(std::size_t port, PlannerPtr planner);
 
   ~Coordinator();
 
@@ -116,7 +110,6 @@ class Coordinator {
   void Stop();
 
  private:
-  MetaStore metastore_;
   //============================================================================
   // Architecture: Gateway + Queues
   //
@@ -151,6 +144,14 @@ class Coordinator {
   struct OutboxMessage {
     Identity node_agent_identity;
     CoordinatorMessage message;
+  };
+
+  /// @brief Task for the planner containing CopyOperationId, CopySpec, and
+  /// shared state
+  struct PlannerTask {
+    CopyOperationId copy_op_id;
+    CopySpec copy_spec;
+    CopyOperationStatePtr state;  // Shared with Handler's copy_operations_ map
   };
 
   //============================================================================
@@ -268,7 +269,8 @@ class Coordinator {
   //============================================================================
   struct Executor {
     Executor(Queue<PlannerTask>& planner_queue,
-             Queue<OutboxMessage>& outbox_queue, MetaStore& metastore);
+             Queue<OutboxMessage>& outbox_queue, MetaStore& metastore,
+             Planner& planner);
 
     void Start();
     void Stop();
@@ -279,7 +281,7 @@ class Coordinator {
     Queue<PlannerTask>& planner_queue_;
     Queue<OutboxMessage>& outbox_queue_;
     MetaStore& metastore_;
-    Planner planner_;
+    Planner& planner_;
 
     std::thread thread_;
     std::atomic<bool> running_{false};
@@ -288,6 +290,9 @@ class Coordinator {
   std::size_t port_;
 
   std::shared_ptr<zmq::context_t> zmq_context_;
+
+  MetaStore metastore_;
+  PlannerPtr planner_;
 
   // Internal message queues
   Queue<InboxMessage> inbox_queue_;
