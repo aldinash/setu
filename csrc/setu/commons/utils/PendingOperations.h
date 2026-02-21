@@ -94,6 +94,22 @@ class PendingOperations {
     return result;
   }
 
+  /// @brief Remove all tracking state for the given key.
+  ///
+  /// Removes the registration count, completion flag, waiters, and payload
+  /// (if any) associated with the key. Use this when the operation is being
+  /// cancelled or the resource is being deregistered.
+  ///
+  /// @param key [in] The operation key to remove.
+  void RemoveOperation(const KeyType& key /*[in]*/) {
+    registration_count_.erase(key);
+    completed_.erase(key);
+    waiters_.erase(key);
+    if constexpr (!std::is_void_v<PayloadType>) {
+      payloads_.erase(key);
+    }
+  }
+
   /// @brief Mark the operation as complete. Future AddWaiter calls for this
   /// key will return kAlreadyComplete.
   /// @param key [in] The operation key to mark complete.

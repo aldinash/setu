@@ -565,6 +565,13 @@ void Coordinator::Handler::HandleDeregisterShardsRequest(
     tensor_names.insert(name);
   }
 
+  // Mark tensors as deregistered immediately to prevent new copy/pull
+  // submissions and registrations from being accepted while deregistration
+  // is in progress (even if the actual shard removal is deferred).
+  for (const auto& name : tensor_names) {
+    metastore_.MarkTensorDeregistered(name);
+  }
+
   // Cancel partial entries in the shard aggregator for these tensors.
   // This cleans up groups that will never complete because the shards are
   // going away.

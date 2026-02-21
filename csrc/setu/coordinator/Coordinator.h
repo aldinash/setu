@@ -90,8 +90,6 @@ struct PendingDeregistration {
   std::unordered_map<TensorName, std::vector<ShardId>> shards_by_tensor;
   std::set<CopyOperationId> blocking_copy_ops;
 };
-
-
 //==============================================================================
 class Coordinator {
  public:

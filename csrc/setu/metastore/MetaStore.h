@@ -121,6 +121,19 @@ class MetaStore {
       const TensorName& tensor_name /*[in]*/) const;
 
   /**
+   * @brief Marks a tensor as deregistered without removing its shards
+   *
+   * Sets the has_deregistered_shards flag so that IsTensorDeregistered returns
+   * true and new registrations/operations are rejected. The actual shard
+   * removal happens later via DeregisterShards. This is used by the
+   * Coordinator to immediately block new operations when a deregistration
+   * request arrives, even if the actual removal is deferred.
+   *
+   * @param tensor_name The name of the tensor to mark as deregistered
+   */
+  void MarkTensorDeregistered(const TensorName& tensor_name /*[in]*/);
+
+  /**
    * @brief Deregisters tensor shards from the metadata store
    *
    * Removes the specified shards from each tensor's registration data,

@@ -211,6 +211,16 @@ bool MetaStore::IsTensorDeregistered(const TensorName& tensor_name) const {
   }
   return it->second.has_deregistered_shards;
 }
+void MetaStore::MarkTensorDeregistered(const TensorName& tensor_name) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+  auto it = registered_shards_data_.find(tensor_name);
+  if (it == registered_shards_data_.end()) {
+    LOG_WARNING("MarkTensorDeregistered: tensor '{}' not found", tensor_name);
+    return;
+  }
+  it->second.has_deregistered_shards = true;
+}
 //==============================================================================
 void MetaStore::DeregisterShards(
     const std::unordered_map<TensorName, std::vector<ShardId>>&

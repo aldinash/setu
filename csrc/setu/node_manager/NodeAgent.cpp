@@ -537,7 +537,9 @@ void NodeAgent::Handler::HandleSubmitCopyResponse(
     return;
   }
 
-  pending_copies_.RegisterOperation(response.copy_operation_id);
+  if (response.error_code == ErrorCode::kSuccess) {
+    pending_copies_.RegisterOperation(response.copy_operation_id);
+  }
 
   Comm::Send<SubmitCopyResponse>(client_socket_, *client_identity, response);
 }
@@ -590,6 +592,7 @@ void NodeAgent::Handler::HandleDeregisterShardsResponse(
       for (const auto& shard_id : shard_ids) {
         shard_id_to_tensor_.erase(shard_id);
         tensor_shard_metadata_map_.erase(shard_id);
+        pending_shard_allocs_.RemoveOperation(shard_id);
 
         LOG_DEBUG("Cleaned up shard {} from tensor '{}'", shard_id,
                   tensor_name);
