@@ -17,27 +17,11 @@
 #pragma once
 //==============================================================================
 #include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 //==============================================================================
-#include "commons/ClassTraits.h"
-#include "planner/passes/Pass.h"
+namespace setu::planner::hints {
 //==============================================================================
-namespace setu::planner::passes {
+void InitHintsPybind(py::module_& m);
 //==============================================================================
-
-class PassManager : public setu::commons::NonCopyable {
- public:
-  PassManager() = default;
-  void AddPass(PassPtr pass);
-  [[nodiscard]] cir::Program Run(cir::Program program,
-                                 const HintStore& hints) const;
-  [[nodiscard]] std::size_t NumPasses() const;
-
- private:
-  std::vector<PassPtr> passes_;
-};
-
-using PassManagerPtr = std::shared_ptr<PassManager>;
-
-//==============================================================================
-}  // namespace setu::planner::passes
+}  // namespace setu::planner::hints
 //==============================================================================

@@ -65,7 +65,9 @@ def main():
     )
     tensor.fill_(42.0)
     torch.cuda.synchronize()
-    print(f"Source tensor filled with 42.0 (shape={list(tensor.shape)}, device={tensor.device})")
+    print(
+        f"Source tensor filled with 42.0 (shape={list(tensor.shape)}, device={tensor.device})"
+    )
 
     print("\nClient A ready. Run test_script_b.py on the other node.")
     print("Press Ctrl+C to stop.\n")
