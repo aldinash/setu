@@ -601,6 +601,8 @@ void NodeAgent::Handler::HandleDeregisterShardsResponse(
     }
   }
 
+  pending_deregistrations_.RemoveOperation(response.request_id);
+
   // Route response back to the client that initiated the deregistration
   auto client_identity = request_router_.ClaimIdentity(response.request_id);
   if (client_identity.has_value()) {
