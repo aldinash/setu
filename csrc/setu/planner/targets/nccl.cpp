@@ -214,8 +214,7 @@ Plan NCCL::Run(const cir::Program& program) {
                   .cir_op_index = op_idx,
               });
 
-              running_offset_bytes +=
-                  src.count * torch::elementSize(src.dtype);
+              running_offset_bytes += src.count * torch::elementSize(src.dtype);
             }
 
             // dst_out inherits dst view info so downstream ops resolve.
@@ -238,10 +237,9 @@ Plan NCCL::Run(const cir::Program& program) {
             std::size_t running_offset_bytes = src.offset_bytes;
             for (std::size_t i = 0; i < concrete.dst_ins.size(); ++i) {
               auto dst_it = view_map.find(concrete.dst_ins[i]);
-              ASSERT_VALID_RUNTIME(
-                  dst_it != view_map.end(),
-                  "UnpackOp dst_in {} not found in view_map",
-                  concrete.dst_ins[i].ToString());
+              ASSERT_VALID_RUNTIME(dst_it != view_map.end(),
+                                   "UnpackOp dst_in {} not found in view_map",
+                                   concrete.dst_ins[i].ToString());
 
               const auto& dst = dst_it->second;
 
@@ -257,16 +255,14 @@ Plan NCCL::Run(const cir::Program& program) {
                   .cir_op_index = op_idx,
               });
 
-              running_offset_bytes +=
-                  dst.count * torch::elementSize(dst.dtype);
+              running_offset_bytes += dst.count * torch::elementSize(dst.dtype);
 
               // Each dst_out inherits its corresponding dst_in view info.
               view_map.try_emplace(concrete.dst_outs[i], dst_it->second);
             }
 
           } else {
-            RAISE_RUNTIME_ERROR(
-                "NCCL backend: unsupported CIR operation");
+            RAISE_RUNTIME_ERROR("NCCL backend: unsupported CIR operation");
           }
         },
         op.op);
@@ -313,11 +309,25 @@ Plan NCCL::Run(const cir::Program& program) {
     return copy_depth.depth[a.cir_op_index] < copy_depth.depth[b.cir_op_index];
   });
 
+  // Flush accumulated same-device copies as batched Copy instructions, one per
+  // participant.  Called at stage boundaries and at the end of the loop.
+  std::unordered_map<Participant, std::vector<llc::CopyEntry>> copy_batches;
+
+  auto flush_copy_batches = [&]() {
+    for (auto& [part, batch] : copy_batches) {
+      if (!batch.empty()) {
+        programs[part].emplace_back(llc::Copy(std::move(batch)));
+      }
+    }
+    copy_batches.clear();
+  };
+
   std::uint32_t prev_stage = 0;
   for (const auto& c : pending_copies) {
     auto stage = copy_depth.depth[c.cir_op_index].value();
 
     if (stage != prev_stage) {
+      flush_copy_batches();
       for (const auto& part : parts) {
         programs[part].emplace_back(llc::Barrier());
       }
@@ -325,9 +335,9 @@ Plan NCCL::Run(const cir::Program& program) {
     }
 
     if (c.src_part == c.dst_part) {
-      programs[c.src_part].emplace_back(llc::Copy(c.src_ref, c.src_offset_bytes,
-                                                  c.dst_ref, c.dst_offset_bytes,
-                                                  c.count, c.dtype));
+      copy_batches[c.src_part].emplace_back(c.src_ref, c.src_offset_bytes,
+                                            c.dst_ref, c.dst_offset_bytes,
+                                            c.count, c.dtype);
     } else {
       programs[c.src_part].emplace_back(llc::Send(c.src_ref, c.src_offset_bytes,
                                                   c.count, c.dtype,
@@ -337,6 +347,9 @@ Plan NCCL::Run(const cir::Program& program) {
                        entry.ranks.at(c.src_part)));
     }
   }
+
+  // Flush remaining copies from the last stage.
+  flush_copy_batches();
 
   return plan;
 }
