@@ -40,16 +40,58 @@ enum class AddWaiterResult : std::uint8_t {
 /// AddWaiter, which drains one completion. The key is fully cleaned up once all
 /// registrations have been drained.
 ///
+/// When PayloadType is not void, each operation can carry associated data that
+/// is stored on registration and consumed on completion via ConsumePayload.
+///
 /// @tparam KeyType The key type (e.g., CopyOperationId, ShardId).
+/// @tparam PayloadType Optional payload type to associate with each operation.
+///         Defaults to void (no payload, zero overhead).
 /// @tparam Hash The hash function for KeyType (defaults to boost::hash).
-template <typename KeyType, typename Hash = boost::hash<KeyType>>
+template <typename KeyType, typename PayloadType = void,
+          typename Hash = boost::hash<KeyType>>
 class PendingOperations {
  public:
-  /// @brief Register an operation. Can be called multiple times for the same
-  /// key; each call increments the expected number of waiters.
+  /// @brief Register an operation without payload.
+  /// Only available when PayloadType is void.
+  /// Can be called multiple times for the same key; each call increments the
+  /// expected number of waiters.
   /// @param key [in] The operation key to register.
-  void RegisterOperation(const KeyType& key /*[in]*/) {
+  void RegisterOperation(const KeyType& key /*[in]*/)
+    requires std::is_void_v<PayloadType>
+  {
     registration_count_[key]++;
+  }
+
+  /// @brief Register an operation with associated payload data.
+  /// Only available when PayloadType is not void.
+  /// Can be called multiple times for the same key; each call increments the
+  /// registration count and replaces any existing payload.
+  /// @param key [in] The operation key to register.
+  /// @param payload [in] The payload to associate with this key.
+  template <typename P = PayloadType>
+    requires (!std::is_void_v<P>)
+  void RegisterOperation(const KeyType& key /*[in]*/, P payload /*[in]*/) {
+    registration_count_[key]++;
+    payloads_.erase(key);
+    payloads_.emplace(key, std::move(payload));
+  }
+
+  /// @brief Consume and return the payload for a registered operation.
+  /// Only available when PayloadType is not void.
+  /// Returns std::nullopt if the key has no stored payload.
+  /// @param key [in] The operation key whose payload to consume.
+  /// @return The payload if present, std::nullopt otherwise.
+  template <typename P = PayloadType>
+    requires (!std::is_void_v<P>)
+  [[nodiscard]] std::optional<P> ConsumePayload(
+      const KeyType& key /*[in]*/) {
+    auto it = payloads_.find(key);
+    if (it == payloads_.end()) {
+      return std::nullopt;
+    }
+    P result = std::move(it->second);
+    payloads_.erase(it);
+    return result;
   }
 
   /// @brief Mark the operation as complete. Future AddWaiter calls for this
@@ -112,6 +154,9 @@ class PendingOperations {
     if (it->second <= count) {
       registration_count_.erase(it);
       completed_.erase(key);
+      if constexpr (!std::is_void_v<PayloadType>) {
+        payloads_.erase(key);
+      }
     } else {
       it->second -= count;
     }
@@ -120,6 +165,11 @@ class PendingOperations {
   std::unordered_map<KeyType, std::size_t, Hash> registration_count_;
   std::unordered_set<KeyType, Hash> completed_;
   std::unordered_map<KeyType, std::vector<Identity>, Hash> waiters_;
+
+  [[no_unique_address]] std::conditional_t<
+      std::is_void_v<PayloadType>, std::monostate,
+      std::unordered_map<KeyType, PayloadType, Hash>>
+      payloads_;
 };
 
 //==============================================================================

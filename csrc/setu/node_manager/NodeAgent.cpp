@@ -572,9 +572,8 @@ void NodeAgent::Handler::HandleDeregisterShardsRequest(
   // Track client identity so we can route the async response back
   request_router_.TrackRequest(request.request_id, client_identity);
 
-  // Store the shards for later cleanup when the Coordinator responds
-  pending_deregistration_shards_.emplace(request.request_id,
-                                         request.shards_by_tensor);
+  // Store the request for later cleanup when the Coordinator responds
+  pending_deregistrations_.RegisterOperation(request.request_id, request);
 
   Comm::Send<NodeAgentRequest>(async_socket_, request);
 }
@@ -583,9 +582,11 @@ void NodeAgent::Handler::HandleDeregisterShardsResponse(
     const DeregisterShardsResponse& response) {
   // Clean up local state now that the Coordinator has confirmed all pending
   // copies are complete and the shards are deregistered
-  auto it = pending_deregistration_shards_.find(response.request_id);
-  if (it != pending_deregistration_shards_.end()) {
-    for (const auto& [tensor_name, shard_ids] : it->second) {
+  auto original_request =
+      pending_deregistrations_.ConsumePayload(response.request_id);
+  if (original_request.has_value()) {
+    for (const auto& [tensor_name, shard_ids] :
+         original_request->shards_by_tensor) {
       for (const auto& shard_id : shard_ids) {
         shard_id_to_tensor_.erase(shard_id);
         tensor_shard_metadata_map_.erase(shard_id);
@@ -595,7 +596,6 @@ void NodeAgent::Handler::HandleDeregisterShardsResponse(
       }
       tensor_spec_cache_.erase(tensor_name);
     }
-    pending_deregistration_shards_.erase(it);
   }
 
   // Route response back to the client that initiated the deregistration

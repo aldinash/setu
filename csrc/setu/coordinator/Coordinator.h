@@ -258,7 +258,12 @@ class Coordinator {
         tensor_to_copy_ops_;
 
     /// Deregistration requests deferred until blocking copy operations complete
-    std::vector<PendingDeregistration> pending_deregistrations_;
+    std::map<RequestId, PendingDeregistration> pending_deregistrations_;
+
+    /// Reverse index: CopyOperationId → RequestIds of deregistrations blocked
+    /// by that copy. Maintained alongside pending_deregistrations_ for O(1)
+    /// lookup when a copy completes.
+    std::map<CopyOperationId, std::set<RequestId>> copy_op_to_pending_dereg_;
 
     std::thread thread_;
     std::atomic<bool> running_{false};

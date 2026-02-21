@@ -22,9 +22,13 @@ from torch.multiprocessing.reductions import rebuild_cuda_tensor
 
 def _run_coordinator(port: int, ready_event, stop_event):
     """Run the Coordinator in a separate process."""
-    from setu._coordinator import Coordinator
+    from setu._coordinator import Coordinator, NCCLBackend, PassManager, Planner
 
-    coordinator = Coordinator(port)
+    backend = NCCLBackend()
+    pass_manager = PassManager()
+    planner = Planner(backend, pass_manager)
+
+    coordinator = Coordinator(port, planner)
     coordinator.start()
     ready_event.set()
 
@@ -848,6 +852,151 @@ def test_disconnect_after_copy_completes_allows_reregistration():
                 proc.kill()
 
 
+@pytest.mark.gpu
+def test_registration_rejected_on_partially_deregistered_tensor():
+    """
+    Test that registering a shard on a partially-deregistered tensor is rejected.
+
+    Setup:
+    - Client A registers shard (rows 0-4) for tensor
+    - Client B registers shard (rows 4-8) for tensor
+    - Client A disconnects (no copies, immediate deregistration)
+    - Tensor is now partially freed (has_deregistered_shards=true)
+    - Client C tries to register a new shard → should get None (rejected)
+    """
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+
+    coordinator_port = 29740
+    node_agent_port = 29741
+    coordinator_endpoint = f"tcp://localhost:{coordinator_port}"
+    client_endpoint = f"tcp://localhost:{node_agent_port}"
+
+    ctx = mp.get_context("spawn")
+    coordinator_ready = ctx.Event()
+    node_agent_ready = ctx.Event()
+    stop_event = ctx.Event()
+
+    processes = []
+
+    try:
+        # Start infrastructure
+        coordinator_proc = ctx.Process(
+            target=_run_coordinator,
+            args=(coordinator_port, coordinator_ready, stop_event),
+        )
+        coordinator_proc.start()
+        processes.append(coordinator_proc)
+        assert coordinator_ready.wait(timeout=10), "Coordinator failed to start"
+
+        node_agent_proc = ctx.Process(
+            target=_run_node_agent,
+            args=(node_agent_port, coordinator_endpoint, node_agent_ready, stop_event),
+        )
+        node_agent_proc.start()
+        processes.append(node_agent_proc)
+        assert node_agent_ready.wait(timeout=10), "NodeAgent failed to start"
+
+        time.sleep(0.2)
+
+        tensor_name = "partial_dereg_tensor"
+
+        # Client A registers rows 0-4, then disconnects
+        client_a_init_done = ctx.Event()
+        client_a_disconnect = ctx.Event()
+        client_a_result = ctx.Queue()
+
+        client_a_proc = ctx.Process(
+            target=_run_source_client_with_disconnect,
+            args=(
+                client_endpoint,
+                tensor_name,
+                [("rows", 8, 0, 4), ("cols", 8, 0, 8)],
+                1.0,
+                client_a_init_done,
+                client_a_disconnect,
+                client_a_result,
+            ),
+        )
+        client_a_proc.start()
+        processes.append(client_a_proc)
+
+        # Client B registers rows 4-8 (keeps tensor alive)
+        client_b_init_done = ctx.Event()
+        client_b_disconnect = ctx.Event()
+        client_b_result = ctx.Queue()
+
+        client_b_proc = ctx.Process(
+            target=_run_source_client_with_disconnect,
+            args=(
+                client_endpoint,
+                tensor_name,
+                [("rows", 8, 4, 8), ("cols", 8, 0, 8)],
+                2.0,
+                client_b_init_done,
+                client_b_disconnect,
+                client_b_result,
+            ),
+        )
+        client_b_proc.start()
+        processes.append(client_b_proc)
+
+        # Wait for both to initialize
+        assert client_a_init_done.wait(timeout=10), "Client A failed to init"
+        assert client_b_init_done.wait(timeout=10), "Client B failed to init"
+
+        # Disconnect Client A — no copies, immediate deregistration
+        # Tensor is now partially freed (Client B's shards still exist)
+        client_a_disconnect.set()
+        a_result = client_a_result.get(timeout=10)
+        assert a_result["success"], (
+            f"Client A disconnect failed: {a_result.get('error')}"
+        )
+
+        time.sleep(0.3)
+
+        # Client C tries to register a new shard on the same tensor
+        # This should be rejected because the tensor is partially deregistered
+        registration_result = ctx.Queue()
+        client_c_proc = ctx.Process(
+            target=_attempt_registration_expect_rejection,
+            args=(
+                client_endpoint,
+                tensor_name,
+                [("rows", 8, 0, 4), ("cols", 8, 0, 8)],
+                registration_result,
+            ),
+        )
+        client_c_proc.start()
+        processes.append(client_c_proc)
+
+        result = registration_result.get(timeout=10)
+        assert result["success"], (
+            f"Test failed: {result.get('error')}\n"
+            f"{result.get('traceback', '')}"
+        )
+        assert result["registration_rejected"], (
+            "Registration should have been rejected on partially-deregistered "
+            "tensor, but it succeeded"
+        )
+
+        # Clean up Client B
+        client_b_disconnect.set()
+        b_result = client_b_result.get(timeout=10)
+        assert b_result["success"], (
+            f"Client B disconnect failed: {b_result.get('error')}"
+        )
+
+    finally:
+        stop_event.set()
+        time.sleep(0.2)
+        for proc in processes:
+            proc.terminate()
+            proc.join(timeout=2)
+            if proc.is_alive():
+                proc.kill()
+
+
 # ==============================================================================
 # Helper subprocess functions
 # ==============================================================================
@@ -904,6 +1053,62 @@ def _verify_reregistration(
                     "shard_id": shard_ref.shard_id,
                 }
             )
+
+        client.disconnect()
+
+    except Exception as e:
+        import traceback
+
+        result_queue.put(
+            {
+                "success": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
+        )
+
+
+def _attempt_registration_expect_rejection(
+    client_endpoint: str,
+    tensor_name: str,
+    dims_data: list,
+    result_queue,
+    device_index: int = 0,
+):
+    """
+    Attempt to register a shard and report whether registration was rejected.
+
+    Reports success=True with registration_rejected=True/False indicating
+    whether the registration returned None (rejected).
+    """
+    from setu._client import Client
+    from setu._commons.datatypes import Device, TensorDimSpec, TensorShardSpec
+
+    try:
+        client = Client()
+        client.connect(client_endpoint)
+
+        dims_spec = [
+            TensorDimSpec(name, global_size, start, end)
+            for name, global_size, start, end in dims_data
+        ]
+
+        device = Device(torch_device=torch.device(f"cuda:{device_index}"))
+        shard_spec = TensorShardSpec(
+            name=tensor_name,
+            dims=dims_spec,
+            dtype=torch.float32,
+            device=device,
+        )
+
+        shard_ref = client.register_tensor_shard(shard_spec)
+
+        result_queue.put(
+            {
+                "success": True,
+                "registration_rejected": shard_ref is None,
+            }
+        )
 
         client.disconnect()
 

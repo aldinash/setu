@@ -73,7 +73,7 @@ class Client {
   [[nodiscard]] std::vector<TensorShardRefPtr> GetShards() const;
 
  private:
-  static constexpr std::int32_t kDeregisterTimeoutMs = 300;
+  static constexpr std::int32_t kDeregisterTimeoutMs = 300000;
 
   void DeregisterShards();
 

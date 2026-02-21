@@ -264,6 +264,18 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   NodeId owner_node_id =
       StringToUUID(node_agent_identity.substr(0, underscore_pos));
 
+  // Reject registration if the tensor is being deregistered
+  if (metastore_.IsTensorDeregistered(request.tensor_shard_spec.name)) {
+    LOG_WARNING(
+        "Rejecting RegisterTensorShardRequest: tensor '{}' has deregistered "
+        "shards",
+        request.tensor_shard_spec.name);
+    RegisterTensorShardCoordinatorResponse response(
+        request.request_id, ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
+
   // Register the tensor shard in the metastore with owner information
   auto shard_metadata_ptr =
       metastore_.RegisterTensorShard(request.tensor_shard_spec, owner_node_id);
@@ -479,24 +491,37 @@ void Coordinator::Handler::HandleExecuteResponse(
 
 void Coordinator::Handler::ProcessPendingDeregistrations(
     CopyOperationId completed_copy_op_id) {
-  auto it = pending_deregistrations_.begin();
-  while (it != pending_deregistrations_.end()) {
-    it->blocking_copy_ops.erase(completed_copy_op_id);
+  auto idx_it = copy_op_to_pending_dereg_.find(completed_copy_op_id);
+  if (idx_it == copy_op_to_pending_dereg_.end()) {
+    return;
+  }
 
-    if (it->blocking_copy_ops.empty()) {
+  // Move out the set of affected request IDs and erase the index entry
+  auto request_ids = std::move(idx_it->second);
+  copy_op_to_pending_dereg_.erase(idx_it);
+
+  for (const auto& request_id : request_ids) {
+    auto it = pending_deregistrations_.find(request_id);
+    if (it == pending_deregistrations_.end()) {
+      continue;
+    }
+
+    it->second.blocking_copy_ops.erase(completed_copy_op_id);
+
+    if (it->second.blocking_copy_ops.empty()) {
       LOG_INFO(
           "All blocking copies completed for deregistration from {} — "
           "proceeding with deregistration",
-          it->node_agent_identity);
+          it->second.node_agent_identity);
 
-      metastore_.DeregisterShards(it->shards_by_tensor);
+      metastore_.DeregisterShards(it->second.shards_by_tensor);
 
-      DeregisterShardsResponse response(it->request_id, ErrorCode::kSuccess);
-      outbox_queue_.push(OutboxMessage{it->node_agent_identity, response});
+      DeregisterShardsResponse response(it->second.request_id,
+                                         ErrorCode::kSuccess);
+      outbox_queue_.push(
+          OutboxMessage{it->second.node_agent_identity, response});
 
-      it = pending_deregistrations_.erase(it);
-    } else {
-      ++it;
+      pending_deregistrations_.erase(it);
     }
   }
 }
@@ -581,9 +606,15 @@ void Coordinator::Handler::HandleDeregisterShardsRequest(
         "Deferring deregistration for {} tensors from {} — {} blocking copy "
         "operations",
         tensor_names.size(), node_agent_identity, blocking_ops.size());
-    pending_deregistrations_.push_back(PendingDeregistration{
-        node_agent_identity, request.request_id, request.shards_by_tensor,
-        std::move(blocking_ops)});
+    // Populate reverse index for O(1) lookup on copy completion
+    for (const auto& copy_op_id : blocking_ops) {
+      copy_op_to_pending_dereg_[copy_op_id].insert(request.request_id);
+    }
+    pending_deregistrations_.emplace(
+        request.request_id,
+        PendingDeregistration{node_agent_identity, request.request_id,
+                              request.shards_by_tensor,
+                              std::move(blocking_ops)});
   }
 }
 
