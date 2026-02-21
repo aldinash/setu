@@ -14,25 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/Planner.h"
+#include "planner/hints/HintStore.h"
 //==============================================================================
-#include "commons/Logging.h"
-#include "planner/passes/CopySpecToCIR.h"
+namespace setu::planner::hints {
 //==============================================================================
-namespace setu::planner {
-//==============================================================================
-Planner::Planner(targets::BackendPtr backend,
-                 passes::PassManagerPtr pass_manager)
-    : backend_(std::move(backend)), pass_manager_(std::move(pass_manager)) {
-  ASSERT_VALID_POINTER_ARGUMENT(backend_);
+void HintStore::AddHint(CompilerHint hint) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  hints_.emplace_back(std::move(hint));
 }
 //==============================================================================
-Plan Planner::Compile(const CopySpec& spec, MetaStore& metastore,
-                      const HintStore& hints) {
-  auto cir = planner::passes::CopySpecToCIR::Run(spec, metastore);
-  cir = pass_manager_->Run(std::move(cir), hints);
-  return backend_->Run(cir);
+HintStore HintStore::Snapshot() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  HintStore snapshot;
+  snapshot.hints_ = hints_;
+  return snapshot;
 }
 //==============================================================================
-}  // namespace setu::planner
+void HintStore::Clear() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  hints_.clear();
+}
+//==============================================================================
+std::size_t HintStore::Size() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return hints_.size();
+}
+//==============================================================================
+}  // namespace setu::planner::hints
 //==============================================================================

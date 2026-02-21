@@ -107,11 +107,12 @@ class SetuCluster:
         cluster.stop()
     """
 
-    def __init__(self) -> None:
+    def __init__(self, env_vars: Optional[Dict[str, str]] = None) -> None:
         self._coordinator_actor: Optional[ray.actor.ActorHandle] = None
         self._node_agent_actors: List[ray.actor.ActorHandle] = []
         self._cluster_info: Optional[ClusterInfo] = None
         self._started: bool = False
+        self._env_vars = env_vars
 
     @property
     def cluster_info(self) -> Optional[ClusterInfo]:
@@ -147,14 +148,17 @@ class SetuCluster:
             node_id=coordinator_node["ray_node_id"],
             soft=False,
         )
+        coordinator_options: Dict = {
+            "num_gpus": 0,
+            "scheduling_strategy": coordinator_scheduling,
+        }
+        if self._env_vars:
+            coordinator_options["runtime_env"] = {"env_vars": self._env_vars}
         self._coordinator_actor = CoordinatorActor.options(
-            num_gpus=0,
-            scheduling_strategy=coordinator_scheduling,
+            **coordinator_options,
         ).remote()
 
-        coordinator_result = ray.get(
-            self._coordinator_actor.start.remote()
-        )
+        coordinator_result = ray.get(self._coordinator_actor.start.remote())
         coordinator_endpoint = coordinator_result["coordinator_endpoint"]
         logger.info("Coordinator started at %s", coordinator_endpoint)
 
@@ -164,9 +168,14 @@ class SetuCluster:
                 node_id=node["ray_node_id"],
                 soft=False,
             )
+            node_options: Dict = {
+                "num_gpus": node["num_gpus"],
+                "scheduling_strategy": node_scheduling,
+            }
+            if self._env_vars:
+                node_options["runtime_env"] = {"env_vars": self._env_vars}
             actor = NodeAgentActor.options(
-                num_gpus=node["num_gpus"],
-                scheduling_strategy=node_scheduling,
+                **node_options,
             ).remote(coordinator_endpoint)
             self._node_agent_actors.append(actor)
 
@@ -254,3 +263,19 @@ class SetuCluster:
         self._started = False
 
         logger.info("Setu cluster fully shut down")
+
+    def add_hint(self, hint) -> None:
+        """Add a compiler hint to the Coordinator.
+
+        Args:
+            hint: A compiler hint (e.g. RoutingHint).
+        """
+        if self._coordinator_actor is None:
+            raise RuntimeError("SetuCluster is not started")
+        ray.get(self._coordinator_actor.add_hint.remote(hint))
+
+    def clear_hints(self) -> None:
+        """Clear all compiler hints from the Coordinator."""
+        if self._coordinator_actor is None:
+            raise RuntimeError("SetuCluster is not started")
+        ray.get(self._coordinator_actor.clear_hints.remote())
