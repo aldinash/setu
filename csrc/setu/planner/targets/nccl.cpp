@@ -214,8 +214,7 @@ Plan NCCL::Run(const cir::Program& program) {
                   .cir_op_index = op_idx,
               });
 
-              running_offset_bytes +=
-                  src.count * torch::elementSize(src.dtype);
+              running_offset_bytes += src.count * torch::elementSize(src.dtype);
             }
 
             // dst_out inherits dst view info so downstream ops resolve.
@@ -238,10 +237,9 @@ Plan NCCL::Run(const cir::Program& program) {
             std::size_t running_offset_bytes = src.offset_bytes;
             for (std::size_t i = 0; i < concrete.dst_ins.size(); ++i) {
               auto dst_it = view_map.find(concrete.dst_ins[i]);
-              ASSERT_VALID_RUNTIME(
-                  dst_it != view_map.end(),
-                  "UnpackOp dst_in {} not found in view_map",
-                  concrete.dst_ins[i].ToString());
+              ASSERT_VALID_RUNTIME(dst_it != view_map.end(),
+                                   "UnpackOp dst_in {} not found in view_map",
+                                   concrete.dst_ins[i].ToString());
 
               const auto& dst = dst_it->second;
 
@@ -257,16 +255,14 @@ Plan NCCL::Run(const cir::Program& program) {
                   .cir_op_index = op_idx,
               });
 
-              running_offset_bytes +=
-                  dst.count * torch::elementSize(dst.dtype);
+              running_offset_bytes += dst.count * torch::elementSize(dst.dtype);
 
               // Each dst_out inherits its corresponding dst_in view info.
               view_map.try_emplace(concrete.dst_outs[i], dst_it->second);
             }
 
           } else {
-            RAISE_RUNTIME_ERROR(
-                "NCCL backend: unsupported CIR operation");
+            RAISE_RUNTIME_ERROR("NCCL backend: unsupported CIR operation");
           }
         },
         op.op);

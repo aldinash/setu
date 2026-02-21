@@ -229,8 +229,7 @@ CopyDepthAnalysis CopyDepthAnalysis::Build(const Program& program) {
       const auto& root_info = program.GetValueInfo(current);
       auto root_op_idx = root_info.def_op_index;
 
-      if (root_op.Type() == OpType::kCopy ||
-          root_op.Type() == OpType::kPack ||
+      if (root_op.Type() == OpType::kCopy || root_op.Type() == OpType::kPack ||
           root_op.Type() == OpType::kUnpack) {
         ASSERT_VALID_RUNTIME(
             result.depth[root_op_idx].has_value(),
