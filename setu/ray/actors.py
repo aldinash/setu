@@ -26,8 +26,7 @@ def _find_free_port() -> int:
         return sock.getsockname()[1]
 
 
-# "NCCL_DEBUG": "INFO", "NCCL_DEBUG_SUBSYS": "ALL"
-@ray.remote(runtime_env={"env_vars": {"SETU_LOG_LEVEL": "DEBUG", "NCCL_SOCKET_IFNAME": "^lo,docker0,enxbe3af2b6059f"}})
+@ray.remote
 class CoordinatorActor:
     """Ray actor wrapping the native Coordinator.
 
@@ -74,13 +73,28 @@ class CoordinatorActor:
             self._coordinator = None
             logger.info("CoordinatorActor stopped")
 
+    def add_hint(self, hint) -> None:
+        """Add a compiler hint to the Coordinator.
+
+        Args:
+            hint: A compiler hint (e.g. RoutingHint).
+        """
+        if self._coordinator is None:
+            raise RuntimeError("Coordinator is not started")
+        self._coordinator.add_hint(hint)
+
+    def clear_hints(self) -> None:
+        """Clear all compiler hints from the Coordinator."""
+        if self._coordinator is None:
+            raise RuntimeError("Coordinator is not started")
+        self._coordinator.clear_hints()
+
     def is_alive(self) -> bool:
         """Check if the Coordinator is running."""
         return self._coordinator is not None
 
 
-# "NCCL_DEBUG": "INFO", "NCCL_DEBUG_SUBSYS": "ALL"
-@ray.remote(runtime_env={"env_vars": {"SETU_LOG_LEVEL": "DEBUG", "NCCL_SOCKET_IFNAME": "^lo,docker0,enxbe3af2b6059f"}})
+@ray.remote
 class NodeAgentActor:
     """Ray actor wrapping the native NodeAgent.
 

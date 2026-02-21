@@ -47,7 +47,9 @@ def _find_local_endpoint(cluster_data):
     print(f"Cluster has {len(node_agents)} node agent(s):")
     for i, na in enumerate(node_agents):
         marker = " <-- LOCAL" if na["ip_address"] == local_ip else ""
-        print(f"  [{i}] {na['node_agent_endpoint']} ({na['num_gpus']} GPUs, ip={na['ip_address']}){marker}")
+        print(
+            f"  [{i}] {na['node_agent_endpoint']} ({na['num_gpus']} GPUs, ip={na['ip_address']}){marker}"
+        )
 
     for na in node_agents:
         if na["ip_address"] == local_ip:

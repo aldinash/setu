@@ -14,25 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#include "planner/Planner.h"
+#include "planner/hints/Pybind.h"
 //==============================================================================
 #include "commons/Logging.h"
-#include "planner/passes/CopySpecToCIR.h"
+#include "commons/StdCommon.h"
+#include "commons/TorchCommon.h"
 //==============================================================================
-namespace setu::planner {
+#include "planner/hints/Hint.h"
 //==============================================================================
-Planner::Planner(targets::BackendPtr backend,
-                 passes::PassManagerPtr pass_manager)
-    : backend_(std::move(backend)), pass_manager_(std::move(pass_manager)) {
-  ASSERT_VALID_POINTER_ARGUMENT(backend_);
+namespace setu::planner::hints {
+//==============================================================================
+void InitHintsPybind(py::module_& m) {
+  py::class_<RoutingHint>(m, "RoutingHint")
+      .def(py::init<Participant, Participant, Path>(), py::arg("src"),
+           py::arg("dst"), py::arg("path"),
+           "Create a routing hint to override path between src and dst")
+      .def_readonly("src", &RoutingHint::src, "Source participant")
+      .def_readonly("dst", &RoutingHint::dst, "Destination participant")
+      .def_readonly("path", &RoutingHint::path, "Override path")
+      .def("__repr__", &RoutingHint::ToString);
 }
 //==============================================================================
-Plan Planner::Compile(const CopySpec& spec, MetaStore& metastore,
-                      const HintStore& hints) {
-  auto cir = planner::passes::CopySpecToCIR::Run(spec, metastore);
-  cir = pass_manager_->Run(std::move(cir), hints);
-  return backend_->Run(cir);
-}
-//==============================================================================
-}  // namespace setu::planner
+}  // namespace setu::planner::hints
 //==============================================================================
