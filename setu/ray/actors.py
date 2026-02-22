@@ -46,13 +46,16 @@ class CoordinatorActor:
         Returns:
             Dict with coordinator_endpoint and ip_address.
         """
-        from setu._coordinator import Coordinator
+        from setu._coordinator import Coordinator, NCCLBackend, PassManager, Planner
 
         self._ip_address = ray.util.get_node_ip_address()
 
         self._port = _find_free_port()
 
-        self._coordinator = Coordinator(self._port)
+        pass_manager = PassManager()
+        backend = NCCLBackend()
+        planner = Planner(backend, pass_manager)
+        self._coordinator = Coordinator(self._port, planner)
         self._coordinator.start()
 
         endpoint = f"tcp://{self._ip_address}:{self._port}"
