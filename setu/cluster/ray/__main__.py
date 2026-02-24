@@ -5,7 +5,7 @@ Usage::
 
     setu-cluster
     setu-cluster --ray-address ray://10.0.0.1:10001
-    python -m setu.ray
+    python -m setu.cluster.ray
 """
 
 import argparse
@@ -17,8 +17,9 @@ import ray
 from rich.console import Console
 from rich.table import Table
 
+from setu.cluster.info import ClusterInfo
+from setu.cluster.ray.cluster import Cluster
 from setu.logger import init_logger
-from setu.ray.cluster import ClusterInfo, SetuCluster
 
 logger = init_logger(__name__)
 
@@ -68,16 +69,14 @@ def display_cluster_info(info: ClusterInfo) -> None:
 
     table = Table(title="Node Agents")
     table.add_column("Node ID", style="cyan")
-    table.add_column("IP Address", style="green")
     table.add_column("Endpoint", style="magenta")
     table.add_column("GPUs", justify="right", style="bold")
 
-    for na in info.node_agents:
+    for node in info.nodes:
         table.add_row(
-            na.node_id,
-            na.ip_address,
-            na.node_agent_endpoint,
-            str(na.num_gpus),
+            node.node_id,
+            node.node_agent_endpoint,
+            str(len(node.devices)),
         )
 
     console.print(table)
@@ -110,7 +109,7 @@ def main() -> None:
     ray.init(address=args.ray_address, ignore_reinit_error=True)
 
     env_vars = _build_env_vars(args)
-    cluster = SetuCluster(env_vars=env_vars)
+    cluster = Cluster(env_vars=env_vars)
     try:
         info = cluster.start()
         display_cluster_info(info)

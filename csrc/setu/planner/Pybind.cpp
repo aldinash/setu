@@ -24,6 +24,7 @@
 #include "planner/Participant.h"
 #include "planner/Plan.h"
 #include "planner/Planner.h"
+#include "planner/hints/HintStore.h"
 #include "planner/hints/Pybind.h"
 #include "planner/ir/llc/Pybind.h"
 #include "planner/passes/Pybind.h"
@@ -85,7 +86,14 @@ void InitPlannerClassPybind(py::module_& m) {
       .def(py::init<targets::BackendPtr, passes::PassManagerPtr>(),
            py::arg("backend"), py::arg("pass_manager"),
            "Create a Planner with the given backend and pass manager")
-      .def("compile", &Planner::Compile);
+      .def(
+          "compile",
+          [](Planner& self, const CopySpec& spec, MetaStore& metastore) {
+            hints::HintStore empty_hints;
+            return self.Compile(spec, metastore, empty_hints);
+          },
+          py::arg("spec"), py::arg("metastore"),
+          "Compile a copy spec into a plan (with no hints)");
 }
 //==============================================================================
 void InitPlannerPybind(py::module_& m) {

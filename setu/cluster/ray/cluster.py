@@ -1,58 +1,30 @@
 """
 Main orchestration for Setu on Ray.
 
-Provides SetuCluster which manages the lifecycle of Coordinator and
-NodeAgent actors across a Ray cluster, along with ClusterInfo and
-NodeAgentInfo data classes for describing cluster topology.
+Provides Cluster which manages the lifecycle of Coordinator and
+NodeAgent actors across a Ray cluster, along with spawn_client for
+running arbitrary work on remote nodes.
 """
 
 import random
-from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 import ray
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
+from setu._coordinator import Participant
+from setu.cluster.handle import ClientHandle
+from setu.cluster.info import ClusterInfo, NodeInfo
+from setu.cluster.protocol import Cluster as ClusterABC
+from setu.cluster.ray.actors import CoordinatorActor, NodeAgentActor
 from setu.logger import init_logger
-from setu.ray.actors import CoordinatorActor, NodeAgentActor
 
 logger = init_logger(__name__)
 
+T = TypeVar("T")
+
 # Timeout in seconds for actor creation and start calls.
 _ACTOR_TIMEOUT_S = 60
-
-
-@dataclass(frozen=True)
-class NodeAgentInfo:
-    """Information about a running NodeAgent in the cluster."""
-
-    node_id: str
-    ip_address: str
-    node_agent_endpoint: str
-    num_gpus: int
-
-
-@dataclass(frozen=True)
-class ClusterInfo:
-    """Information about the running Setu cluster."""
-
-    coordinator_endpoint: str
-    node_agents: List[NodeAgentInfo]
-
-    @property
-    def node_agent_endpoints(self) -> List[str]:
-        """All NodeAgent endpoints in the cluster."""
-        return [na.node_agent_endpoint for na in self.node_agents]
-
-    @property
-    def num_nodes(self) -> int:
-        """Number of nodes in the cluster."""
-        return len(self.node_agents)
-
-    @property
-    def total_gpus(self) -> int:
-        """Total number of GPUs across all nodes."""
-        return sum(na.num_gpus for na in self.node_agents)
 
 
 def _discover_ray_nodes() -> List[Dict]:
@@ -93,7 +65,56 @@ def _discover_ray_nodes() -> List[Dict]:
     return result
 
 
-class SetuCluster:
+# ---------------------------------------------------------------------------
+# Ray client actor (used by spawn_client)
+# ---------------------------------------------------------------------------
+
+
+@ray.remote(num_gpus=1)
+class _ClientActor:
+    """Ray actor that creates a Client, runs a body function, and stays alive."""
+
+    def __init__(self, endpoint: str) -> None:
+        self._endpoint = endpoint
+        self._client = None
+
+    def run(self, body: Callable, participant: Participant, *args, **kwargs):
+        """Connect, run body(client, participant, *args, **kwargs), return result."""
+        from setu.client import Client
+
+        self._client = Client(self._endpoint)
+        return body(self._client, participant, *args, **kwargs)
+
+    def stop(self) -> None:
+        if self._client is not None:
+            self._client.disconnect()
+            self._client = None
+
+
+class _RayClientHandle(ClientHandle[T]):
+    """Handle wrapping a Ray actor + result ObjectRef."""
+
+    def __init__(self, actor, result_ref) -> None:
+        self._actor = actor
+        self._result_ref = result_ref
+
+    def result(self, timeout: Optional[float] = None) -> T:
+        return ray.get(self._result_ref, timeout=timeout)
+
+    def stop(self) -> None:
+        try:
+            ray.get(self._actor.stop.remote(), timeout=5)
+        except Exception:
+            pass
+        ray.kill(self._actor)
+
+
+# ---------------------------------------------------------------------------
+# Cluster
+# ---------------------------------------------------------------------------
+
+
+class Cluster(ClusterABC):
     """Manages the lifecycle of Setu components on a Ray cluster.
 
     Creates one CoordinatorActor (cluster-wide) and one NodeAgentActor
@@ -101,7 +122,7 @@ class SetuCluster:
 
     Usage::
 
-        cluster = SetuCluster()
+        cluster = Cluster()
         info = cluster.start()
         # info.coordinator_endpoint, info.node_agent_endpoints, etc.
         cluster.stop()
@@ -194,30 +215,60 @@ class SetuCluster:
                 "new one."
             )
 
-        # Build ClusterInfo
-        node_agents = [
-            NodeAgentInfo(
+        # Build ClusterInfo using shared types
+        nodes = [
+            NodeInfo(
                 node_id=result["node_id"],
-                ip_address=result["ip_address"],
                 node_agent_endpoint=result["node_agent_endpoint"],
-                num_gpus=result["num_gpus"],
+                devices=result["devices"],
+                ray_node_id=result["ray_node_id"],
             )
             for result in node_agent_results
         ]
 
         self._cluster_info = ClusterInfo(
             coordinator_endpoint=coordinator_endpoint,
-            node_agents=node_agents,
+            nodes=nodes,
         )
         self._started = True
 
         logger.info(
-            "Setu cluster started: %d node(s), %d total GPU(s), " "coordinator at %s",
+            "Setu cluster started: %d node(s), %d total GPU(s), coordinator at %s",
             self._cluster_info.num_nodes,
             self._cluster_info.total_gpus,
             coordinator_endpoint,
         )
         return self._cluster_info
+
+    def spawn_client(
+        self,
+        participant: Participant,
+        body: Callable[..., T],
+        *args: Any,
+        **kwargs: Any,
+    ) -> ClientHandle[T]:
+        """Spawn a Client on the Ray node owning *participant*.
+
+        Creates a ``_ClientActor`` pinned to the correct node, which
+        connects a ``Client`` and calls ``body(client, participant, *args, **kwargs)``.
+        """
+        assert self._cluster_info is not None, "Cluster has not been started"
+
+        node = self._cluster_info.node_for_device(participant.device)
+        assert (
+            node.ray_node_id is not None
+        ), f"NodeInfo for device {participant.device} has no ray_node_id"
+
+        scheduling = NodeAffinitySchedulingStrategy(
+            node_id=node.ray_node_id,
+            soft=False,
+        )
+        actor = _ClientActor.options(
+            scheduling_strategy=scheduling,
+        ).remote(node.node_agent_endpoint)
+
+        result_ref = actor.run.remote(body, participant, *args, **kwargs)
+        return _RayClientHandle(actor, result_ref)
 
     def _kill_all_actors(self) -> None:
         """Force-kill all actors and reset state. Used for cleanup on failure."""
