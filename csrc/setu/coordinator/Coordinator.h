@@ -24,6 +24,7 @@
 #include "commons/datatypes/TensorShard.h"
 #include "commons/datatypes/TensorShardMetadata.h"
 #include "commons/datatypes/TensorShardSpec.h"
+#include "commons/utils/PendingOperations.h"
 #include "commons/utils/ShardAggregator.h"
 #include "commons/utils/ThreadingUtils.h"
 #include "commons/utils/ZmqHelper.h"
@@ -84,13 +85,12 @@ struct CopyOperationState {
 };
 using CopyOperationStatePtr = std::shared_ptr<CopyOperationState>;
 
-/// @brief Tracks a deregistration request that is deferred until all blocking
+/// @brief Payload for a deregistration request deferred until all blocking
 /// copy operations complete.
 struct PendingDeregistration {
   Identity node_agent_identity;
   RequestId request_id;
   std::unordered_map<TensorName, std::vector<ShardId>> shards_by_tensor;
-  std::set<CopyOperationId> blocking_copy_ops;
 };
 //==============================================================================
 class Coordinator {
@@ -224,10 +224,6 @@ class Coordinator {
                                const CopySpec& copy_spec,
                                std::size_t expected_shards);
 
-    /// @brief Check if any pending deregistrations are unblocked after a copy
-    /// operation completes, and execute them.
-    void ProcessPendingDeregistrations(CopyOperationId completed_copy_op_id);
-
     /// Key for tracking copy operations by (src, dst) tensor pair
     struct CopyKey {
       TensorName src_name;
@@ -254,19 +250,14 @@ class Coordinator {
     /// and completion tracking)
     std::map<CopyOperationId, CopyOperationStatePtr> copy_operations_;
 
-    /// Reverse index: TensorName → active CopyOperationIds involving that
-    /// tensor (as src or dst). Maintained alongside copy_operations_ for O(1)
-    /// lookup of blocking copies during deregistration.
-    std::unordered_map<TensorName, std::set<CopyOperationId>>
-        tensor_to_copy_ops_;
-
-    /// Deregistration requests deferred until blocking copy operations complete
-    std::map<RequestId, PendingDeregistration> pending_deregistrations_;
-
-    /// Reverse index: CopyOperationId → RequestIds of deregistrations blocked
-    /// by that copy. Maintained alongside pending_deregistrations_ for O(1)
-    /// lookup when a copy completes.
-    std::map<CopyOperationId, std::set<RequestId>> copy_op_to_pending_dereg_;
+    /// Tracks deregistration requests blocked by in-flight copy operations.
+    /// WaiterId=RequestId, BlockerId=CopyOperationId,
+    /// Payload=PendingDeregistration. As each copy completes, Resolve() is
+    /// called and the deregistration payload is returned when all its
+    /// blockers are resolved.
+    setu::commons::utils::PendingOperations<RequestId, CopyOperationId,
+                                            PendingDeregistration>
+        deregistration_tracker_;
 
     std::thread thread_;
     std::atomic<bool> running_{false};
