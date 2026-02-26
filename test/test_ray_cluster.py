@@ -1,7 +1,7 @@
 """
 Integration tests for Setu Ray cluster management.
 
-Tests the SetuCluster lifecycle, ClusterInfo structure, client connection,
+Tests the Cluster lifecycle, ClusterInfo structure, client connection,
 and tensor registration through Ray-managed cluster components.
 """
 
@@ -11,7 +11,7 @@ import pytest
 import ray
 import torch
 
-from setu.ray import ClusterInfo, NodeAgentInfo, SetuCluster
+from setu.cluster.ray import Cluster, ClusterInfo, NodeInfo
 
 
 @pytest.fixture(scope="module")
@@ -30,8 +30,8 @@ def ray_context():
 
 @pytest.fixture(scope="module")
 def cluster(ray_context):
-    """Start a SetuCluster for the test module and stop it after."""
-    setu_cluster = SetuCluster()
+    """Start a Cluster for the test module and stop it after."""
+    setu_cluster = Cluster()
     info = setu_cluster.start()
 
     yield setu_cluster, info
@@ -39,8 +39,8 @@ def cluster(ray_context):
     setu_cluster.stop()
 
 
-class TestSetuCluster:
-    """Tests for SetuCluster lifecycle and cluster info."""
+class TestCluster:
+    """Tests for Cluster lifecycle and cluster info."""
 
     @pytest.mark.gpu
     def test_cluster_starts_and_returns_info(self, cluster):
@@ -51,19 +51,18 @@ class TestSetuCluster:
         assert info.coordinator_endpoint.startswith("tcp://")
         assert info.num_nodes >= 1
         assert info.total_gpus >= 1
-        assert len(info.node_agents) >= 1
+        assert len(info.nodes) >= 1
 
     @pytest.mark.gpu
-    def test_node_agent_info_structure(self, cluster):
-        """Test that each NodeAgentInfo has the expected fields."""
+    def test_node_info_structure(self, cluster):
+        """Test that each NodeInfo has the expected fields."""
         _, info = cluster
 
-        for na in info.node_agents:
-            assert isinstance(na, NodeAgentInfo)
-            assert na.node_id
-            assert na.ip_address
-            assert na.node_agent_endpoint.startswith("tcp://")
-            assert na.num_gpus >= 1
+        for node in info.nodes:
+            assert isinstance(node, NodeInfo)
+            assert node.node_id
+            assert node.node_agent_endpoint.startswith("tcp://")
+            assert len(node.devices) >= 1
 
     @pytest.mark.gpu
     def test_node_agent_endpoints_property(self, cluster):
