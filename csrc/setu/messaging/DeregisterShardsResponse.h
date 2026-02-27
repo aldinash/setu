@@ -18,26 +18,36 @@
 //==============================================================================
 #include "commons/StdCommon.h"
 //==============================================================================
-#include "commons/ClassTraits.h"
-#include "planner/hints/HintStore.h"
-#include "planner/ir/cir/Program.h"
+#include "commons/Types.h"
+#include "commons/utils/Serialization.h"
+#include "messaging/BaseResponse.h"
 //==============================================================================
-namespace setu::planner::passes {
+namespace setu::commons::messages {
 //==============================================================================
-namespace cir = setu::planner::ir::cir;
-using setu::planner::hints::HintStore;
+using setu::commons::RequestId;
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
 //==============================================================================
 
-class Pass : public setu::commons::NonCopyableNonMovable {
- public:
-  virtual ~Pass() = default;
-  [[nodiscard]] virtual cir::Program Run(cir::Program program,
-                                         const HintStore& hints) = 0;
-  [[nodiscard]] virtual std::string Name() const = 0;
+/// @brief Response to a DeregisterShardsRequest.
+/// Used for both Coordinator → NodeAgent and NodeAgent → Client.
+struct DeregisterShardsResponse : public BaseResponse {
+  explicit DeregisterShardsResponse(
+      RequestId request_id_param,
+      ErrorCode error_code_param = ErrorCode::kSuccess)
+      : BaseResponse(request_id_param, error_code_param) {}
+
+  [[nodiscard]] std::string ToString() const {
+    return std::format("DeregisterShardsResponse(request_id={}, error_code={})",
+                       request_id, error_code);
+  }
+
+  void Serialize(BinaryBuffer& buffer) const;
+
+  static DeregisterShardsResponse Deserialize(const BinaryRange& range);
 };
-
-using PassPtr = std::shared_ptr<Pass>;
+using DeregisterShardsResponsePtr = std::shared_ptr<DeregisterShardsResponse>;
 
 //==============================================================================
-}  // namespace setu::planner::passes
+}  // namespace setu::commons::messages
 //==============================================================================

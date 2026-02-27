@@ -14,30 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //==============================================================================
-#pragma once
+#include "messaging/DeregisterShardsRequest.h"
 //==============================================================================
-#include "commons/StdCommon.h"
+namespace setu::commons::messages {
 //==============================================================================
-#include "commons/ClassTraits.h"
-#include "planner/hints/HintStore.h"
-#include "planner/ir/cir/Program.h"
-//==============================================================================
-namespace setu::planner::passes {
-//==============================================================================
-namespace cir = setu::planner::ir::cir;
-using setu::planner::hints::HintStore;
+using setu::commons::utils::BinaryBuffer;
+using setu::commons::utils::BinaryRange;
+using setu::commons::utils::BinaryReader;
+using setu::commons::utils::BinaryWriter;
 //==============================================================================
 
-class Pass : public setu::commons::NonCopyableNonMovable {
- public:
-  virtual ~Pass() = default;
-  [[nodiscard]] virtual cir::Program Run(cir::Program program,
-                                         const HintStore& hints) = 0;
-  [[nodiscard]] virtual std::string Name() const = 0;
-};
+void DeregisterShardsRequest::Serialize(BinaryBuffer& buffer) const {
+  BinaryWriter writer(buffer);
+  writer.WriteFields(request_id, shards_by_tensor);
+}
 
-using PassPtr = std::shared_ptr<Pass>;
+DeregisterShardsRequest DeregisterShardsRequest::Deserialize(
+    const BinaryRange& range) {
+  BinaryReader reader(range);
+  auto [request_id_val, shards_by_tensor_val] =
+      reader.ReadFields<RequestId,
+                        std::unordered_map<TensorName, std::vector<ShardId>>>();
+  return DeregisterShardsRequest(request_id_val,
+                                 std::move(shards_by_tensor_val));
+}
 
 //==============================================================================
-}  // namespace setu::planner::passes
+}  // namespace setu::commons::messages
 //==============================================================================

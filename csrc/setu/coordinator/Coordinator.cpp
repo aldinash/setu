@@ -31,6 +31,8 @@ using setu::commons::enums::ErrorCode;
 using setu::commons::messages::AllocateTensorRequest;
 using setu::commons::messages::CoordinatorMessage;
 using setu::commons::messages::CopyOperationFinishedRequest;
+using setu::commons::messages::DeregisterShardsRequest;
+using setu::commons::messages::DeregisterShardsResponse;
 using setu::commons::messages::ExecuteRequest;
 using setu::commons::messages::ExecuteResponse;
 using setu::commons::messages::GetTensorSpecRequest;
@@ -53,10 +55,14 @@ Coordinator::Coordinator(std::size_t port, PlannerPtr planner)
       planner_(planner) {
   gateway_ = std::make_unique<Gateway>(zmq_context_, port_, inbox_queue_,
                                        outbox_queue_);
+
+  auto outbox_notify = [this]() { gateway_->NotifyOutbox(); };
+
   handler_ = std::make_unique<Handler>(inbox_queue_, outbox_queue_, metastore_,
-                                       planner_queue_);
-  executor_ = std::make_unique<Executor>(planner_queue_, outbox_queue_,
-                                         metastore_, *planner_, hint_store_);
+                                       planner_queue_, outbox_notify);
+  executor_ =
+      std::make_unique<Executor>(planner_queue_, outbox_queue_, metastore_,
+                                 *planner_, hint_store_, outbox_notify);
 }
 
 Coordinator::~Coordinator() {
@@ -136,9 +142,28 @@ Coordinator::Gateway::~Gateway() {
 void Coordinator::Gateway::InitSockets() {
   node_agent_socket_ = ZmqHelper::CreateAndBindSocket(
       zmq_context_, zmq::socket_type::router, port_);
+
+  // Create inproc PAIR sockets for self-pipe wakeup pattern
+  wakeup_recv_ =
+      std::make_shared<zmq::socket_t>(*zmq_context_, zmq::socket_type::pair);
+  wakeup_send_ =
+      std::make_shared<zmq::socket_t>(*zmq_context_, zmq::socket_type::pair);
+  wakeup_recv_->bind("inproc://gateway-wakeup");
+  wakeup_send_->connect("inproc://gateway-wakeup");
+}
+
+void Coordinator::Gateway::NotifyOutbox() {
+  // Send a single byte to wake the Gateway from zmq::poll().
+  // Uses dontwait to avoid blocking the caller if the pipe is full.
+  zmq::message_t signal(1);
+  static_cast<char*>(signal.data())[0] = 'W';
+  [[maybe_unused]] auto result =
+      wakeup_send_->send(std::move(signal), zmq::send_flags::dontwait);
 }
 
 void Coordinator::Gateway::CloseSockets() {
+  if (wakeup_send_) wakeup_send_->close();
+  if (wakeup_recv_) wakeup_recv_->close();
   if (node_agent_socket_) {
     node_agent_socket_->close();
   }
@@ -163,8 +188,9 @@ void Coordinator::Gateway::Stop() {
 void Coordinator::Gateway::Loop() {
   running_ = true;
   while (running_) {
-    // Poll for incoming messages from NodeAgents
-    auto ready = Comm::PollForRead({node_agent_socket_}, kPollTimeoutMs);
+    // Poll for incoming messages from NodeAgents OR wakeup signal
+    auto ready =
+        Comm::PollForRead({node_agent_socket_, wakeup_recv_}, kPollTimeoutMs);
 
     for (const auto& socket : ready) {
       if (socket == node_agent_socket_) {
@@ -174,6 +200,12 @@ void Coordinator::Gateway::Loop() {
             inbox_queue_.try_push(InboxMessage{node_agent_identity, request});
         if (status == boost::queue_op_status::closed) {
           return;
+        }
+      } else if (socket == wakeup_recv_) {
+        // Drain all wakeup signals (there may be multiple)
+        zmq::message_t drain;
+        while (
+            wakeup_recv_->recv(drain, zmq::recv_flags::dontwait).has_value()) {
         }
       }
     }
@@ -198,11 +230,18 @@ void Coordinator::Gateway::Loop() {
 Coordinator::Handler::Handler(Queue<InboxMessage>& inbox_queue,
                               Queue<OutboxMessage>& outbox_queue,
                               MetaStore& metastore,
-                              Queue<PlannerTask>& planner_queue)
+                              Queue<PlannerTask>& planner_queue,
+                              OutboxNotifyFn outbox_notify)
     : inbox_queue_(inbox_queue),
       outbox_queue_(outbox_queue),
       metastore_(metastore),
-      planner_queue_(planner_queue) {}
+      planner_queue_(planner_queue),
+      outbox_notify_(std::move(outbox_notify)) {}
+
+void Coordinator::Handler::PushOutbox(OutboxMessage msg) {
+  outbox_queue_.push(std::move(msg));
+  outbox_notify_();
+}
 
 void Coordinator::Handler::Start() {
   if (running_.load()) {
@@ -239,6 +278,8 @@ void Coordinator::Handler::Loop() {
               HandleExecuteResponse(inbox_msg.node_agent_identity, msg);
             } else if constexpr (std::is_same_v<T, GetTensorSpecRequest>) {
               HandleGetTensorSpecRequest(inbox_msg.node_agent_identity, msg);
+            } else if constexpr (std::is_same_v<T, DeregisterShardsRequest>) {
+              HandleDeregisterShardsRequest(inbox_msg.node_agent_identity, msg);
             } else {
               LOG_WARNING("Handler: Unknown message type (index={})",
                           inbox_msg.request.index());
@@ -266,6 +307,18 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   NodeId owner_node_id =
       StringToUUID(node_agent_identity.substr(0, underscore_pos));
 
+  // Reject registration if the tensor is being deregistered
+  if (metastore_.IsTensorDeregistered(request.tensor_shard_spec.name)) {
+    LOG_WARNING(
+        "Rejecting RegisterTensorShardRequest: tensor '{}' has deregistered "
+        "shards",
+        request.tensor_shard_spec.name);
+    RegisterTensorShardCoordinatorResponse response(
+        request.request_id, ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
+
   // Register the tensor shard in the metastore with owner information
   auto shard_metadata_ptr =
       metastore_.RegisterTensorShard(request.tensor_shard_spec, owner_node_id);
@@ -274,12 +327,12 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
   if (shard_metadata_ptr) {
     RegisterTensorShardCoordinatorResponse response(
         request.request_id, ErrorCode::kSuccess, *shard_metadata_ptr);
-    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    PushOutbox(OutboxMessage{node_agent_identity, response});
   } else {
     LOG_ERROR("Failed to register tensor shard: {}", request.tensor_shard_spec);
     RegisterTensorShardCoordinatorResponse response(
         request.request_id, ErrorCode::kInvalidArguments);
-    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    PushOutbox(OutboxMessage{node_agent_identity, response});
     return;
   }
 
@@ -305,7 +358,7 @@ void Coordinator::Handler::HandleRegisterTensorShardRequest(
     for (const auto& [owner_id, shard_ids] : owner_to_shard_ids) {
       Identity owner_identity = to_string(owner_id) + "_dealer";
       AllocateTensorRequest allocate_request(shard_ids);
-      outbox_queue_.push(OutboxMessage{owner_identity, allocate_request});
+      PushOutbox(OutboxMessage{owner_identity, allocate_request});
     }
   }
 }
@@ -315,6 +368,18 @@ void Coordinator::Handler::HandleSubmitCopyRequest(
   LOG_INFO("Coordinator received SubmitCopyRequest from {} to {} for shard {}",
            request.copy_spec.src_name, request.copy_spec.dst_name,
            request.shard_id);
+
+  if (metastore_.IsTensorDeregistered(request.copy_spec.src_name) ||
+      metastore_.IsTensorDeregistered(request.copy_spec.dst_name)) {
+    LOG_WARNING(
+        "Rejecting SubmitCopyRequest: tensor '{}' or '{}' has deregistered "
+        "shards",
+        request.copy_spec.src_name, request.copy_spec.dst_name);
+    SubmitCopyResponse response(request.request_id, CopyOperationId{},
+                                ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
 
   // Expected = all src shards + all dst shards
   std::size_t expected_shards =
@@ -330,6 +395,18 @@ void Coordinator::Handler::HandleSubmitPullRequest(
   LOG_INFO("Coordinator received SubmitPullRequest from {} to {} for shard {}",
            request.copy_spec.src_name, request.copy_spec.dst_name,
            request.shard_id);
+
+  if (metastore_.IsTensorDeregistered(request.copy_spec.src_name) ||
+      metastore_.IsTensorDeregistered(request.copy_spec.dst_name)) {
+    LOG_WARNING(
+        "Rejecting SubmitPullRequest: tensor '{}' or '{}' has deregistered "
+        "shards",
+        request.copy_spec.src_name, request.copy_spec.dst_name);
+    SubmitCopyResponse response(request.request_id, CopyOperationId{},
+                                ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
 
   // For Pull: expected shards = number of DESTINATION shards only (one-sided)
   std::size_t expected_shards =
@@ -370,9 +447,9 @@ void Coordinator::Handler::HandleShardSubmission(
   CopyOperationId copy_op_id = GenerateUUID();
 
   LOG_INFO(
-      "All shards submitted for {} -> {}, "
+      "All {} shards submitted for {} -> {}, "
       "copy_op_id={}, adding to planner queue",
-      copy_spec.src_name, copy_spec.dst_name, copy_op_id);
+      expected_shards, copy_spec.src_name, copy_spec.dst_name, copy_op_id);
 
   // Collect submitter identities
   std::vector<Identity> submitters;
@@ -395,7 +472,7 @@ void Coordinator::Handler::HandleShardSubmission(
   for (const auto& participant : result->participants) {
     SubmitCopyResponse response(participant.request_id, copy_op_id,
                                 ErrorCode::kSuccess);
-    outbox_queue_.push(OutboxMessage{participant.identity, response});
+    PushOutbox(OutboxMessage{participant.identity, response});
   }
 }
 
@@ -428,10 +505,26 @@ void Coordinator::Handler::HandleExecuteResponse(
     // Send CopyOperationFinishedRequest to all SUBMITTERS
     for (const auto& submitter_identity : state->submitters) {
       CopyOperationFinishedRequest finish_req(response.copy_op_id);
-      outbox_queue_.push(OutboxMessage{submitter_identity, finish_req});
+      PushOutbox(OutboxMessage{submitter_identity, finish_req});
     }
 
     copy_operations_.erase(it);
+
+    // Check if any deferred deregistrations are now unblocked
+    auto unblocked = deregistration_tracker_.Resolve(response.copy_op_id);
+    for (auto& dereg : unblocked) {
+      LOG_INFO(
+          "All blocking copies completed for deregistration from {} — "
+          "proceeding with deregistration",
+          dereg.node_agent_identity);
+
+      metastore_.DeregisterShards(dereg.shards_by_tensor);
+
+      DeregisterShardsResponse dereg_response(dereg.request_id,
+                                              ErrorCode::kSuccess);
+      outbox_queue_.push(
+          OutboxMessage{dereg.node_agent_identity, dereg_response});
+    }
   }
 }
 
@@ -439,6 +532,16 @@ void Coordinator::Handler::HandleGetTensorSpecRequest(
     const Identity& node_agent_identity, const GetTensorSpecRequest& request) {
   LOG_DEBUG("Coordinator received GetTensorSpecRequest for tensor: {}",
             request.tensor_name);
+
+  if (metastore_.IsTensorDeregistered(request.tensor_name)) {
+    LOG_WARNING(
+        "Rejecting GetTensorSpecRequest: tensor '{}' has deregistered shards",
+        request.tensor_name);
+    GetTensorSpecResponse response(request.request_id,
+                                   ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
 
   const auto* tensor_spec = metastore_.GetTensorSpec(request.tensor_name);
   ASSERT_VALID_RUNTIME(
@@ -449,7 +552,97 @@ void Coordinator::Handler::HandleGetTensorSpecRequest(
 
   GetTensorSpecResponse response(request.request_id, ErrorCode::kSuccess,
                                  *tensor_spec);
-  outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+  PushOutbox(OutboxMessage{node_agent_identity, response});
+}
+
+/// Deregistration is two-phase (see MetaStore class docstring):
+///
+///   1. Mark. Immediately mark all affected tensors as deregistered so new
+///      registrations, copies, and pulls are rejected. Cancel any partial
+///      shard aggregation groups that reference these tensors.
+///
+///   2. Remove. Remove shard metadata from the MetaStore and send a
+///      success response to the requesting NodeAgent. If there are
+///      in-flight copy operations touching these tensors, defer this step
+///      using deregistration_tracker_ (a PendingOperations instance) which
+///      releases the deregistration request once all blocking copy
+///      operations have finished. On receiving the response, the NodeAgent
+///      cleans up its own local state (shard mappings, caches, blocker
+///      registrations) and forwards the response to the client.
+void Coordinator::Handler::HandleDeregisterShardsRequest(
+    const Identity& node_agent_identity,
+    const DeregisterShardsRequest& request) {
+  LOG_INFO("Coordinator received DeregisterShardsRequest from {}",
+           node_agent_identity);
+
+  // Collect tensor names being deregistered
+  std::set<TensorName> tensor_names;
+  for (const auto& [name, _] : request.shards_by_tensor) {
+    tensor_names.insert(name);
+  }
+
+  // Mark tensors as deregistered immediately to prevent new copy/pull
+  // submissions and registrations from being accepted while deregistration
+  // is in progress (even if the actual shard removal is deferred).
+  for (const auto& name : tensor_names) {
+    metastore_.MarkTensorDeregistered(name);
+  }
+
+  // Cancel partial entries in the shard aggregator for these tensors.
+  // This cleans up groups that will never complete because the shards are
+  // going away.
+  auto cancelled_participants =
+      shard_aggregator_.CancelIf([&tensor_names](const CopyKey& key) {
+        return tensor_names.contains(key.src_name) ||
+               tensor_names.contains(key.dst_name);
+      });
+
+  // Send error responses to cancelled participants
+  for (const auto& participant : cancelled_participants) {
+    LOG_INFO(
+        "Cancelling pending copy submission for participant {} due to tensor "
+        "deregistration",
+        participant.identity);
+    SubmitCopyResponse error_response(participant.request_id, CopyOperationId{},
+                                      ErrorCode::kTensorDeregistered);
+    outbox_queue_.push(OutboxMessage{participant.identity, error_response});
+  }
+
+  // Find all in-flight copy operations that involve any of the tensors
+  // being deregistered by scanning active copy operations
+  std::set<CopyOperationId> blocking_ops;
+  for (const auto& [copy_op_id, state] : copy_operations_) {
+    if (tensor_names.contains(state->spec.src_name) ||
+        tensor_names.contains(state->spec.dst_name)) {
+      blocking_ops.insert(copy_op_id);
+    }
+  }
+
+  PendingDeregistration dereg_data{node_agent_identity, request.request_id,
+                                   request.shards_by_tensor};
+
+  if (blocking_ops.empty()) {
+    // No in-flight copies — deregister immediately
+    metastore_.DeregisterShards(dereg_data.shards_by_tensor);
+    DeregisterShardsResponse response(request.request_id, ErrorCode::kSuccess);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+    return;
+  }
+
+  auto immediate = deregistration_tracker_.AddWaiter(
+      request.request_id, std::move(blocking_ops), std::move(dereg_data));
+
+  if (immediate.has_value()) {
+    // All blocking copies already resolved — deregister immediately
+    metastore_.DeregisterShards(immediate->shards_by_tensor);
+    DeregisterShardsResponse response(request.request_id, ErrorCode::kSuccess);
+    outbox_queue_.push(OutboxMessage{node_agent_identity, response});
+  } else {
+    LOG_INFO(
+        "Deferring deregistration for {} tensors from {} — blocked by "
+        "in-flight copy operations",
+        tensor_names.size(), node_agent_identity);
+  }
 }
 
 //==============================================================================
@@ -458,12 +651,19 @@ void Coordinator::Handler::HandleGetTensorSpecRequest(
 Coordinator::Executor::Executor(Queue<PlannerTask>& planner_queue,
                                 Queue<OutboxMessage>& outbox_queue,
                                 MetaStore& metastore, Planner& planner,
-                                HintStore& hint_store)
+                                HintStore& hint_store,
+                                OutboxNotifyFn outbox_notify)
     : planner_queue_(planner_queue),
       outbox_queue_(outbox_queue),
       metastore_(metastore),
       planner_(planner),
-      hint_store_(hint_store) {}
+      hint_store_(hint_store),
+      outbox_notify_(std::move(outbox_notify)) {}
+
+void Coordinator::Executor::PushOutbox(OutboxMessage msg) {
+  outbox_queue_.push(std::move(msg));
+  outbox_notify_();
+}
 
 void Coordinator::Executor::Start() {
   if (running_.load()) {
@@ -486,11 +686,14 @@ void Coordinator::Executor::Loop() {
   while (running_) {
     try {
       PlannerTask task = planner_queue_.pull();
+      auto t_after_dequeue = std::chrono::steady_clock::now();
 
       LOG_DEBUG("Executor received task for copy_op_id: {}", task.copy_op_id);
 
       auto hints = hint_store_.Snapshot();
+      auto t_compile_start = std::chrono::steady_clock::now();
       Plan plan = planner_.Compile(task.copy_spec, metastore_, hints);
+      auto t_compile_end = std::chrono::steady_clock::now();
 
       LOG_DEBUG("Compiled plan:\n{}", plan);
 
@@ -503,7 +706,7 @@ void Coordinator::Executor::Loop() {
 
         ExecuteRequest execute_request(task.copy_op_id, std::move(node_plan));
 
-        outbox_queue_.push(OutboxMessage{node_identity, execute_request});
+        PushOutbox(OutboxMessage{node_identity, execute_request});
       }
 
       // Set expected responses
@@ -511,8 +714,16 @@ void Coordinator::Executor::Loop() {
       // order aqcuire)
       task.state->expected_responses.store(fragments.size(),
                                            std::memory_order_release);
-      LOG_DEBUG("Executor: Set expected_responses={} for copy_op_id={}",
-                fragments.size(), task.copy_op_id);
+
+      auto t_end = std::chrono::steady_clock::now();
+      auto to_us = [](auto d) {
+        return std::chrono::duration_cast<std::chrono::microseconds>(d).count();
+      };
+      LOG_INFO(
+          "Executor: copy_op_id={}, compile={}us, fragment+dispatch={}us, "
+          "total={}us",
+          task.copy_op_id, to_us(t_compile_end - t_compile_start),
+          to_us(t_end - t_compile_end), to_us(t_end - t_after_dequeue));
 
     } catch (const boost::concurrent::sync_queue_is_closed&) {
       return;
